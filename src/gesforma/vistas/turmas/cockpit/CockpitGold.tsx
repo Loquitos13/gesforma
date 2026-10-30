@@ -24,6 +24,7 @@ import type { Separador } from "../../../rotasGesforma";
 import { TurmaActivaToggle, TurmaInactivaBanner } from "../../../TurmaCronograma";
 import { CronogramaEditor } from "../../../CronogramaEditor";
 import { TurmaAvaliacao } from "../../../TurmaAvaliacaoGrelha";
+import { AvaliacaoQualitativa } from "../../../AvaliacaoQualitativa";
 import type { Navegar } from "../../../shell/tipos";
 import { labelsSessoesFin } from "../../../../partilhado/finDossierUi";
 import { EstadoCockpit, NovaSessaoPainel, ReabrirTurma } from "./comum";
@@ -181,7 +182,10 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   }} />
               )}
               {tab === "avaliacao" && (
+                <div className="space-y-4">
                 <TurmaAvaliacao key={t.id} regime="gold" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="gold" formandos={nomesCockpit} soLeitura={souFormador} />
+                <AvaliacaoQualitativa regime="gold" turmaId={t.id} formandos={nomesCockpit} />
+                </div>
               )}
               {tab === "documentos" && !souFormador && (
                 <DocumentosTurmaTab regime="gold" curso={t.curso} criterios={criterios} guardados={ped.documentos} onSaveDoc={doc => void ped.guardarDocumento(doc)}

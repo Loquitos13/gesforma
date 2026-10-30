@@ -333,7 +333,7 @@ export async function apiDtpExport(regime: Regime, turmaId: number, filename?: s
   URL.revokeObjectURL(url);
 }
 
-async function descarregarFicheiro(path: string, fallback: string, accept: string) {
+export async function descarregarFicheiro(path: string, fallback: string, accept: string) {
   const headers = new Headers();
   headers.set("Accept", accept);
   headers.set("X-Gesforma-Client", "web");
@@ -385,3 +385,19 @@ export const apiImportarPlanosCurso = (regime: Regime, turmaId: number, substitu
 /** Outras turmas do mesmo curso (turma padrão de onde copiar planos e sumários). */
 export const apiOrigensPlanos = (regime: Regime, turmaId: number) =>
   api<{ turmas: { id: number; nome: string; dataInicio: string }[] }>(`/v1/turmas/${regime}/${turmaId}/planos/origens`);
+
+// ── Ficha individual de avaliação (qualitativa) ──
+export type CriterioQualitativo = { nivel: number | null; texto: string };
+export type FichaQualitativa = {
+  aquisicao?: CriterioQualitativo; autonomiaAprendizagens?: CriterioQualitativo; autonomiaProblemas?: CriterioQualitativo;
+  atualizadoPor?: string; atualizadoEm?: string;
+};
+export const apiAvaliacaoQualitativa = (regime: Regime, turmaId: number, signal?: AbortSignal) =>
+  api<{ competencias: string; formandos: Record<string, FichaQualitativa> }>(`/v1/turmas/${regime}/${turmaId}/avaliacao-qualitativa`, { signal });
+export const apiGravarCompetencias = (regime: Regime, turmaId: number, competencias: string) =>
+  api<{ ok: true }>(`/v1/turmas/${regime}/${turmaId}/avaliacao-qualitativa/turma`, { method: "PUT", body: JSON.stringify({ competencias }) });
+export const apiGravarFichaQualitativa = (regime: Regime, turmaId: number, formandoId: number, ficha: FichaQualitativa) =>
+  api<{ ok: true }>(`/v1/turmas/${regime}/${turmaId}/avaliacao-qualitativa/${formandoId}`, { method: "PUT", body: JSON.stringify(ficha) });
+export const apiPdfAvaliacaoQualitativa = (regime: Regime, turmaId: number, formandoId?: number) =>
+  descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/avaliacao-qualitativa/pdf${formandoId ? `?formando=${formandoId}` : ""}`,
+    "Avaliacao da aprendizagem.pdf", "application/pdf");

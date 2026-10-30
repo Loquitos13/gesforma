@@ -333,6 +333,34 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/sessoes/1/assinatura/plano`)).statusCode).toBe(403);
   });
 
+  it("ficha individual de avaliação (qualitativa): competências da turma, três critérios de 1 a 5 e o PDF por formando", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx);
+    const base = `/v1/turmas/fin/${t.id}/avaliacao-qualitativa`;
+    expect((await pedido(ctx, "financiada", "PUT", `${base}/turma`, { competencias: "Elaborar um plano de procura de emprego." })).statusCode).toBe(200);
+    const ficha = {
+      aquisicao: { nivel: 4, texto: "Adquiriu as competências com autonomia." },
+      autonomiaAprendizagens: { nivel: 5, texto: "Muito autónoma." },
+      autonomiaProblemas: { nivel: 3, texto: "" },
+    };
+    expect((await pedido(ctx, "financiada", "PUT", `${base}/${t.ana}`, ficha)).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "PUT", `${base}/${t.ana}`, { aquisicao: { nivel: 7, texto: "" } })).statusCode).toBe(400);
+    expect((await pedido(ctx, "financiada", "PUT", `${base}/999999`, ficha)).statusCode).toBe(400);
+    // O formador fora da turma não preenche nem consulta.
+    expect((await pedido(ctx, "formador", "PUT", `${base}/${t.ana}`, ficha)).statusCode).toBe(403);
+    const lida = (await pedido(ctx, "financiada", "GET", base)).json();
+    expect(lida.competencias).toBe("Elaborar um plano de procura de emprego.");
+    expect(lida.formandos[t.ana]).toMatchObject(ficha);
+
+    const um = await pedido(ctx, "financiada", "GET", `${base}/pdf?formando=${t.ana}`);
+    expect(um.statusCode, um.body.slice(0, 200)).toBe(200);
+    const [p1] = await paginas(um.rawPayload);
+    for (const v of ["AVALIAÇÃO DA APRENDIZAGEM", "Programa:", "Tipologia de Operação:", "Ana Silva", "Elaborar um plano de procura de emprego.",
+      "Autonomia na resolução de problemas", "Adquiriu as competências com autonomia.", "o Formador:", "o Coordenador:"]) expect(p1, v).toContain(v);
+    // Toda a turma: uma página por formando.
+    expect(await paginas((await pedido(ctx, "financiada", "GET", `${base}/pdf`)).rawPayload)).toHaveLength(2);
+  });
+
   it("plano de sessão: uma página na horizontal por sessão lectiva, com as colunas do modelo e o Tempo", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
@@ -545,7 +573,8 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
 
       // Listagem da Financiada: os formandos da turma, com contacto.
       const [lista] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).rawPayload);
-      expect(lista).toContain("LISTAGEM DE FORMANDOS");
+      expect(lista).toContain("LISTA DE SELECIONADOS");
+      expect(lista).toContain("o Coordenador:");
       expect(lista).toContain("Ana Silva");
       expect(lista).toContain("Bruno Silva");
       // Cabeçalho com o enquadramento da candidatura, como nas folhas de presenças.

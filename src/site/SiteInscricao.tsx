@@ -125,6 +125,13 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime) && (!t.dataInicio || t.dataInicio >= hoje));
   }, [turmas, curso?.title, curso?.nomeOferta, curso?.regime]);
   const locais = uniqueVals(doCurso, "local");
+  // Pré-inscrição: todos os locais que a página do curso mostra (com turmas primeiro; depois os atribuídos ao curso
+  // ainda sem datas, onde o pedido fica só com o local).
+  const locaisEscolha = useMemo(() => {
+    if (!preinscricao) return locais;
+    const todos = [...locais, ...(curso?.locais ?? []).map(x => x.nome), ...(curso?.contactosLocais ?? []).map(x => x.local)];
+    return todos.filter((l, i) => l.trim() && todos.findIndex(x => norm(x) === norm(l)) === i);
+  }, [preinscricao, locais, curso?.locais, curso?.contactosLocais]);
   // Turmas do local escolhido, pela data de início (com horário, preço, vagas e cronograma).
   const datas = useMemo(
     () => [...ofertaFiltrada(doCurso, { local })].sort((a, b) => a.dataInicio.localeCompare(b.dataInicio) || a.horario.localeCompare(b.horario)),
@@ -337,14 +344,14 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                     <p className="flex flex-wrap items-center gap-3 text-sm text-[#1C3350]">
                       <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</span>
                       <strong>{local}</strong>
-                      {locais.length > 1 && <button type="button" onClick={() => setTrocarLocal(true)} className="font-bold text-[#A60000] underline">Alterar</button>}
+                      {locaisEscolha.length > 1 && <button type="button" onClick={() => setTrocarLocal(true)} className="font-bold text-[#A60000] underline">Alterar</button>}
                     </p>
                   ) : (
                     <fieldset>
                       <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
                       <p className="mt-1 text-xs text-[#1C3350]/60">Selecione o local para ver as datas de início e os cronogramas.</p>
                       <div className="mt-3 flex flex-wrap gap-2">
-                        {locais.map(l => (
+                        {locaisEscolha.map(l => (
                           <button key={l} type="button" onClick={() => { escolherLocal(l); setTrocarLocal(false); }} aria-pressed={local === l}
                             className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/20 text-[#1C3350] hover:border-[#1C3350]"}`}>
                             {l}
@@ -358,6 +365,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                     {local && <p className="mt-1 text-xs text-[#1C3350]/60">Veja o cronograma, selecione a data pretendida e clique em Continuar.</p>}
                     {!local ? (
                       <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
+                    ) : localSemTurmas || !datas.length ? (
+                      <p className="mt-3 text-sm text-[#1C3350]/70">Ainda não há datas abertas em {local}. Continue e deixe o seu pedido: a secretaria contacta-o quando abrir uma turma.</p>
                     ) : (
                       <div className="mt-3 grid gap-2">
                         {datas.map(t => {

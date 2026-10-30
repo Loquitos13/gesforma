@@ -26,6 +26,7 @@ import type { Navegar } from "../../../shell/tipos";
 import { TurmaActivaToggle, TurmaInactivaBanner } from "../../../TurmaCronograma";
 import { CronogramaEditor } from "../../../CronogramaEditor";
 import { TurmaAvaliacao } from "../../../TurmaAvaliacaoGrelha";
+import { AvaliacaoQualitativa } from "../../../AvaliacaoQualitativa";
 import { EstadoCockpit, NovaSessaoPainel, ReabrirTurma } from "./comum";
 import { recarregarTurma, useMembrosFin, useResultadosTurma, useTurmaCockpit } from "./dados";
 import { EditarTurmaFin, InscreverFin, TransferirEEliminarFin } from "./FinDialogos";
@@ -271,7 +272,10 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                 <ProcessarApoios embutido turma={{ id: t.id, nome: t.nome }} aberto onFechar={() => undefined} />
               )}
               {tab === "avaliacao" && (
+                <div className="space-y-4">
                 <TurmaAvaliacao key={t.id} regime="fin" turmaId={t.id} cursoNome={t.curso} turmaNome={t.nome} accent="fin" formandos={nomesCockpit} soLeitura={souFormador} />
+                <AvaliacaoQualitativa regime="fin" turmaId={t.id} formandos={nomesCockpit} />
+                </div>
               )}
               {tab === "documentos" && !souFormador && (
                 <DocumentosTurmaTab regime="fin" curso={t.curso} criterios={criterios} guardados={ped.documentos} onSaveDoc={doc => void ped.guardarDocumento(doc)}

@@ -838,7 +838,13 @@ export type ColunaTabela = { titulo: string; peso: number };
 /** Tabela com o cabeçalho repetido em cada página (listagem de formandos, cronograma). */
 export async function pdfTabelaFin(
   cab: CabecalhoFin,
-  opts: { titulo: string; subtitulo?: string; pares?: [string, string][]; colunas: ColunaTabela[]; linhas: string[][]; vazio?: string; nota?: string; paisagem?: boolean },
+  opts: {
+    titulo: string; subtitulo?: string; pares?: [string, string][]; colunas: ColunaTabela[]; linhas: string[][]; vazio?: string; nota?: string; paisagem?: boolean;
+    /** Linha final a negrito (totais), alinhada pelas colunas. */
+    total?: string[];
+    /** Linhas de assinatura no fim («o Coordenador:»…). */
+    assinaturas?: string[];
+  },
 ) {
   const d = await abrirDoc(opts.titulo, cab);
   const tamanho = opts.paisagem ? PAISAGEM : RETRATO;
@@ -877,6 +883,17 @@ export async function pdfTabelaFin(
     });
     pg.y -= alt;
   }
+  if (opts.total) {
+    if (pg.y - 18 < pg.fundo) pg = novaPagina(d, tamanho, tituloPg, opts.subtitulo ? `${opts.subtitulo} (continuação)` : "(continuação)");
+    let x = pg.m;
+    larguras.forEach((w, i) => {
+      pg.page.drawRectangle({ x, y: pg.y - 18, width: w, height: 18, color: rgb(0.95, 0.95, 0.96), borderColor: BORDA, borderWidth: 0.6 });
+      const [t = ""] = quebrar(opts.total![i] ?? "", d.negrito, tam, w - 8);
+      escrever(pg, t, x + 4, pg.y - 12.5, d.negrito, tam);
+      x += w;
+    });
+    pg.y -= 18;
+  }
   if (!opts.linhas.length && opts.vazio) {
     caixa(pg, pg.m, pg.y - 20, pg.largura, 20, 0.4);
     escrever(pg, opts.vazio, pg.m + 6, pg.y - 13.5, d.sans, TAM, SUAVE);
@@ -889,6 +906,11 @@ export async function pdfTabelaFin(
       escrever(pg, l, pg.m, pg.y - 8, d.sans, 8, SUAVE);
       pg.y -= 10;
     }
+  }
+  if (opts.assinaturas?.length) {
+    pg.y -= 22;
+    if (pg.y - opts.assinaturas.length * 26 < pg.fundo) pg = novaPagina(d, tamanho, tituloPg, opts.subtitulo);
+    for (const rotulo of opts.assinaturas) linhaAssinatura(d, pg, rotulo, 160);
   }
   return fecharDoc(d);
 }
@@ -972,17 +994,14 @@ async function cabecalhoSemTurma(db: Db): Promise<CabecalhoFin> {
   };
 }
 
-/** Listagem dos formandos da turma (os indeferidos ficam de fora, como em todos os documentos da turma). */
+/** Lista de selecionados da turma para o dossiê: N.º e nome, só com a assinatura do coordenador (os indeferidos ficam de fora). */
 export async function listagemFormandosFin(db: Db, turmaId: number) {
   const turma = await turmaReembolso(db, turmaId);
   if (!turma) return null;
   const [cab, formandos] = await Promise.all([cabecalhoFin(db, turma), formandosDaTurma(db, turma)]);
-  const linhas = formandos.map((f, i) => {
-    const ficha = fichaDoFormando(f);
-    return [String(i + 1), ficha.nome, ficha.email, ficha.telefone, ficha.nif, txt(f.estado)];
-  });
+  const linhas = formandos.map((f, i) => [String(i + 1), fichaDoFormando(f).nome]);
   const bytes = await pdfTabelaFin(cab, {
-    titulo: "Listagem de formandos",
+    titulo: "Lista de selecionados",
     subtitulo: `${formandos.length} ${formandos.length === 1 ? "formando" : "formandos"}`,
     // O mesmo enquadramento da candidatura que as folhas de presenças levam no topo.
     pares: [
@@ -996,12 +1015,195 @@ export async function listagemFormandosFin(db: Db, turmaId: number) {
       ["Ação:", cab.acao],
       ["Local:", cab.local],
     ],
-    colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Nome", peso: 30 }, { titulo: "Email", peso: 28 }, { titulo: "Telefone", peso: 13 }, { titulo: "NIF", peso: 11 }, { titulo: "Estado", peso: 14 }],
+    colunas: [{ titulo: "N.º", peso: 6 }, { titulo: "Nome", peso: 94 }],
     linhas,
     vazio: "Ainda sem formandos nesta turma.",
     nota: `Gerado a ${fmtDataDDMMAAAA(new Date().toISOString())}.`,
+    assinaturas: ["o Coordenador:"],
   });
-  return { nome: "ListagemFormandos.pdf", bytes };
+  return { nome: "ListaSelecionados.pdf", bytes };
+}
+
+export type FichaQualitativa = {
+  formando: string;
+  competencias: string;
+  criterios: { titulo: string; esquerda: string; direita: string; nivel: number | null; texto: string }[];
+};
+
+/** Os três critérios da ficha individual, pela ordem do modelo do dossiê. */
+export const CRITERIOS_QUALITATIVOS = [
+  { id: "aquisicao", titulo: "Aquisição de Competências (saber e saber fazer): (Competências adquiridas pelo formando)",
+    esquerda: "Não adquiriu as competências desejadas", direita: "Adquiriu as competências desejadas" },
+  { id: "autonomiaAprendizagens", titulo: "Autonomia na realização das aprendizagens",
+    esquerda: "Não conseguiu autonomia na realização das aprendizagens", direita: "Conseguiu autonomia na realização das aprendizagens" },
+  { id: "autonomiaProblemas", titulo: "Autonomia na resolução de problemas",
+    esquerda: "Não conseguiu autonomia na resolução de problemas", direita: "Conseguiu autonomia na resolução de problemas" },
+] as const;
+
+const VERMELHO = rgb(0.62, 0.05, 0.05);
+
+/**
+ * Ficha individual de avaliação da aprendizagem (qualitativa), uma página por formando: o enquadramento, a UFCD e o
+ * formando; as competências a adquirir; os três critérios com a escala de 1 a 5 e o texto do formador.
+ */
+export async function pdfAvaliacaoQualitativa(cab: CabecalhoFin, fichas: FichaQualitativa[], pares?: [string, string][]) {
+  const d = await abrirDoc("Avaliação da aprendizagem", cab);
+  const titulo = "AVALIAÇÃO DA APRENDIZAGEM";
+  const ufcd = [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" - ");
+  const lista = fichas.length ? fichas : [{ formando: "", competencias: "", criterios: CRITERIOS_QUALITATIVOS.map(c => ({ ...c, nivel: null, texto: "" })) }];
+  for (const f of lista) {
+    const pg = novaPagina(d, RETRATO, titulo);
+    const topo: [string, string][] = pares ?? [
+      ["Entidade:", cab.entidade],
+      ["Programa:", cab.candidatura.programa],
+      ["Prioridade do Programa:", cab.candidatura.prioridade],
+      ["Tipologia de Ação:", cab.candidatura.tipologiaAcao],
+      ["Tipologia de Intervenção:", cab.candidatura.tipologiaIntervencao],
+      ["Tipologia de Operação:", cab.candidatura.tipologiaOperacao],
+      ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")],
+    ];
+    for (const [r, v] of topo) linhaPar(d, pg, r, v, 130, 17);
+    pg.y -= 8;
+    // Faixa do percurso, da unidade e do formando (rótulos a vermelho, como no modelo).
+    const faixa = (rotulo: string, valor: string) => {
+      const alt = 18;
+      pg.page.drawRectangle({ x: pg.m, y: pg.y - alt, width: 130, height: alt, color: VERMELHO, borderColor: BORDA, borderWidth: 0.6 });
+      escrever(pg, rotulo, pg.m + 6, pg.y - 12.5, d.negrito, TAM, rgb(1, 1, 1));
+      caixa(pg, pg.m + 130, pg.y - alt, pg.largura - 130, alt);
+      const [v = ""] = quebrar(valor, d.sans, TAM, pg.largura - 140);
+      escrever(pg, v, pg.m + 136, pg.y - 12.5, d.sans, TAM);
+      pg.y -= alt;
+    };
+    faixa("Percurso:", ufcd || cab.acao);
+    const sub = "Avaliação do Resultado da Aprendizagem por Unidade de Competência";
+    caixa(pg, pg.m, pg.y - 18, pg.largura, 18);
+    escrever(pg, sub, pg.m + (pg.largura - d.sans.widthOfTextAtSize(sub, TAM)) / 2, pg.y - 12.5, d.sans, TAM);
+    pg.y -= 18;
+    faixa("Unidade de Competência:", ufcd || cab.acao);
+    faixa("Formando:", f.formando);
+    pg.y -= 10;
+
+    // Uma secção: título a vermelho, (escala), caixa do texto.
+    const seccao = (tituloSec: string, texto: string, escala?: { esquerda: string; direita: string; nivel: number | null }) => {
+      pg.page.drawRectangle({ x: pg.m, y: pg.y - 15, width: pg.largura, height: 15, color: VERMELHO });
+      const [t = ""] = quebrar(tituloSec, d.negrito, 8.5, pg.largura - 10);
+      escrever(pg, t, pg.m + (pg.largura - d.negrito.widthOfTextAtSize(t, 8.5)) / 2, pg.y - 10.5, d.negrito, 8.5, rgb(1, 1, 1));
+      pg.y -= 15;
+      if (escala) {
+        const alt = 26;
+        caixa(pg, pg.m, pg.y - alt, pg.largura, alt, 0.4);
+        const lado = (pg.largura - 120) / 2;
+        const esq = quebrar(escala.esquerda, d.sans, 8, lado - 10);
+        const dir = quebrar(escala.direita, d.sans, 8, lado - 10);
+        esq.forEach((l, i) => escrever(pg, l, pg.m + 6, pg.y - 10 - i * 9, d.sans, 8));
+        dir.forEach((l, i) => escrever(pg, l, pg.m + lado + 120 + 4, pg.y - 10 - i * 9, d.sans, 8));
+        for (let n = 1; n <= 5; n++) {
+          const x = pg.m + lado + 8 + (n - 1) * 21;
+          const marcado = escala.nivel === n;
+          pg.page.drawRectangle({ x, y: pg.y - 19, width: 16, height: 14, borderColor: BORDA, borderWidth: 0.6, ...(marcado ? { color: TINTA } : {}) });
+          escrever(pg, String(n), x + 5.5, pg.y - 15.5, d.negrito, 8, marcado ? rgb(1, 1, 1) : TINTA);
+        }
+        pg.y -= alt;
+      }
+      const linhas = quebrar(texto, d.sans, TAM, pg.largura - 12);
+      const alt = Math.max(48, linhas.length * ENTRELINHA + 10);
+      caixa(pg, pg.m, pg.y - alt, pg.largura, alt, 0.4);
+      linhas.forEach((l, i) => escrever(pg, l, pg.m + 6, pg.y - 5 - TAM - i * ENTRELINHA, d.sans, TAM));
+      pg.y -= alt + 10;
+    };
+    seccao("Competências a adquirir: (apresentação dos objectivos/competências que o formando deveria adquirir)", f.competencias);
+    for (const c of f.criterios) seccao(c.titulo, c.texto, c);
+    pg.y -= 6;
+    linhaAssinatura(d, pg, "o Formador:", 160);
+    linhaAssinatura(d, pg, "o Coordenador:", 160);
+  }
+  return fecharDoc(d);
+}
+
+/** As fichas qualitativas da turma (ou só de um formando), com o cabeçalho do regime. */
+export async function avaliacaoQualitativaDaTurma(db: Db, regime: "gold" | "fin", turmaId: number, formandoId?: number) {
+  const { listarQualitativas } = await import("./repos/avaliacaoQualitativa.js");
+  const { carregarTurma } = await import("./repos/pedagogiaTurma.js");
+  const { formandosDaTurma: membros } = await import("./repos/pedagogiaTurma.js");
+  const turma = await carregarTurma(db, regime, turmaId);
+  if (!turma) return null;
+  let cab: CabecalhoFin;
+  let pares: [string, string][] | undefined;
+  if (regime === "fin") {
+    const t = await turmaReembolso(db, turmaId);
+    if (!t) return null;
+    cab = await cabecalhoFin(db, t);
+  } else {
+    cab = await cabecalhoGold(db, turma);
+    pares = [["Entidade:", cab.entidade], ["Curso:", turma.curso], ["Turma:", turma.nome]];
+  }
+  const linhas = new Map((await listarQualitativas(db, regime, turmaId)).map(l => [Number(l.formando_id), l.dados ?? {}]));
+  const competencias = txt(linhas.get(0)?.competencias);
+  const todos = await membros(db, regime, turma);
+  const alvo = formandoId ? todos.filter(f => f.id === formandoId) : todos;
+  if (formandoId && !alvo.length) return null;
+  const fichas: FichaQualitativa[] = alvo.map(f => {
+    const dados = linhas.get(f.id) ?? {};
+    return {
+      formando: f.nome,
+      competencias: txt(dados.competencias) || competencias,
+      criterios: CRITERIOS_QUALITATIVOS.map(c => {
+        const v = (dados as Record<string, { nivel?: number | null; texto?: string } | undefined>)[c.id];
+        return { titulo: c.titulo, esquerda: c.esquerda, direita: c.direita, nivel: v?.nivel ?? null, texto: txt(v?.texto) };
+      }),
+    };
+  });
+  const bytes = await pdfAvaliacaoQualitativa(cab, fichas, pares);
+  const nome = fichas.length === 1 ? `Avaliacao da aprendizagem - ${fichas[0]!.formando}.pdf` : `Avaliacao da aprendizagem - ${turma.nome}.pdf`;
+  return { nome, bytes };
+}
+
+export type LinhaSubsidio = { formandoId: number; nome: string; iban: string; dias: number; horas: number; valor: number };
+
+/**
+ * Processamento do subsídio de alimentação (modelo do dossiê): o enquadramento da candidatura e, por formando,
+ * NIF, IBAN, dias e horas com direito e o valor; total no fim e a assinatura do coordenador.
+ */
+export async function pdfSubsidioAlimentacaoFin(db: Db, turmaId: number, linhas: LinhaSubsidio[], o: { periodo: string; valorDia: number | null; horas: number }) {
+  const turma = await turmaReembolso(db, turmaId);
+  if (!turma) return null;
+  const [cab, formandos] = await Promise.all([cabecalhoFin(db, turma), formandosDaTurma(db, turma)]);
+  const nifs = new Map(formandos.map(f => [Number(f.id), fichaDoFormando(f).nif]));
+  const sessoes = (Array.isArray(turma.cronograma) ? turma.cronograma : []) as SessaoCron[];
+  const datas = sessoes.map(x => txt(x.data)).filter(Boolean).sort();
+  const eur = (v: number) => `${v.toFixed(2).replace(".", ",")} €`;
+  const nDias = linhas.reduce((m, l) => Math.max(m, l.dias), 0);
+  const total = Math.round(linhas.reduce((t, l) => t + l.valor, 0) * 100) / 100;
+  const bytes = await pdfTabelaFin(cab, {
+    titulo: "Processamento do subsídio de alimentação",
+    subtitulo: o.periodo,
+    paisagem: true,
+    pares: [
+      ["Entidade:", cab.entidade],
+      ["Programa:", cab.candidatura.programa],
+      ["Prioridade do Programa:", cab.candidatura.prioridade],
+      ["Tipologia de Ação:", cab.candidatura.tipologiaAcao],
+      ["Tipologia de Intervenção:", cab.candidatura.tipologiaIntervencao],
+      ["Tipologia de Operação:", cab.candidatura.tipologiaOperacao],
+      ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")],
+      ["Ação:", cab.acao],
+      ["Local:", cab.local],
+      ["Datas:", datas.length ? `${fmtDataDDMMAAAA(datas[0])} a ${fmtDataDDMMAAAA(datas[datas.length - 1])}` : ""],
+      ["N.º de horas:", o.horas ? String(o.horas) : ""],
+      ["N.º de dias:", nDias ? String(nDias) : ""],
+      ["Subsídio de alimentação:", o.valorDia != null ? `${eur(o.valorDia)} por dia` : ""],
+    ],
+    colunas: [
+      { titulo: "N.º", peso: 4 }, { titulo: "Nome do formando", peso: 30 }, { titulo: "NIF", peso: 11 }, { titulo: "IBAN", peso: 25 },
+      { titulo: "Dias", peso: 7 }, { titulo: "Horas", peso: 8 }, { titulo: "Valor", peso: 11 },
+    ],
+    linhas: linhas.map((l, i) => [String(i + 1), l.nome, nifs.get(l.formandoId) ?? "", l.iban || "Sem IBAN", String(l.dias), String(l.horas).replace(".", ","), eur(l.valor)]),
+    total: ["", "Total", "", "", String(linhas.reduce((t, l) => t + l.dias, 0)), "", eur(total)],
+    vazio: "Sem formandos com direito ao subsídio neste período.",
+    nota: `Calculado a partir das folhas de presença. Gerado a ${fmtDataDDMMAAAA(new Date().toISOString())}.`,
+    assinaturas: ["o Coordenador:"],
+  });
+  return { nome: `Subsidio de alimentacao - ${turma.nome}${o.periodo ? ` - ${o.periodo}` : ""}.pdf`, bytes };
 }
 
 /** Os rótulos do cronograma (src/partilhado/cronogramaGrelha.ts › EVENTO_OPTS). */

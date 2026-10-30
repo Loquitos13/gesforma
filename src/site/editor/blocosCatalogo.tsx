@@ -63,15 +63,16 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
           <span className="px-2.5 py-1 text-[10px] font-extrabold uppercase tracking-[0.1em]" style={gold ? { background: "var(--c-acento)", color: "#14263D" } : { background: "var(--c-destaque)", color: "#fff" }}>{gold ? "Gold" : "Financiada"}</span>
         </span>
       </a>
-      <div className="p-6">
+      {/* Todo o texto leva à página do curso (o título estica-se por cima do bloco); «Guardar» fica por cima disso. */}
+      <div className="relative cursor-pointer p-6">
         {(etiquetas || guardar) && <div className="flex flex-wrap items-center gap-3">
           {etiquetas && <>
           <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">{c.enrollment}</span>
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{c.area}</span>
           </>}
-          {guardar && <button type="button" onClick={onGuardar} className={`ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}
+          {guardar && <button type="button" onClick={onGuardar} className={`relative z-10 ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}
         </div>}
-        <h2 className={juntar("font-serif text-2xl font-bold", (etiquetas || guardar) && "mt-3")}><a href={`/formacao/${c.id}`} className="hover:text-[var(--c-destaque)]">{c.title}</a></h2>
+        <h2 className={juntar("font-serif text-2xl font-bold", (etiquetas || guardar) && "mt-3")}><a href={`/formacao/${c.id}`} className="after:absolute after:inset-0 hover:text-[var(--c-destaque)] group-hover:text-[var(--c-destaque)]">{c.title}</a></h2>
         <TextoFormatado texto={c.resumo} className="mt-2 max-w-2xl text-sm leading-6 opacity-60" nivel={4} />
         <div className="mt-5 flex flex-wrap gap-x-6 gap-y-2 text-xs font-bold opacity-60">
           <span className="flex items-center gap-2"><Icon name="clock" className="h-4 w-4" />{c.duration}</span>

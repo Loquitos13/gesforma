@@ -224,6 +224,15 @@ describe("apoios: API", () => {
     expect(audit.rows[0]!.n).toBeGreaterThan(5);
     const viuLote = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE action = 'apoios.lote'");
     expect(viuLote.rows[0]!.n).toBe(1);
+
+    // PDF do processamento do subsídio de alimentação (dossiê): só a equipa; IBAN completo; auditado.
+    expect((await pedido(ctx, "comercial", "GET", `${base}/subsidio-alimentacao?mes=${MES}`)).statusCode).toBe(403);
+    const pdf = await pedido(ctx, "financiada", "GET", `${base}/subsidio-alimentacao?mes=${MES}`);
+    expect(pdf.statusCode, pdf.body.slice(0, 200)).toBe(200);
+    expect(pdf.headers["content-type"]).toContain("application/pdf");
+    expect((await pedido(ctx, "financiada", "GET", `${base}/subsidio-alimentacao`)).statusCode).toBe(200);
+    const viuPdf = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE action = 'apoios.subsidio_pdf'");
+    expect(viuPdf.rows[0]!.n).toBe(2);
   });
 
   it("painel da Financiada mostra os apoios por aprovar ou pagar", async () => {

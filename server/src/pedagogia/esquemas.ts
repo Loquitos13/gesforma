@@ -142,3 +142,16 @@ export const sessaoParam = z.object({ regime, id: idNum, n: idNum });
 export const itemParam = z.object({ regime, id: idNum, itemId: z.string().trim().min(1).max(80) });
 export const formandoParam = z.object({ regime, id: idNum, formandoId: idNum });
 export const tokenParam = z.object({ token: z.string().min(8).max(80) });
+
+const criterioQualitativo = z.object({
+  nivel: z.number().int().min(1).max(5).nullable().default(null),
+  texto: z.string().max(4000).default(""),
+});
+
+/** Ficha individual de avaliação (qualitativa): a da turma (formando 0) só leva as competências a adquirir. */
+export const avaliacaoQualitativaSchema = z.object({
+  competencias: z.string().max(4000).optional(),
+  aquisicao: criterioQualitativo.optional(),
+  autonomiaAprendizagens: criterioQualitativo.optional(),
+  autonomiaProblemas: criterioQualitativo.optional(),
+});

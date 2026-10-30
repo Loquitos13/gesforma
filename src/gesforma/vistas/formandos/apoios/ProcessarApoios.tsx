@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import {
-  apiApoiosTurma, apiEstadoApoiosTurma, apiProcessarApoios, type PreviaFormando, type ResultadoProcessar,
+  apiApoiosTurma, apiEstadoApoiosTurma, apiPdfSubsidioAlimentacao, apiProcessarApoios, type PreviaFormando, type ResultadoProcessar,
 } from "../../../../partilhado/api/apoios";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { invalidar, useRecurso } from "../../../../partilhado/dados/useRecurso";
@@ -32,6 +32,11 @@ export function ProcessarApoios({ turma, aberto, onFechar, embutido = false }: {
   const [aCalcular, setACalcular] = useState(false);
   const [pagar, setPagar] = useState(false);
   const [aExportar, setAExportar] = useState(false);
+  const [aPdf, setAPdf] = useState<"" | "mes" | "acao">("");
+  async function pdfSubsidio(qual: "mes" | "acao") {
+    setAPdf(qual);
+    try { await apiPdfSubsidioAlimentacao(turmaId, qual === "mes" ? mes : undefined); } catch (e) { toastError(e, "Não foi possível gerar o PDF."); } finally { setAPdf(""); }
+  }
   const info = useRecurso(aberto && turmaId ? `apoios:turma:${turmaId}:${mes}` : null, s => apiApoiosTurma(turmaId, mes, s));
 
   // Ao abrir, escolhe o mês mais recente já decorrido com sessões.
@@ -114,6 +119,11 @@ export function ProcessarApoios({ turma, aberto, onFechar, embutido = false }: {
             estilo="pilula"
             itens={[{ id: "rever", rotulo: "Rever cálculo" }, { id: "registos", rotulo: `Registados (${registos.length})` }]}
           />
+          {/* Processamento do subsídio de alimentação para o dossiê (com NIF e IBAN). */}
+          <div className="ml-auto flex flex-wrap gap-2">
+            <Botao tamanho="sm" aCarregar={aPdf === "mes"} onClick={() => void pdfSubsidio("mes")}>PDF do subsídio · {nomeMes(mes)}</Botao>
+            <Botao tamanho="sm" aCarregar={aPdf === "acao"} onClick={() => void pdfSubsidio("acao")}>PDF da ação completa</Botao>
+          </div>
         </div>
 
         {passo === "rever" && (

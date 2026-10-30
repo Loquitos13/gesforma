@@ -14,6 +14,8 @@ import {
 import { idNum, idParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { diaLisboa, hojeLisboa } from "../../datas.js";
+import { pdfSubsidioAlimentacaoFin, type LinhaSubsidio } from "../../documentosFin.js";
+import { enviarPdf } from "../pedagogia/comum.js";
 
 const tipo = z.enum(TIPOS_APOIO);
 const estado = z.enum(["calculado", "aprovado", "pago", "anulado"]);
@@ -267,6 +269,49 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
       registos,
       bancos: Object.fromEntries(bancos.map(b => [Number(b.formando_id), { iban: ibanDe(b.iban_enc), titular: b.titular }])),
     };
+  });
+
+  /**
+   * Processamento do subsídio de alimentação em PDF (para o dossiê): o mês pedido, ou a ação inteira (todos os meses
+   * com sessões). Os valores são os do cálculo (folhas de presença e regras da turma); o IBAN sai completo (auditado).
+   */
+  app.get("/v1/apoios/turmas/:id/subsidio-alimentacao", async (req, reply) => {
+    const v = validar(reply, { params: idParam, query: z.object({ mes: periodo.optional() }) }, req);
+    if (!v || !requireAuth(req, reply)) return;
+    const base = await turmaFin(db, v.params.id);
+    if (!base) return reply.code(404).send({ error: "Turma não encontrada." });
+    const meses = v.query.mes ? [v.query.mes] : mesesDaTurma(sessoesDaTurma(base.cronograma, []));
+    const porFormando = new Map<number, LinhaSubsidio>();
+    let valorDia: number | null = null;
+    for (const mes of meses) {
+      const calc = await calcularTurma(v.params.id, mes);
+      if (!calc) continue;
+      const regra = calc.regras.find(r => r.ativo && r.tipo === "alimentacao");
+      if (!regra) continue;
+      valorDia ??= regra.modo === "dia" ? regra.valor : null;
+      for (const c of calc.calculos) {
+        const l = c.calculo.linhas.find(x => x.tipo === "alimentacao");
+        const atual = porFormando.get(c.formandoId) ?? { formandoId: c.formandoId, nome: c.nome, iban: "", dias: 0, horas: 0, valor: 0 };
+        if (l && !l.exclusao) {
+          atual.dias += l.dias;
+          atual.horas = Math.round((atual.horas + l.horas) * 100) / 100;
+          atual.valor = Math.round((atual.valor + (l.bloqueadoIban ? 0 : l.valor)) * 100) / 100;
+        }
+        porFormando.set(c.formandoId, atual);
+      }
+    }
+    if (!porFormando.size) {
+      return reply.code(409).send({ error: "Esta turma não tem o subsídio de alimentação nas regras de apoios ativas (Configurações › Apoios)." });
+    }
+    const linhas = [...porFormando.values()].sort((a, b) => a.nome.localeCompare(b.nome, "pt"));
+    const bancos = new Map((await dadosBancarios(db, linhas.map(l => l.formandoId))).map(b => [Number(b.formando_id), ibanDe(b.iban_enc)]));
+    for (const l of linhas) l.iban = bancos.get(l.formandoId) ?? "";
+    const horas = Number((await db.query<{ horas: number }>("SELECT horas FROM turmas_fin WHERE id = $1", [v.params.id])).rows[0]?.horas ?? 0);
+    const periodoTxt = v.query.mes ? `${v.query.mes.slice(5, 7)}-${v.query.mes.slice(0, 4)}` : "Ação completa";
+    const doc = await pdfSubsidioAlimentacaoFin(db, v.params.id, linhas, { periodo: periodoTxt, valorDia, horas });
+    if (!doc) return reply.code(404).send({ error: "Turma não encontrada." });
+    await audit(db, req.actor!.id, "apoios.subsidio_pdf", "turma_fin", String(v.params.id), req.ip, { mes: v.query.mes ?? null, n: linhas.length });
+    return enviarPdf(reply, doc.nome, doc.bytes);
   });
 
   app.post("/v1/apoios/turmas/:id/processar", async (req, reply) => {

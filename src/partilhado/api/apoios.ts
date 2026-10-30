@@ -1,5 +1,6 @@
 // API dos apoios da Financiada (server/src/rotas/formandos/apoios.ts).
 import { api, enviar, qs } from "./cliente";
+import { descarregarFicheiro } from "./pedagogia";
 
 export type TipoApoio = "bolsa" | "alimentacao" | "transporte" | "acolhimento" | "alojamento";
 export type ModoApoio = "hora" | "dia" | "mes";
@@ -144,3 +145,7 @@ export const apiAlterarApoio = (
   id: number,
   corpo: { estado?: EstadoApoio; pagoEm?: string | null; referencia?: string; notas?: string; ajuste?: number; motivoAjuste?: string },
 ) => enviar.patch<{ ok: true; apoio: Apoio }>(`/v1/apoios/${id}`, corpo);
+
+/** Processamento do subsídio de alimentação em PDF: um mês, ou a ação inteira sem `mes`. */
+export const apiPdfSubsidioAlimentacao = (turmaId: number, mes?: string) =>
+  descarregarFicheiro(`/v1/apoios/turmas/${turmaId}/subsidio-alimentacao${qs({ mes })}`, `Subsidio de alimentacao${mes ? ` ${mes}` : ""}.pdf`, "application/pdf");

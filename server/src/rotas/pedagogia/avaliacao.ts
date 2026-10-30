@@ -1,13 +1,16 @@
 /** Avaliação da turma: grelha de notas, certificados e resultados. */
 import type { FastifyInstance } from "fastify";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
-import { avaliacaoNotasSchema, certificadoSchema, formandoParam } from "../../pedagogia/esquemas.js";
+import { avaliacaoNotasSchema, avaliacaoQualitativaSchema, certificadoSchema, formandoParam } from "../../pedagogia/esquemas.js";
+import { gravarQualitativa, listarQualitativas } from "../../repos/avaliacaoQualitativa.js";
+import { avaliacaoQualitativaDaTurma } from "../../documentosFin.js";
+import { z } from "zod";
 import { gravarCertificado, gravarNotaCertificado, gravarNotas, listarNotas } from "../../repos/pedagogiaSessoes.js";
 import { formandosDaTurma } from "../../repos/pedagogiaTurma.js";
 import { ERRO_TURMA_FECHADA, escalaDaTurma, pendentesDoFecho, resultadosDaTurma, turmaFechada } from "../../resultados.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
-import { formadorPodeVer, semFormador, turmaOu404 } from "./comum.js";
+import { enviarPdf, formadorPodeVer, semFormador, turmaOu404 } from "./comum.js";
 
 export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit }: Deps) {
   app.get("/v1/turmas/:regime/:id/avaliacao", async (req, reply) => {
@@ -47,6 +50,64 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     await gravarNotas(fn => db.tx(fn), regime, id, v.body.notas);
     await audit(db, req.actor!.id, "turma.avaliacao", "turma", String(id), req.ip, { regime, notas: v.body.notas.length });
     return { ok: true };
+  });
+
+  // ── Ficha individual de avaliação (qualitativa): o formador da turma preenche, a equipa também ──
+  app.get("/v1/turmas/:regime/:id/avaliacao-qualitativa", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
+    const linhas = await listarQualitativas(db, regime, id);
+    const turma = linhas.find(l => Number(l.formando_id) === 0);
+    return {
+      competencias: String(turma?.dados?.competencias ?? ""),
+      formandos: Object.fromEntries(linhas.filter(l => Number(l.formando_id) !== 0)
+        .map(l => [Number(l.formando_id), { ...l.dados, atualizadoPor: l.atualizado_por, atualizadoEm: l.atualizado_em }])),
+    };
+  });
+
+  /** As competências a adquirir: iguais para todos os formandos da turma. */
+  app.put("/v1/turmas/:regime/:id/avaliacao-qualitativa/turma", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam, body: z.object({ competencias: z.string().max(4000) }) }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só preenche as turmas em que está atribuído."))) return;
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+    await gravarQualitativa(db, regime, id, 0, { competencias: v.body.competencias }, req.actor!.name);
+    await audit(db, req.actor!.id, "turma.avaliacao_qualitativa", "turma", String(id), req.ip, { regime, formando: 0 });
+    return { ok: true };
+  });
+
+  app.put("/v1/turmas/:regime/:id/avaliacao-qualitativa/:formandoId", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: formandoParam, body: avaliacaoQualitativaSchema }, req);
+    if (!v) return;
+    const { regime, id, formandoId } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só preenche as turmas em que está atribuído."))) return;
+    if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
+    const turma = await turmaOu404(db, reply, regime, id);
+    if (!turma) return;
+    if (!(await formandosDaTurma(db, regime, turma)).some(f => f.id === formandoId)) {
+      return reply.code(400).send({ error: "O formando não pertence a esta turma." });
+    }
+    await gravarQualitativa(db, regime, id, formandoId, v.body, req.actor!.name);
+    await audit(db, req.actor!.id, "turma.avaliacao_qualitativa", "formando", String(formandoId), req.ip, { regime, turma: id });
+    return { ok: true };
+  });
+
+  /** PDF para o dossiê: a ficha de um formando (`?formando=`) ou as de toda a turma. */
+  app.get("/v1/turmas/:regime/:id/avaliacao-qualitativa/pdf", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam, query: z.object({ formando: z.coerce.number().int().positive().optional() }) }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
+    const doc = await avaliacaoQualitativaDaTurma(db, regime, id, v.query.formando);
+    if (!doc) return reply.code(404).send({ error: "Turma ou formando não encontrado." });
+    return enviarPdf(reply, doc.nome, doc.bytes);
   });
 
   app.put("/v1/turmas/:regime/:id/certificados/:formandoId", async (req, reply) => {

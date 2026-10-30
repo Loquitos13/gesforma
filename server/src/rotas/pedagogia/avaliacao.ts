@@ -2,6 +2,7 @@
 import type { FastifyInstance } from "fastify";
 import { dtpEmFalta } from "../../pedagogia/dtp.js";
 import { avaliacaoNotasSchema, avaliacaoQualitativaSchema, certificadoSchema, formandoParam } from "../../pedagogia/esquemas.js";
+import { guardarNaPastaDaTurma } from "../../pedagogia/ficheiros.js";
 import { gravarQualitativa, listarQualitativas } from "../../repos/avaliacaoQualitativa.js";
 import { avaliacaoQualitativaDaTurma } from "../../documentosFin.js";
 import { z } from "zod";
@@ -107,6 +108,8 @@ export function registarAvaliacao(app: FastifyInstance, { db, requireAuth, audit
     if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
     const doc = await avaliacaoQualitativaDaTurma(db, regime, id, v.query.formando);
     if (!doc) return reply.code(404).send({ error: "Turma ou formando não encontrado." });
+    // Todas as fichas da Financiada ficam no dossiê / pasta Drive da turma (7. Avaliação da aprendizagem).
+    if (regime === "fin" && !v.query.formando) await guardarNaPastaDaTurma(db, req.log, req.actor!.id, regime, id, "fichas-avaliacao", doc.nome, doc.bytes);
     return enviarPdf(reply, doc.nome, doc.bytes);
   });
 

@@ -16,6 +16,7 @@ import type { Deps } from "../tipos.js";
 import { diaLisboa, hojeLisboa } from "../../datas.js";
 import { pdfSubsidioAlimentacaoFin, type LinhaSubsidio } from "../../documentosFin.js";
 import { enviarPdf } from "../pedagogia/comum.js";
+import { guardarNaPastaDaTurma } from "../../pedagogia/ficheiros.js";
 
 const tipo = z.enum(TIPOS_APOIO);
 const estado = z.enum(["calculado", "aprovado", "pago", "anulado"]);
@@ -311,6 +312,8 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
     const periodoTxt = v.query.mes ? `${v.query.mes.slice(5, 7)}-${v.query.mes.slice(0, 4)}` : "Ação completa";
     const doc = await pdfSubsidioAlimentacaoFin(db, v.params.id, linhas, { periodo: periodoTxt, valorDia, horas });
     if (!doc) return reply.code(404).send({ error: "Turma não encontrada." });
+    // A ação completa é o mapa de pagamento do dossiê: fica também na pasta Drive da turma.
+    if (!v.query.mes) await guardarNaPastaDaTurma(db, req.log, req.actor!.id, "fin", v.params.id, "mapa-pagamento", doc.nome, doc.bytes);
     await audit(db, req.actor!.id, "apoios.subsidio_pdf", "turma_fin", String(v.params.id), req.ip, { mes: v.query.mes ?? null, n: linhas.length });
     return enviarPdf(reply, doc.nome, doc.bytes);
   });

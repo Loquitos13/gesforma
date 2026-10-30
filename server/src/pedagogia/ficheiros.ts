@@ -11,7 +11,7 @@ import { ficheiroDrive } from "../repos/drive.js";
 import { anexosDaTurma, gravarAnexo } from "../repos/dtp.js";
 import { listarSessoes } from "../repos/pedagogiaSessoes.js";
 import { turmaFechadaEm } from "../repos/resultados.js";
-import { formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
+import { carregarTurma, formandosDaTurma, type TurmaRow } from "../repos/pedagogiaTurma.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "./inqueritos.js";
 import type { Regime } from "./util.js";
 
@@ -112,6 +112,33 @@ export async function anexarPdfDtp(
 ) {
   const file = await guardarPdfGerado(db, actorId, regime, turma, itemId, name, bytes);
   for (const id of [itemId, ...outrosItens.filter(x => x !== itemId)]) await ligarAnexoGerado(db, regime, turma.id, id, file);
+}
+
+/**
+ * PDF descarregado no cockpit que também fica no dossiê / pasta Drive da turma. Só ocupa o item se estiver vazio ou
+ * ainda tiver a cópia gerada (mesmo nome): um documento carregado à mão (ex.: a folha assinada) não é substituído.
+ * Falhas (Drive desligada, etc.) só ficam no log: a descarga segue.
+ */
+export async function guardarNaPastaDaTurma(
+  db: Db,
+  log: { warn: (o: object, m: string) => void },
+  actorId: string | undefined,
+  regime: Regime,
+  turmaId: number,
+  itemId: string,
+  name: string,
+  bytes: Buffer,
+  outrosItens: string[] = [],
+) {
+  try {
+    const turma = await carregarTurma(db, regime, turmaId);
+    if (!turma) return;
+    const atual = (await anexosDaTurma(db, regime, turmaId)).find(a => a.item_id === itemId);
+    if (atual?.file_name && atual.file_name !== sanitizeFileName(name)) return;
+    await anexarPdfDtp(db, actorId, regime, turma, itemId, name, bytes, outrosItens);
+  } catch (err) {
+    log.warn({ err, turma: turmaId, item: itemId }, "PDF não guardado na pasta da turma");
+  }
 }
 
 /** Relatório final entregue no fecho da turma: nome com o dia (Lisboa), diferente do que se gera depois. */

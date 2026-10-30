@@ -71,6 +71,7 @@ const POR_ID: Record<string, number> = {
   corrigenda: 7,
   "grelha-correcao": 7,
   pauta: 7,
+  "fichas-avaliacao": 7,
   instrumentos: 7,
   "inquerito-formador": 8,
   "inquerito-formandos": 8,

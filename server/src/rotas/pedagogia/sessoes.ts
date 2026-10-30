@@ -4,7 +4,9 @@ import {
   AssinaturaQualificadaErro, estadoQualificada, pdfAssinado as pdfAssinadoQualificado, pdfParaAssinar, receberAssinado,
 } from "../../sessaoAssinaturaQualificada.js";
 import { z } from "zod";
+import { itensDoMesmoPdf } from "../../dossieGerado.js";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
+import { guardarNaPastaDaTurma } from "../../pedagogia/ficheiros.js";
 import { importarDeTurma, importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
 import { turmasDoMesmoCurso } from "../../repos/planosCurso.js";
 import { documentoSchema, sessaoParam, sessaoPatchSchema } from "../../pedagogia/esquemas.js";
@@ -88,7 +90,8 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
   /**
    * Folhas de presenças e planos de sessão para imprimir no cockpit: na Financiada, no modelo da candidatura; na Gold, o
    * mesmo desenho com o logótipo da entidade, sem o programa nem os logótipos de financiamento.
-   * O formador só os tira das turmas em que está atribuído; não ficam no dossiê (isso é o «Gerar» do Dossiê TP).
+   * O formador só os tira das turmas em que está atribuído. Quando a coordenação tira o PDF completo, fica também no
+   * dossiê / pasta Drive da turma (sem substituir uma folha assinada carregada à mão).
    */
   for (const [caminho, doc] of [["folhas-presenca", "folhas"], ["planos-sessao", "planos"]] as const) {
     app.get(`/v1/turmas/:regime/:id/${caminho}`, async (req, reply) => {
@@ -103,8 +106,13 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       if (!docs) return reply.code(404).send({ error: v.query.sessao ? "sessão não encontrada" : "turma não encontrada" });
       const base = NOMES_DOCUMENTOS_FIN[doc].replace(/\.pdf$/, "");
       const nome = v.query.sessao ? `${base} - sessao ${v.query.sessao}.pdf` : `${base}.pdf`;
+      const bytes = doc === "folhas" ? docs.folhas : docs.planos;
+      if (!v.query.sessao && req.actor!.role !== "formador") {
+        const [item, ...outros] = itensDoMesmoPdf(doc === "folhas" ? "presencas" : "planos");
+        await guardarNaPastaDaTurma(db, req.log, req.actor!.id, regime, id, item!, nome, bytes, outros);
+      }
       await audit(db, req.actor!.id, "turma.documento_pdf", "turma", String(id), req.ip, { doc, sessao: v.query.sessao ?? null });
-      return enviarPdf(reply, nome, doc === "folhas" ? docs.folhas : docs.planos);
+      return enviarPdf(reply, nome, bytes);
     });
   }
 

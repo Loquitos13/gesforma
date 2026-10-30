@@ -581,6 +581,8 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       for (const v of ["Programa:", "Prioridade do Programa:", "Tipologia de Ação:", "Tipologia de Intervenção:", "Tipologia de Operação:", "UFCD:", "Ação:"]) {
         expect(lista, v).toContain(v);
       }
+      // Fica também no dossiê / pasta Drive da turma.
+      expect((await anexosDaTurma(ctx.db, "fin", t.id)).find(a => a.item_id === "listagem-formandos")?.file_name).toBe("ListaSelecionados.pdf");
       // O formador não tira a listagem.
       expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).statusCode).toBe(403);
 

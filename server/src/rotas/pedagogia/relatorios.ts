@@ -2,7 +2,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { listagemFormandosFin, listagemFormandosGold } from "../../documentosFin.js";
-import { anexarPdfDtp } from "../../pedagogia/ficheiros.js";
+import { anexarPdfDtp, guardarNaPastaDaTurma } from "../../pedagogia/ficheiros.js";
 import { ITEM_PERGUNTAS, NOME_PERGUNTAS, perguntasEnviadas } from "../../pedagogia/inqueritos.js";
 import { dadosRelatorioFinal } from "../../pedagogia/relatorio.js";
 import { pdfPerguntasInqueritos, pdfRelatorioFinal, pdfRelatorioInqueritos, type RelatorioFinalDados } from "../../relatorioFinal.js";
@@ -82,6 +82,7 @@ export function registarRelatorios(app: FastifyInstance, { db, requireAuth, audi
     const { regime, id } = v.params;
     const doc = regime === "fin" ? await listagemFormandosFin(db, id) : await listagemFormandosGold(db, id);
     if (!doc) return reply.code(404).send({ error: "turma não encontrada" });
+    await guardarNaPastaDaTurma(db, req.log, req.actor!.id, regime, id, "listagem-formandos", doc.nome, doc.bytes);
     await audit(db, req.actor!.id, "turma.listagem_formandos", "turma", String(id), req.ip, { regime });
     return enviarPdf(reply, doc.nome, doc.bytes);
   });

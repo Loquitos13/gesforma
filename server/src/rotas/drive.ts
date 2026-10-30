@@ -155,7 +155,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const state = newToken(24);
     const exp = new Date(Date.now() + 10 * 60_000).toISOString();
     const redirectUri = driveCallbackUri(req);
-    await criarEstadoOauth(db, { state, userId: req.actor!.id, redirectTo: `${publicOrigin(req)}/gesforma/configuracoes?drive=ligado`, expiraEm: exp, redirectUri });
+    await criarEstadoOauth(db, { state, userId: req.actor!.id, redirectTo: `${publicOrigin(req)}/gesforma/configuracoes?drive=ligado`, expiraEm: exp, finalidade: "drive", redirectUri });
     return reply.redirect(googleAuthUrl(state, { ...creds, redirectUri }));
   });
 

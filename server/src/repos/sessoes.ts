@@ -92,7 +92,7 @@ export async function criarEstadoOauth(c: Consulta, input: {
   await one(
     c,
     "INSERT INTO oauth_states (state, user_id, redirect_to, expires_at, purpose, oauth_redirect_uri) VALUES ($1, $2, $3, $4, $5, $6)",
-    [input.state, input.userId ?? null, input.redirectTo, input.expiraEm, input.finalidade ?? null, input.redirectUri ?? null],
+    [input.state, input.userId ?? null, input.redirectTo, input.expiraEm, input.finalidade ?? "drive", input.redirectUri ?? null],
   );
 }
 

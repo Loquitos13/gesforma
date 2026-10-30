@@ -57,18 +57,22 @@ describe("atalhos do cronograma", () => {
   });
 });
 
-describe("grelha de tempos de 45 minutos", () => {
-  it("3h30 ocupa quatro tempos e 30 dos 45 minutos do quinto; sobrepostas ficam lado a lado", () => {
+describe("grelha de hora em hora", () => {
+  it("das 8:00 às 19:00, alarga para aulas fora dessa janela; sobrepostas ficam lado a lado", () => {
     const dias = ["2026-11-07", "2026-11-14"];
     const g = grelhaTempos([s("a", "2026-11-07", "09:00", "12:30"), s("b", "2026-11-14", "09:00", "10:45"), s("c", "2026-11-14", "10:00", "11:00", "sincrona")], dias, "Sábado manhã");
-    expect(g.base).toBe(9 * 60);
-    expect(g.n).toBe(6); // 9:00 a 13:30 (o horário habitual vai até às 13:00)
+    expect(g.base).toBe(8 * 60);
+    expect(g.n).toBe(11);
     const a = g.blocos.find(b => b.date === "2026-11-07")!;
-    expect(a).toMatchObject({ linha: 0, linhas: 5 });
-    expect(a.sessoes[0]!.altura).toBeCloseTo((210 / 225) * 100);
+    expect(a).toMatchObject({ linha: 1, linhas: 4 });
+    expect(a.sessoes[0]!.altura).toBeCloseTo((210 / 240) * 100);
     const b = g.blocos.find(x => x.date === "2026-11-14")!;
     expect(b.sessoes.map(x => x.colunas)).toEqual([2, 2]);
-    expect(g.inicioDaLinha(1)).toBe("09:45");
+    expect(g.inicioDaLinha(1)).toBe("09:00");
+    // Uma aula pós-laboral alarga a grelha até às 23:00.
+    const tarde = grelhaTempos([s("d", "2026-11-07", "19:00", "22:30")], dias, "");
+    expect(tarde.base).toBe(8 * 60);
+    expect(tarde.inicioDaLinha(tarde.n)).toBe("23:00");
   });
 });
 

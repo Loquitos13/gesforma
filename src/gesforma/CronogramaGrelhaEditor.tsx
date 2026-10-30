@@ -10,6 +10,7 @@ import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
 import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import { formatDiaMes, sessaoModalidade, type SessaoCronograma } from "../partilhado/turmaModel";
+import { ConfirmarPerigo } from "../partilhado/ui";
 import { TONE, TONE_GOLD, EventoModal } from "./CronogramaGrelha";
 
 export function CronogramaGrelha({
@@ -94,6 +95,7 @@ export function CronogramaGrelha({
   // Os dias seguidos sem eventos (entre a matrícula e o início, ou um intervalo longo entre módulos) ficam numa só
   // coluna («…»); um clique mostra-os. A impressão também os salta.
   const [verSalto, setVerSalto] = useState(false);
+  const [repor, setRepor] = useState(false);
   const saltos = useMemo(() => (verSalto ? [] : saltosVazios(todosOsDias, sessoes, matricula, inicio)), [verSalto, todosOsDias, sessoes, matricula, inicio]);
   const saltoApos = useMemo(() => new Map(saltos.map(x => [x.apos, x])), [saltos]);
   const dates = useMemo(
@@ -212,6 +214,15 @@ export function CronogramaGrelha({
             <tr>
               <th rowSpan={3} className="sticky left-0 z-20 bg-white border-b border-r border-slate-200 px-2 py-1 text-left w-44 min-w-[11rem]">
                 <span className="sr-only">Horário</span>
+                {sessoesSemFim(sessoes).length > 0 && (
+                  <button type="button" onClick={() => setRepor(true)} title="Repor o cronograma (fica em branco)" aria-label="Repor o cronograma"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-600 hover:border-red-200 hover:bg-red-50 hover:text-red-700">
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <path d="M3 12a9 9 0 1 0 3-6.7" /><path d="M3 4v5h5" />
+                    </svg>
+                    Repor
+                  </button>
+                )}
               </th>
               {months.map(m => (
                 <th key={m.key} colSpan={m.count} className="border-b border-slate-200 bg-slate-50 px-1 py-1 text-center text-[10px] font-bold uppercase tracking-wider text-slate-600 whitespace-nowrap">
@@ -258,7 +269,7 @@ export function CronogramaGrelha({
             {Array.from({ length: tempos.n }, (_, r) => (
               <tr key={`tempo-${r}`} style={{ height: "2.4rem" }}>
                 <th className="sticky left-0 z-10 bg-white border-r border-b border-slate-200 px-2 py-1 text-left align-middle font-semibold text-slate-700 w-44 min-w-[11rem]">
-                  {r === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Horário das aulas · tempos de {tempos.tempo} min</p>}
+                  {r === 0 && <p className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Horário das aulas</p>}
                   <p className="text-[11px] font-medium text-slate-600 leading-tight">{horaOficial(tempos.inicioDaLinha(r))} – {horaOficial(tempos.inicioDaLinha(r + 1))}</p>
                 </th>
                 {dates.flatMap(d => {
@@ -471,6 +482,16 @@ export function CronogramaGrelha({
         </button>
       </div>
 
+      <ConfirmarPerigo aberto={repor} onFechar={() => setRepor(false)} titulo="Repor o cronograma?" acao="Repor"
+        descricao={`As ${sessoesSemFim(sessoes).length} entradas do cronograma (aulas, e-learning, avaliações e matrícula) são apagadas e a grelha fica em branco. Sessões com sumário, presenças ou plano assinado são recusadas ao gravar.`}
+        onConfirmar={() => {
+          setRepor(false);
+          setMatriculaDate("");
+          setFim("");
+          setLinhas(linhasFromSessoes([], horario));
+          onChange([]);
+        }} />
+
       {evento && (
         <EventoModal
           date={evento.date}
@@ -494,7 +515,7 @@ export function CronogramaGrelha({
         <li className="flex items-center gap-2"><span className={`w-3.5 h-3.5 rounded-sm ${gold ? "bg-[#ffc000]" : "bg-[#a60000]"}`} /> Aulas presenciais em sala, por módulo</li>
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#1d4ed8]" /> Sessão síncrona em vídeo-conferência</li>
         <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-slate-300" /> E-learning / auto-aprendizagem</li>
-        <li className="flex items-center gap-2"><span className={`w-3.5 h-3.5 rounded-sm ${gold ? "bg-[#e00000]" : "bg-amber-400"}`} /> Data limite de avaliação do(s) módulo(s)</li>
+        <li className="flex items-center gap-2"><span className="w-3.5 h-3.5 rounded-sm bg-[#e00000]" /> Data limite de avaliação do(s) módulo(s)</li>
       </ul>
     </div>
   );

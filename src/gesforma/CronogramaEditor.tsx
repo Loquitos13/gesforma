@@ -12,7 +12,6 @@ import { toastError, toastOk } from "../partilhado/toastBus";
 import { ConfirmarPerigo } from "../partilhado/ui";
 import { hojeIso, emptySessao, formatDiaMes, formatHoraRange, formatMesAno, formadoresNasSessoes, groupCronogramaByMonth, horasCronograma, isSessaoLectiva, modulosDoFormador, modulosLabel, periodoCronograma, proximaSessao, sessaoEstado, sessaoFormadores, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
-import { CronogramaRemover } from "./CronogramaRemover";
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, nome, local, accent = "gold",
@@ -54,7 +53,6 @@ export function CronogramaEditor({
   const [confirmRegen, setConfirmRegen] = useState(false);
   const [openId, setOpenId] = useState<string | null>(null);
   const [aRemover, setARemover] = useState<{ sessao: SessaoCronograma; n: number } | null>(null);
-  const [removerVarias, setRemoverVarias] = useState(false);
   const [publicando, setPublicando] = useState(false);
   const [publicadoUrl, setPublicadoUrl] = useState<string | null>(null);
   // A sessão aberta continua na lista mesmo depois de passar a assíncrona, para
@@ -128,10 +126,6 @@ export function CronogramaEditor({
       </button>
       <button type="button" onClick={addSessao} className={`inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border bg-white ${ghost}`}>
         <IconPlus /> Sessão
-      </button>
-      <button type="button" disabled={plano.length === 0} onClick={() => setRemoverVarias(true)}
-        className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-lg border border-red-200 bg-white text-red-700 hover:bg-red-50 disabled:opacity-40">
-        Remover sessões
       </button>
       <button
         type="button"
@@ -262,8 +256,6 @@ export function CronogramaEditor({
         </div>
       )}
 
-      <CronogramaRemover aberto={removerVarias} sessoes={sessoes} onFechar={() => setRemoverVarias(false)}
-        onChange={next => { onChange(next); setOpenId(null); }} />
       <ConfirmarPerigo
         aberto={aRemover !== null}
         onFechar={() => setARemover(null)}

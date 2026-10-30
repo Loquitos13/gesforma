@@ -18,7 +18,7 @@ export type CronogramaPrintInput = {
   sessoes: SessaoCronograma[];
   /** Folha para mostrar dentro de outra página, sem abrir a impressão. */
   embutido?: boolean;
-  /** Gold (modelo do CCP): aulas presenciais a amarelo e datas limite de avaliação a vermelho. */
+  /** Gold (modelo do CCP): aulas presenciais a amarelo (as datas limite de avaliação são sempre a vermelho). */
   cores?: "gold" | "fin";
   /** Dados da entidade (Configurações › Entidade) para o cabeçalho. */
   entidade?: Partial<Record<"nome" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site", string>>;
@@ -145,7 +145,7 @@ function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: strin
   for (const b of t.blocos) porDia.set(b.date, [...(porDia.get(b.date) ?? []), b]);
   return Array.from({ length: t.n }, (_, r) => {
     const grupo = r === 0
-      ? `<th class="group" rowspan="${t.n}">Horário das aulas<br /><span class="sub">tempos de ${t.tempo} min</span></th>`
+      ? `<th class="group" rowspan="${t.n}">Horário das aulas</th>`
       : "";
     const hora = `<th class="time tempo">${esc(horaOficial(t.inicioDaLinha(r)))} – ${esc(horaOficial(t.inicioDaLinha(r + 1)))}</th>`;
     const cells = dates.map(d => {
@@ -314,7 +314,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .pres { background: ${input.cores === "gold" ? "#ffc000; color: #111" : "#a60000; color: #fff"}; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
-    .aval { background: ${input.cores === "gold" ? "#e00000; color: #fff" : "#f5c518; color: #111"}; }
+    .aval { background: #e00000; color: #fff; }
     .mat { background: #15803d; color: #fff; }
     tr.tempo { height: ${TEMPO_MM}mm; }
     .group .sub { font-weight: 400; color: #444; }

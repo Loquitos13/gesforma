@@ -450,9 +450,9 @@ export function saltoMatricula(dates: string[], sessoes: SessaoCronograma[], mat
 
 /**
  * Cortes da grelha: os dias seguidos sem nenhum evento ficam numa só coluna («…») depois do último dia com evento,
- * para o cronograma não ficar comprido demais. Entre a matrícula e o início bastam 3 dias; no resto, `minimo`.
+ * para o cronograma não ficar comprido demais (a partir de `minimo` dias seguidos, como entre a matrícula e o início).
  */
-export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string, minimo = 7) {
+export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string, minimo = 3) {
   const comEvento = new Set(sessoesSemFim(sessoes).map(s => s.data));
   if (matricula) comEvento.add(matricula);
   if (inicio) comEvento.add(inicio);
@@ -464,9 +464,8 @@ export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matri
     while (j + 1 < dates.length && !comEvento.has(dates[j + 1]!)) j += 1;
     const apos = dates[i - 1];
     const n = j - i + 1;
-    const minimoAqui = matricula && apos === matricula && inicio > matricula ? 3 : minimo;
     // Só corta entre dois dias com eventos (o fim da grelha fica como está).
-    if (apos && j + 1 < dates.length && n >= minimoAqui) saltos.push({ apos, de: dates[i]!, ate: dates[j]!, n });
+    if (apos && j + 1 < dates.length && n >= minimo) saltos.push({ apos, de: dates[i]!, ate: dates[j]!, n });
     i = j + 1;
   }
   return saltos;
@@ -527,10 +526,15 @@ export function mudarHorasLinha(sessoes: SessaoCronograma[], linha: GrelhaLinha,
 }
 
 // ── Grelha de tempos (aulas presenciais e síncronas) ──────────────────────────────────────────────────────────
-// As linhas são tempos lectivos de 45 minutos; cada sessão ocupa os tempos da sua duração e o último fica
-// preenchido só na parte que a sessão usa (ex.: 3h30 = quatro tempos inteiros e 30 dos 45 minutos do quinto).
+// As linhas vão de hora em hora, das 8:00 às 19:00 (alargam se houver aulas antes ou depois); cada sessão ocupa as
+// linhas da sua duração e a última fica preenchida só na parte que a sessão usa (ex.: 9:00–12:30 = três horas e meia).
 
+/** Duração mínima de uma aula criada na grelha. */
 export const TEMPO_MIN = 45;
+/** Janela da grelha (minutos desde a meia-noite) e altura de cada linha. */
+export const GRELHA_INICIO = 8 * 60;
+export const GRELHA_FIM = 19 * 60;
+export const GRELHA_PASSO = 60;
 
 export const minutosDaHora = (h: string) => {
   const n = normHora(h);
@@ -549,16 +553,15 @@ export type BlocoTempos = {
   sessoes: { s: SessaoCronograma; topo: number; altura: number; coluna: number; colunas: number }[];
 };
 
-export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], horario: string, tempo = TEMPO_MIN) {
+export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], _horario: string, tempo = GRELHA_PASSO) {
   const lectivas = sessoesSemFim(sessoes).filter(s => {
     const m = sessaoModalidade(s);
     return (m === "presencial" || m === "sincrona") && minutosDaHora(s.horaInicio) != null && minutosDaHora(s.horaFim) != null
       && minutosDaHora(s.horaFim)! > minutosDaHora(s.horaInicio)!;
   });
-  const padrao = defaultSlot(horario, "presencial");
-  const inicios = [...lectivas.map(s => minutosDaHora(s.horaInicio)!), minutosDaHora(padrao.horaInicio)!];
-  const fins = [...lectivas.map(s => minutosDaHora(s.horaFim)!), minutosDaHora(padrao.horaFim)!];
-  const base = Math.min(...inicios);
+  const inicios = [...lectivas.map(s => minutosDaHora(s.horaInicio)!), GRELHA_INICIO];
+  const fins = [...lectivas.map(s => minutosDaHora(s.horaFim)!), GRELHA_FIM];
+  const base = Math.floor(Math.min(...inicios) / tempo) * tempo;
   const n = Math.max(1, Math.ceil((Math.max(...fins) - base) / tempo));
   const dias = new Set(dates);
   const blocos: BlocoTempos[] = [];

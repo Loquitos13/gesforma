@@ -45,16 +45,15 @@ export const TONE: Record<string, string> = {
   presencial: "bg-[#a60000] text-white",
   sincrona: "bg-[#1d4ed8] text-white",
   auto: "bg-slate-200 text-slate-700",
-  avaliacao: "bg-amber-400 text-amber-950",
+  avaliacao: "bg-[#e00000] text-white",
   matricula: "bg-[#15803d] text-white",
   empty: "bg-white hover:bg-slate-50 text-slate-400",
 };
 
-/** Gold (modelo do CCP): aulas presenciais a amarelo e datas limite de avaliação a vermelho. */
+/** Gold (modelo do CCP): aulas presenciais a amarelo. As datas limite de avaliação são sempre a vermelho. */
 export const TONE_GOLD: Record<string, string> = {
   ...TONE,
   presencial: "bg-[#ffc000] text-slate-900",
-  avaliacao: "bg-[#e00000] text-white",
 };
 
 type EventoMod = Exclude<SessaoModalidade, "matricula">;

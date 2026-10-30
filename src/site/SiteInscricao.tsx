@@ -140,10 +140,12 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   // Pré-inscrição num local registado sem turmas (ex.: Sala Virtual): fica o local, sem data de início.
   const localSemTurmas = preinscricao && ofertaEstado === "pronto" && Boolean(local) && !locais.includes(local);
   const precisaTurma = doCurso.length > 0 && !localSemTurmas;
-  // Sem turmas com data (ou nesse local), o pedido começa nos dados.
+  // Pré-inscrição com vários locais: escolhe-se o local primeiro, mesmo nos que ainda não têm datas.
+  const escolheLocal = preinscricao && ofertaEstado === "pronto" && locaisEscolha.length > 1;
+  // Sem turmas com data (ou nesse local) nem local para escolher, o pedido começa nos dados.
   useEffect(() => {
-    if (passo === "turma" && ofertaEstado !== "a-carregar" && !precisaTurma) setPasso("dados");
-  }, [passo, ofertaEstado, precisaTurma]);
+    if (passo === "turma" && ofertaEstado !== "a-carregar" && !precisaTurma && !escolheLocal) setPasso("dados");
+  }, [passo, ofertaEstado, precisaTurma, escolheLocal]);
   // Um só local: fica escolhido. Um local vindo da página que não tem turmas: limpa-se (na pré-inscrição fica).
   useEffect(() => {
     if (ofertaEstado !== "pronto") return;
@@ -175,6 +177,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setErro("");
   }
   function continuarTurma() {
+    if (escolheLocal && !local) { setErro("Escolha o local."); return; }
     if (precisaTurma && !turmaId) { setErro("Escolha a data de início da turma."); return; }
     setErro("");
     setPasso("dados");
@@ -276,7 +279,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
       : "";
   const pagamentoBloqueado = passo === "pagamento" && Boolean(falhaPagamento());
   const passos: [Passo, string][] = [
-    ...(precisaTurma || ofertaEstado === "a-carregar" ? [["turma", "Local, data de início e horário"] as [Passo, string]] : []),
+    ...(precisaTurma || escolheLocal || ofertaEstado === "a-carregar" ? [["turma", "Local, data de início e horário"] as [Passo, string]] : []),
     ["dados", "Os seus dados"],
     ...(prepago ? [["pagamento", "Pagamento"] as [Passo, string]] : []),
   ];
@@ -362,7 +365,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                   )}
                   <fieldset>
                     <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início e horário</legend>
-                    {local && <p className="mt-1 text-xs text-[#1C3350]/60">Veja o cronograma, selecione a data pretendida e clique em Continuar.</p>}
+                    {local && datas.length > 0 && !localSemTurmas && <p className="mt-1 text-xs text-[#1C3350]/60">Veja o cronograma, selecione a data pretendida e clique em Continuar.</p>}
                     {!local ? (
                       <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
                     ) : localSemTurmas || !datas.length ? (

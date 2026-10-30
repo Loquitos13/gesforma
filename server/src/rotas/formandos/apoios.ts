@@ -295,7 +295,8 @@ export function registarApoios(app: FastifyInstance, deps: Deps) {
         if (l && !l.exclusao) {
           atual.dias += l.dias;
           atual.horas = Math.round((atual.horas + l.horas) * 100) / 100;
-          atual.valor = Math.round((atual.valor + (l.bloqueadoIban ? 0 : l.valor)) * 100) / 100;
+          // O valor a que tem direito; sem IBAN o pagamento fica à espera, e a coluna do IBAN di-lo.
+          atual.valor = Math.round((atual.valor + l.valor) * 100) / 100;
         }
         porFormando.set(c.formandoId, atual);
       }

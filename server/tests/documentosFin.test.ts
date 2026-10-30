@@ -548,6 +548,10 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       expect(lista).toContain("LISTAGEM DE FORMANDOS");
       expect(lista).toContain("Ana Silva");
       expect(lista).toContain("Bruno Silva");
+      // Cabeçalho com o enquadramento da candidatura, como nas folhas de presenças.
+      for (const v of ["Programa:", "Prioridade do Programa:", "Tipologia de Ação:", "Tipologia de Intervenção:", "Tipologia de Operação:", "UFCD:", "Ação:"]) {
+        expect(lista, v).toContain(v);
+      }
       // O formador não tira a listagem.
       expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).statusCode).toBe(403);
 

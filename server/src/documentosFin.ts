@@ -805,7 +805,7 @@ export async function pdfFolhasPresencaFin(cab: CabecalhoFin, sessoes: SessaoDoc
 
 /** Bloco de linhas «rótulo: valor» no topo de uma listagem (ação, curso, local…). */
 function blocoInfo(d: Doc, pg: Pg, pares: [string, string][]) {
-  for (const [r, v] of pares) if (v) linhaPar(d, pg, r, v, 110, 17);
+  for (const [r, v] of pares) if (v) linhaPar(d, pg, r, v, 130, 17);
   pg.y -= 12;
 }
 
@@ -984,7 +984,18 @@ export async function listagemFormandosFin(db: Db, turmaId: number) {
   const bytes = await pdfTabelaFin(cab, {
     titulo: "Listagem de formandos",
     subtitulo: `${formandos.length} ${formandos.length === 1 ? "formando" : "formandos"}`,
-    pares: [["Entidade:", cab.entidade], ["Programa:", cab.candidatura.programa], ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")], ["Ação:", cab.acao], ["Local:", cab.local]],
+    // O mesmo enquadramento da candidatura que as folhas de presenças levam no topo.
+    pares: [
+      ["Entidade:", cab.entidade],
+      ["Programa:", cab.candidatura.programa],
+      ["Prioridade do Programa:", cab.candidatura.prioridade],
+      ["Tipologia de Ação:", cab.candidatura.tipologiaAcao],
+      ["Tipologia de Intervenção:", cab.candidatura.tipologiaIntervencao],
+      ["Tipologia de Operação:", cab.candidatura.tipologiaOperacao],
+      ["UFCD:", [cab.ufcdCodigo, cab.ufcdNome].filter(Boolean).join(" | ")],
+      ["Ação:", cab.acao],
+      ["Local:", cab.local],
+    ],
     colunas: [{ titulo: "N.º", peso: 4 }, { titulo: "Nome", peso: 30 }, { titulo: "Email", peso: 28 }, { titulo: "Telefone", peso: 13 }, { titulo: "NIF", peso: 11 }, { titulo: "Estado", peso: 14 }],
     linhas,
     vazio: "Ainda sem formandos nesta turma.",

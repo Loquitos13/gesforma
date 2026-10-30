@@ -209,7 +209,7 @@ export async function saveGoogleAccount(db: Db, tokens: {
   const email = await googleUserEmail(tokens.access_token);
   const prev = await contaGoogle(db);
   const refresh = tokens.refresh_token
-    ?? (prev?.refresh_token ? openSecret(prev.refresh_token) : "");
+    ?? refreshLegivel(prev?.refresh_token);
   if (!refresh) throw new Error("Google não devolveu refresh token. Volte a ligar a conta.");
   const expiry = new Date(Date.now() + tokens.expires_in * 1000).toISOString();
   await gravarContaGoogle(db, {
@@ -246,7 +246,8 @@ export async function getDriveStatus(db: Db) {
   const account = await loadAccount(db);
   const creds = await driveCreds(db);
   const configured = googleConfigured(creds);
-  const connected = Boolean(account?.refresh_token);
+  const ilegivel = Boolean(account?.refresh_token) && !refreshLegivel(account?.refresh_token);
+  const connected = Boolean(account?.refresh_token) && !ilegivel;
   const access = connected ? await usableToken(db) : { token: null, reason: null as string | null };
   const reason = connected && !access.token ? (access.reason || "sem-token") : null;
   return {
@@ -261,14 +262,27 @@ export async function getDriveStatus(db: Db) {
     clientId: creds.clientId,
     hasSecret: Boolean(creds.clientSecret),
     fromEnv: creds.fromEnv,
-    hint: hintDoDrive(configured, connected, account?.email ?? null, reason),
+    hint: ilegivel
+      ? "A ligação ao Google gravada noutra instalação já não se lê neste servidor. Volte a ligar a conta Google da ENA (ou defina LEGACY_SESSION_SECRET com o segredo antigo)."
+      : hintDoDrive(configured, connected, account?.email ?? null, reason),
   };
+}
+
+/** O refresh token gravado, ou "" se não se lê com os segredos deste servidor (ex.: selado com o SESSION_SECRET de outra instalação). */
+function refreshLegivel(sealed: string | null | undefined) {
+  if (!sealed) return "";
+  try { return openSecret(sealed); } catch { return ""; }
 }
 
 export async function tokenDrive(db: Db) {
   const account = await loadAccount(db);
   if (!account?.refresh_token) return null;
-  const refresh = openSecret(account.refresh_token);
+  // Credenciais ilegíveis contam como Drive desligada: o resto (validar uma pré-inscrição…) continua sem a Drive.
+  const refresh = refreshLegivel(account.refresh_token);
+  if (!refresh) {
+    console.warn("[drive] o refresh token gravado não se lê com o SESSION_SECRET atual: volte a ligar a conta Google (ou defina LEGACY_SESSION_SECRET).");
+    return null;
+  }
   const exp = account.expiry ? new Date(account.expiry).getTime() : 0;
   if (exp - 60_000 > Date.now() && account.access_token) {
     try { return openSecret(account.access_token); } catch { /* refresh */ }

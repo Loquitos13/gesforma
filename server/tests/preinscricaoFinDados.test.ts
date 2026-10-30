@@ -317,8 +317,14 @@ describe("validação: os dados passam para a ficha do formando", () => {
     const nomeCompleto = `${l.nome} ${l.apelido}`.trim();
     const busca = await pedido(ctx, "financiada", "GET", `/v1/crm/leads?regime=fin&q=${encodeURIComponent(nomeCompleto)}&perPage=100`);
     expect(busca.json().items.map((x: { id: number }) => x.id)).toContain(id);
+    // Uma ligação à Google Drive gravada noutra instalação (selada com outro segredo) não impede a validação:
+    // conta como Drive desligada e a pasta fica por mover.
+    await ctx.db.query(`INSERT INTO oauth_accounts (provider, email, access_token, refresh_token, expiry)
+      VALUES ('google', 'drive@exemplo.pt', 'x', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', now())
+      ON CONFLICT (provider) DO UPDATE SET refresh_token = EXCLUDED.refresh_token`);
     const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
     expect(ok.statusCode, ok.body).toBe(200);
+    await ctx.db.query("DELETE FROM oauth_accounts WHERE provider = 'google'");
 
     const ficha = await ctx.db.query<{ id: number }>("SELECT id FROM formandos_fin WHERE lower(email) = $1", [email]);
     const formandoId = Number(ficha.rows[0]!.id);

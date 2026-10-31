@@ -2,7 +2,7 @@
 // (título, texto, imagens, vídeo e logótipos), que se escrevem no backoffice em Gestão › Empresas / Business.
 import { createContext, useContext, useEffect, useState, type ReactNode } from "react";
 import type { ComponentConfig } from "@puckeditor/core";
-import { slugServico, videoServico, type ServicoSite } from "../../partilhado/siteServicos";
+import { slugServico, videoServico, type CartaoServico, type ServicoSite } from "../../partilhado/siteServicos";
 import { TextoEmLinha, TextoFormatado } from "../../partilhado/TextoFormatadoVista";
 import { linhasPontos } from "../../partilhado/textoFormatado";
 import { Icon } from "../SiteLanding";
@@ -78,6 +78,21 @@ function EscolherServico({ value, onChange, vazio }: { value: string; onChange: 
       {servicos.map(s => <option key={slugServico(s)} value={slugServico(s)}>{s.titulo}</option>)}
     </select>
   );
+}
+
+/**
+ * As páginas «dentro» deste serviço (ex.: os dois serviços da Certifica), como cartões em destaque com ligação.
+ * Aparecem sempre, mesmo que os cartões escritos no backoffice não tenham ligação para elas; as que já têm um cartão
+ * com ligação não se repetem.
+ */
+function useCartoesFilhos(s: ServicoSite): CartaoServico[] {
+  const { servicos } = useContext(ServicoAtualCtx);
+  const proprio = slugServico(s);
+  const ligados = new Set((s.cartoes ?? []).map(c => ligacaoSegura(c.ligacao) ?? "").filter(Boolean));
+  return servicos
+    .filter(x => x.pai && x.pai === proprio && slugServico(x) !== proprio)
+    .map(x => ({ titulo: x.titulo, texto: x.texto, rotulo: "", ligacao: `/empresas/${slugServico(x)}` }))
+    .filter(c => c.titulo?.trim() && !ligados.has(c.ligacao));
 }
 
 /** Invólucro dos blocos do serviço: aparência, pega de arrastar e nada quando o serviço não tem o conteúdo. */
@@ -215,15 +230,16 @@ export const ServicoCartoes: ComponentConfig<CartoesProps> = {
   },
   defaultProps: { titulo: "", colunas: 4, textoLigacao: "Saber mais", tTitulo: tipoVazia(), aparencia: estiloVazio() },
   render: p => (
-    <CaixaServico p={p} tem={s => (s.cartoes ?? []).some(c => c.titulo?.trim())} vazio={`O serviço não tem cartões. ${ONDE}`}>
-      {s => (
+    <CaixaServicoComFilhos p={p} vazio={`O serviço não tem cartões. ${ONDE}`}>
+      {(s, filhos) => (
         <>
           <Titulo texto={p.titulo} t={p.tTitulo} className="mb-6 font-serif text-3xl font-bold" />
           {(() => {
             const cartoes = (s.cartoes ?? []).filter(c => c.titulo?.trim());
             const informativos = cartoes.filter(c => !ligacaoSegura(c.ligacao));
-            // Cartões com ligação (ex.: os dois da Certifica, um por serviço) vêm primeiro e em destaque: são o caminho.
-            const destaques = cartoes.filter(c => ligacaoSegura(c.ligacao));
+            // Cartões com ligação e as páginas dentro deste serviço (ex.: os dois da Certifica) vêm primeiro e em
+            // destaque: são o caminho.
+            const destaques = [...cartoes.filter(c => ligacaoSegura(c.ligacao)), ...filhos];
             return (
               <>
                 {destaques.length > 0 && (
@@ -261,9 +277,20 @@ export const ServicoCartoes: ComponentConfig<CartoesProps> = {
           })()}
         </>
       )}
-    </CaixaServico>
+    </CaixaServicoComFilhos>
   ),
 };
+
+/** A caixa dos cartões aparece também quando o serviço só tem páginas dentro dele (sem cartões escritos). */
+function CaixaServicoComFilhos({ p, vazio, children }: { p: Base; vazio: string; children: (s: ServicoSite, filhos: CartaoServico[]) => ReactNode }) {
+  const { servico } = useContext(ServicoAtualCtx);
+  const filhos = useCartoesFilhos(servico ?? ({} as ServicoSite));
+  return (
+    <CaixaServico p={p} tem={s => (s.cartoes ?? []).some(c => c.titulo?.trim()) || filhos.length > 0} vazio={vazio}>
+      {s => children(s, filhos)}
+    </CaixaServico>
+  );
+}
 
 // ─── Faixa final (pedido de proposta) ───────────────────────────────────────
 

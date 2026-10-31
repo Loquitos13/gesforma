@@ -72,6 +72,8 @@ export const SITE_OMISSAO = {
   metodoNota: "4,8/5",
   metodoNotaLegenda: "Satisfação média",
   evaNome: "Eva",
+  /** Número de WhatsApp da ENA (com indicativo, ex.: 351912345678): «Falar com um operador» abre a conversa com ele. */
+  evaWhatsapp: "",
   evaBoasVindas: "Olá! Sou a Eva, assistente virtual da ENA. Em menos de dois minutos ajudo a encontrar a formação certa e a tratar da inscrição.",
   evaObjetivos: "Evoluir na carreira\nCompetências digitais | Digital\nGestão e liderança | Gestão, Competências\nSaúde e segurança | Saúde, Segurança",
   metodoKicker: "Mais do que aprender",

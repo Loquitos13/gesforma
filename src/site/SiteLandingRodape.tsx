@@ -13,6 +13,7 @@ function WhatsAppAssistant() {
   const t = useSiteTexto();
   const nomeEva = t("evaNome").trim() || "Eva";
   const objectivos = objectivosEva(t("evaObjetivos"));
+  const numeroEna = t("evaWhatsapp").replace(/\D/g, "");
   const [open, setOpen] = useState(false);
   const [step, setStep] = useState<"welcome" | "name" | "goal" | "path" | "format" | "courses" | "confirm" | "handoff">("welcome");
   const [typing, setTyping] = useState(false);
@@ -73,8 +74,17 @@ function WhatsAppAssistant() {
     format: "E em que formato gostaria de aprender?",
     courses: `${name}, selecionei ${visibleCourses.length} ${visibleCourses.length === 1 ? "opção" : "opções"} com base nas suas respostas.`,
     confirm: chosen ? `Esta é uma boa opção para ${goal.toLowerCase() || "o seu objetivo"}. Quer avançar?` : "",
-    handoff: "Claro. Deixe um contacto e um consultor ENA continuará esta conversa consigo.",
+    handoff: numeroEna
+      ? "Claro. Abra a conversa no seu WhatsApp e um operador da ENA responde-lhe aí. Se preferir, deixe o contacto e ligamos-lhe."
+      : "Claro. Deixe um contacto e um consultor ENA continuará esta conversa consigo.",
   }[step];
+
+  // A conversa com um operador começa no WhatsApp da própria pessoa (wa.me): fica a saber-se que o número tem WhatsApp
+  // e a ENA responde-lhe diretamente, sem mensagens pré-aprovadas (quem escreve primeiro é a pessoa).
+  const ligacaoOperador = numeroEna ? `https://wa.me/${numeroEna}?text=${encodeURIComponent([
+    `Olá! ${name && name !== "Visitante" ? `Sou ${name}. ` : ""}Vim do site da ENA e gostava de falar com um operador`,
+    chosen ? ` sobre o curso «${chosen.title}».` : goal ? ` sobre formação em «${goal}».` : ".",
+  ].join(""))}` : "";
 
   function enviar(event: FormEvent) {
     event.preventDefault();
@@ -158,6 +168,12 @@ function WhatsAppAssistant() {
 
             {!typing && step === "courses" && (
               <div className="ml-auto max-w-[94%] space-y-2">
+                {visibleCourses.length === 0 && (
+                  <div className="rounded-xl bg-white p-3 text-sm leading-6 shadow-sm">
+                    Não encontrei cursos com estas escolhas.
+                    <button type="button" onClick={() => transition("handoff")} className="mt-2 flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-left text-sm font-bold text-white">Falar com um operador <Icon name="arrow" className="h-4 w-4" /></button>
+                  </div>
+                )}
                 {visibleCourses.slice(0, 4).map((course, index) => (
                   <button type="button" key={course.id} onClick={() => chooseCourse(course)} className="w-full rounded-xl bg-white p-3 text-left shadow-sm ring-1 ring-[#1C3350]/8 hover:ring-[#25D366]">
                     <div className="flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-[#075E54]">{course.funding === "Gold" ? "ENA Gold" : "Financiada"} · {course.enrollment}</span>{index === 0 && goal && <span className="rounded-full bg-[#DCF8C6] px-2 py-0.5 text-[9px] font-bold text-[#075E54]">Recomendada</span>}</div>
@@ -192,17 +208,26 @@ function WhatsAppAssistant() {
             )}
             {!typing && step === "handoff" && (
               handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido registado.</strong><p className="mt-1 text-[#1C3350]/60">Ficou na base de dados e o email automático segue para o endereço indicado.</p>{(!chosen || ePreinscricao(chosen.enrollment)) && <a href="/pre-inscricao" className="mt-3 inline-flex font-bold text-[#075E54] underline">Completar a pré-inscrição</a>}</div> :
-                <form onSubmit={enviar} className="ml-auto max-w-[92%] space-y-2 rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-3 shadow-sm">
+                <div className="ml-auto max-w-[92%] space-y-2">
+                {ligacaoOperador && (
+                  <a href={ligacaoOperador} target="_blank" rel="noreferrer"
+                    className="flex w-full items-center justify-between rounded-xl bg-[#25D366] px-4 py-3 text-sm font-bold text-[#073B35] shadow-sm hover:brightness-95">
+                    <span className="flex items-center gap-2"><Icon name="whatsapp" className="h-5 w-5" />Falar com um operador no WhatsApp</span><Icon name="arrow" className="h-4 w-4" />
+                  </a>
+                )}
+                <form onSubmit={enviar} className="space-y-2 rounded-2xl rounded-tr-sm bg-[#DCF8C6] p-3 shadow-sm">
+                  {ligacaoOperador && <p className="text-xs font-semibold text-[#1C3350]/60">Ou deixe o contacto e ligamos-lhe:</p>}
                   <input name="nome" required defaultValue={name} placeholder="Nome" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
                   <input name="email" required type="email" placeholder="Email" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
-                  <input name="telf" required type="tel" placeholder="Telefone" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  <input name="telf" required type="tel" placeholder="Telemóvel (com WhatsApp)" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
                   <label className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-xs leading-5"><input name="consentimento" type="checkbox" required className="mt-1 accent-[#075E54]" />Aceito que a ENA use estes dados para me contactar sobre a formação.</label>
                   {handoffErro && <p className="text-xs font-semibold text-[#A60000]">{handoffErro}</p>}
                   <button type="submit" disabled={handoffBusy} className="w-full rounded-lg bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{handoffBusy ? "A registar…" : "Pedir contacto humano"}</button>
                 </form>
+                </div>
             )}
           </div>
-          <footer className="flex items-center justify-between border-t border-[#1C3350]/8 bg-white px-4 py-3 text-[10px] text-[#1C3350]/40"><button type="button" onClick={() => transition("handoff")} className="font-bold text-[#075E54]">Falar com uma pessoa</button><button type="button" onClick={restart} className="font-bold text-[#075E54]">Limpar conversa</button></footer>
+          <footer className="flex items-center justify-between border-t border-[#1C3350]/8 bg-white px-4 py-3 text-[10px] text-[#1C3350]/40"><button type="button" onClick={() => transition("handoff")} className="font-bold text-[#075E54]">Falar com um operador</button><button type="button" onClick={restart} className="font-bold text-[#075E54]">Limpar conversa</button></footer>
         </aside>
       )}
       <button type="button" onClick={() => setOpen(!open)} className="fixed bottom-5 right-4 z-50 grid h-16 w-16 place-items-center rounded-full bg-[#25D366] text-white shadow-[0_12px_35px_rgba(7,94,84,.35)] transition-transform hover:scale-105 sm:right-6" aria-label={open ? "Fechar assistente" : "Abrir assistente de pré-inscrição"}>

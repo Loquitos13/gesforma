@@ -51,7 +51,7 @@ export default function Site(_props: VistaProps) {
   );
 }
 
-const CHAVES = ["tituloSeparador", "rgpdObrigatorio", "rgpdVersao", "evaNome", "evaBoasVindas", "evaObjetivos"] as const;
+const CHAVES = ["tituloSeparador", "rgpdObrigatorio", "rgpdVersao", "evaNome", "evaBoasVindas", "evaObjetivos", "evaWhatsapp"] as const;
 type Chave = typeof CHAVES[number];
 
 /** Definições do site que não são layout: separador do browser, consentimento e assistente. */
@@ -91,6 +91,9 @@ function DefinicoesSite() {
           <Campo rotulo="Frase de boas-vindas">{p => <AreaTexto {...p} rows={3} value={v.evaBoasVindas} onChange={e => mudar("evaBoasVindas", e.target.value.slice(0, 800))} />}</Campo>
           <Campo rotulo="Objectivos, um por linha" ajuda="Depois de | vêm as áreas do curso, separadas por vírgula.">
             {p => <AreaTexto {...p} rows={5} value={v.evaObjetivos} onChange={e => mudar("evaObjetivos", e.target.value.slice(0, 800))} />}
+          </Campo>
+          <Campo rotulo="WhatsApp da ENA para «Falar com um operador»" ajuda="Com o indicativo, só números (ex.: 351912345678). A pessoa abre a conversa no WhatsApp dela com este número e a ENA responde-lhe diretamente. Vazio: só fica o formulário de contacto.">
+            {p => <Entrada {...p} className="max-w-[16rem]" inputMode="numeric" placeholder="351…" value={v.evaWhatsapp} onChange={e => mudar("evaWhatsapp", e.target.value.replace(/\D/g, "").slice(0, 15))} />}
           </Campo>
         </div>
       </Cartao>

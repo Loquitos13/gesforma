@@ -13,6 +13,7 @@ import { gravarSessao, listarSessoes } from "./repos/pedagogiaSessoes.js";
 import { turmaParaPlanos, turmasAbertasDoCurso } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
+import { atribuirPlanos } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -53,24 +54,30 @@ export function planoTemTexto(raw: unknown) {
 
 type SumarioCurso = { conteudos: string; atividades: string };
 
-/** Planos com texto da ficha do curso, pela ordem da sessão. */
-async function planosDoCurso(db: Db, regime: Regime, cursoId: number) {
-  return new Map([...(await modelosDoCurso(db, regime, cursoId))].flatMap(([n, m]) => (m.plano ? [[n, m.plano] as const] : [])));
-}
+type ModeloCurso = { ordem: number; modulo: string; plano: PlanoSessao | null; sumario: SumarioCurso | null };
 
-/** Plano e sumário padrão de cada sessão da ficha do curso (só os que têm texto). */
+/** Plano e sumário padrão de cada sessão da ficha do curso (só os que têm texto), com o módulo / tema a que se ligam. */
 async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
   const ficha = await lerFicha(db, regime, cursoId);
   const linhas = asObj(ficha?.payload).planosSessao;
-  const out = new Map<number, { plano: PlanoSessao | null; sumario: SumarioCurso | null }>();
+  const out: ModeloCurso[] = [];
   for (const l of Array.isArray(linhas) ? linhas : []) {
     const p = planoDaLinha(l);
     if (!p) continue;
     const s = asObj(asObj(l).sumario);
     const sumario = { conteudos: txt(s.conteudos, 6000), atividades: txt(s.atividades, 6000) };
     const temSumario = regime === "gold" && Boolean(sumario.conteudos.trim() || sumario.atividades.trim());
-    if (planoTemTexto(p.plano) || temSumario) out.set(p.ordem, { plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
+    if (planoTemTexto(p.plano) || temSumario) {
+      out.push({ ordem: p.ordem, modulo: txt(asObj(l).modulo, 300), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
+    }
   }
+  return out;
+}
+
+/** As sessões lectivas da turma, pela ordem (a n-ésima é a sessão n). */
+function sessoesLectivas(cronograma: unknown) {
+  const out: { id?: unknown; modulos?: unknown }[] = [];
+  for (let n = 1; sessaoLectivaN(cronograma, n); n++) out.push(sessaoLectivaN(cronograma, n) as { id?: unknown; modulos?: unknown });
   return out;
 }
 
@@ -79,7 +86,10 @@ export async function ordensComPlanoDoCurso(db: Db, regime: Regime, turmaId: num
   const turma = await turmaParaPlanos(db, regime, turmaId);
   if (!turma) return new Set<number>();
   const cursoId = turma.curso_id ?? (await cursoPorNome(db, regime, turma.curso))?.id ?? null;
-  return cursoId ? new Set((await planosDoCurso(db, regime, Number(cursoId))).keys()) : new Set<number>();
+  if (!cursoId) return new Set<number>();
+  const modelos = await modelosDoCurso(db, regime, Number(cursoId));
+  const atribuidos = atribuirPlanos(modelos, sessoesLectivas(turma.cronograma));
+  return new Set(atribuidos.flatMap((m, i) => (m?.plano ? [i + 1] : [])));
 }
 
 export type ResultadoImportacao = { importados: number; mantidos: number; semModelo: number; sumarios?: number; fechada?: boolean };
@@ -102,15 +112,28 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
   const cursoId = turma.curso_id ?? (await cursoPorNome(db, regime, turma.curso))?.id ?? null;
   if (!cursoId) return vazio;
   const modelos = await modelosDoCurso(db, regime, Number(cursoId));
-  if (!modelos.size) return vazio;
+  if (!modelos.length) return vazio;
   const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), s]));
   const r = { ...vazio };
-  // O plano n do curso vai para a sessão que hoje está na posição n; depois de gravado fica preso ao id dessa sessão.
-  for (let n = 1; sessaoLectivaN(turma.cronograma, n); n++) {
-    const sessaoId = String(sessaoLectivaN(turma.cronograma, n)?.id ?? "");
-    const modelo = modelos.get(n);
-    if (!modelo || !sessaoId) { r.semModelo += 1; continue; }
+  // Cada plano vai para a sessão do seu módulo (ou, sem módulo, para a sessão n); depois de gravado fica preso ao id.
+  const lectivas = sessoesLectivas(turma.cronograma);
+  const atribuidos = atribuirPlanos(modelos, lectivas);
+  for (let n = 1; n <= lectivas.length; n++) {
+    const sessaoId = String(lectivas[n - 1]?.id ?? "");
+    const modelo = atribuidos[n - 1];
     const linha = actuais.get(sessaoId);
+    if (!modelo || !sessaoId) {
+      // Esta sessão já não recebe plano do curso (ex.: os planos passaram a ir por módulo): o plano e o sumário que
+      // vieram do curso e que a turma não alterou nem assinou saem, para não ficarem planos de outra sessão.
+      const p0 = asObj(linha?.plano);
+      const s0 = asObj(linha?.sumario);
+      const limpar: { plano?: unknown; sumario?: unknown } = {};
+      if (p0.origem === "curso" && p0.assinado !== true) limpar.plano = {};
+      if (s0.origem === "curso" && s0.assinado !== true && s0.presencasValidadas !== true) limpar.sumario = {};
+      if (sessaoId && (limpar.plano || limpar.sumario)) await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, limpar);
+      r.semModelo += 1;
+      continue;
+    }
     const partes: { plano?: unknown; sumario?: unknown } = {};
 
     const plano = asObj(linha?.plano);

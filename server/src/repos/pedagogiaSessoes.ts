@@ -32,7 +32,7 @@ export async function sessoesComDados(c: Consulta, regime: Regime, turmaId: numb
     c,
     `SELECT sessao_id, sessao_n FROM turma_sessoes
       WHERE regime = $1 AND turma_id = $2 AND sessao_id IS NOT NULL
-        AND (sumario IS NOT NULL AND sumario <> 'null'::jsonb
+        AND (sumario IS NOT NULL AND sumario <> 'null'::jsonb AND sumario <> '{}'::jsonb
               -- O sumário padrão herdado da ficha do curso (por assinar e sem presenças validadas) não prende a sessão.
               AND NOT (coalesce(sumario->>'origem', '') = 'curso' AND coalesce(sumario->>'assinado', '') <> 'true'
                        AND coalesce(sumario->>'presencasValidadas', '') NOT IN ('true'))

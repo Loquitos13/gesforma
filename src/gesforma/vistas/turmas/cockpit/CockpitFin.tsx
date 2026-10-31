@@ -300,7 +300,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
             </div>
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
-              plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
+              plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, t.cronograma, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
               coordenacao={staffPodeDossie(user.role)}

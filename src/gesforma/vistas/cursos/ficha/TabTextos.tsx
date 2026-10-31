@@ -1,7 +1,7 @@
 // Separadores de texto da ficha: conteúdo do site, programa e planos de sessão.
 import { TOPICOS_CURSO } from "../../../../partilhado/topicosCurso";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
-import { codigoTopico, juntarHoras, novoTopicoId, partirHoras, textoPrograma } from "../../../cursoPrograma";
+import { codigoTopico, juntarHoras, novoTopicoId, opcoesDoPrograma, partirHoras, textoPrograma } from "../../../cursoPrograma";
 import { useState, type ReactNode } from "react";
 import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
 import { novoPlanoCurso } from "../../../planosCurso";
@@ -195,19 +195,37 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
     mudar(i, { momentos: { ...linha.momentos, [m]: { ...linha.momentos[m], [campo]: valor } } });
   };
   const renumerar = (lista: PlanoLinha[]) => lista.map((p, j) => ({ ...p, ordem: j + 1 }));
+  // Módulos / temas do programa (separador Programa): cada plano pode ficar ligado a um, e vai para as sessões dele.
+  const modulos = opcoesDoPrograma(data.organizacaoPrograma, data.topicosPrograma).map(o => ({ valor: o.value, rotulo: o.value }));
+  const unidade = data.organizacaoPrograma === "livre" ? "tema" : "módulo";
+  // N.º do plano dentro do seu módulo (1.º, 2.º…): é a sessão desse módulo que o recebe.
+  const posNoModulo = (i: number) => {
+    const m = data.planosSessao[i]!.modulo;
+    return m ? data.planosSessao.slice(0, i + 1).filter(x => x.modulo === m).length : 0;
+  };
   return (
-    <Cartao titulo="Plano de cada sessão" subtitulo="O plano e o sumário n vão para a sessão n de todas as turmas do curso (só sessões presenciais e síncronas, pela ordem do cronograma), já aprovados. Ao gravar a ficha, as turmas abertas recebem as alterações nas sessões que não mudaram o plano ou o sumário nem os assinaram.">
+    <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano (e o seu sumário) vai para todas as turmas do curso, já aprovado: ligado a um módulo / tema, para as sessões desse módulo, pela ordem; sem módulo, para a sessão com o mesmo número (só sessões presenciais e síncronas, pela ordem do cronograma). Ao gravar a ficha, as turmas abertas recebem as alterações nas sessões que não mudaram o plano ou o sumário nem os assinaram.">
       <div className="space-y-3">
         {data.planosSessao.length === 0 && <Vazio compacto titulo="Ainda sem planos." descricao="Acrescente a primeira sessão." />}
         {data.planosSessao.map((linha, i) => (
           <div key={linha.ordem} className="space-y-2 rounded-controlo border border-linha p-3">
             <div className="flex items-center justify-between gap-2">
-              <p className="m-0 text-[13px] font-semibold">Sessão {linha.ordem}</p>
+              <p className="m-0 text-[13px] font-semibold">
+                Plano {linha.ordem}
+                <span className="font-normal text-tinta-suave">
+                  {linha.modulo ? ` · ${posNoModulo(i)}.ª sessão de ${linha.modulo.split("·")[0]!.trim()}` : ` · sessão ${linha.ordem} da turma`}
+                </span>
+              </p>
               <span className="flex gap-1">
                 <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar([...data.planosSessao.slice(0, i + 1), { ...linha }, ...data.planosSessao.slice(i + 1)]) })}>Duplicar</Botao>
                 <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar(data.planosSessao.filter((_, j) => j !== i)) })}>Remover</Botao>
               </span>
             </div>
+            {modulos.length > 0 && (
+              <Campo rotulo={unidade === "tema" ? "Tema" : "Módulo"} ajuda={`Com ${unidade}, o plano vai para as sessões desse ${unidade} na turma (o 1.º plano do ${unidade} para a 1.ª sessão dele…). Sem ${unidade}, vai para a sessão com este número.`}>
+                {p => <Selecao {...p} opcoes={modulos} vazio={`Sem ${unidade} (pelo número da sessão)`} value={linha.modulo} onChange={e => mudar(i, { modulo: e.target.value })} />}
+              </Campo>
+            )}
             <div className="grid gap-2 sm:grid-cols-2">
               <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos gerais`} rows={2} placeholder="Objetivos gerais" value={linha.objetivosGerais} onChange={e => mudar(i, { objetivosGerais: e.target.value })} />
               <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos específicos`} rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => mudar(i, { objetivosEspecificos: e.target.value })} />

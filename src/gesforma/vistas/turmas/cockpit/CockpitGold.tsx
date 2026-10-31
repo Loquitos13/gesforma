@@ -208,14 +208,14 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
             </div>
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
-              plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
+              plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, t.cronograma, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
               coordenacao={staffPodeDossie(user.role)}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
-              sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
+              sumario={sumarioSessao ? herdarSumarioCurso(modelosCurso.planos, t.cronograma, sumarioSessao.n, ped.sumario(sumarioSessao.n)) : emptySumario()}
               onPdf={sumarioSessao ? () => { apiFolhasPresencaFin(t.id, sumarioSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar a folha de presenças / sumário.")); } : undefined}
               onSave={data => {
                 if (!sumarioSessao) return;

@@ -134,4 +134,30 @@ describe("planos de sessão do curso nas turmas", () => {
       "SELECT plano FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 ORDER BY sessao_n", [t.json().turma.id]);
     expect(r.rows.map(x => x.plano?.objetivosGerais)).toEqual(["Fin 1", "Fin 2"]);
   });
+
+  it("planos ligados a um módulo vão para as sessões desse módulo, pela ordem", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Modulos");
+    const c = await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "Presencial", horas: 8 });
+    expect(c.statusCode, c.body).toBe(200);
+    const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1", [curso])).rows[0]!.id;
+    const comModulo = (ordem: number, gerais: string, modulo: string) => ({ ...plano(ordem, gerais), modulo });
+    const ficha = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, {
+      payload: { planosSessao: [comModulo(1, "M1 a", "M1 · Aprendizagem"), comModulo(2, "M1 b", "M1 · Aprendizagem"), comModulo(3, "M2 a", "M2 · Comunicação")] },
+    });
+    expect(ficha.statusCode, ficha.body).toBe(200);
+    const s = (id: string, data: string, modulos: string[], modalidade = "presencial") => ({ id, data, horaInicio: "09:00", horaFim: "13:00", modalidade, modulos, formadores: [] });
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-08-01", nome: unico("TMOD"), curso,
+      cronograma: [
+        s("1", "2099-08-01", ["M2 · Comunicação e dinâmica de grupos · 20h"]),
+        s("2", "2099-08-02", ["M1 · Aprendizagem e pedagogia · 20h"]),
+        s("3", "2099-08-03", []),
+        s("4", "2099-08-04", ["M1 · Aprendizagem e pedagogia · 20h"]),
+      ],
+    });
+    expect(t.statusCode, t.body).toBe(200);
+    const linhas = await planosDaTurma(ctx, t.json().turma.id as number);
+    expect(linhas.filter(l => l.sessao_n != null).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "M2 a"], [2, "M1 a"], [4, "M1 b"]]);
+  });
 });

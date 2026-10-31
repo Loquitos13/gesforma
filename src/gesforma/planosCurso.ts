@@ -2,10 +2,14 @@ import { useEffect, useState } from "react";
 import { apiCursoFicha } from "../partilhado/api";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { emptyPlano, type MomentoKey, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
+import { sessoesSemFim } from "../partilhado/cronogramaGrelha";
+import { atribuirPlanos } from "../partilhado/planosModulo";
+import { isSessaoLectiva, type SessaoCronograma } from "../partilhado/turmaModel";
 
 /**
  * Plano de sessão da ficha do curso: o plano completo (os três momentos) e um sumário padrão.
- * A sessão n da turma recebe o plano com a ordem n (o servidor grava-o nas sessões sem plano).
+ * Cada plano vai para as sessões do seu módulo / tema (sem módulo, a sessão n recebe o plano com a ordem n);
+ * o servidor grava-o nas sessões sem plano.
  */
 export type PlanoCurso = {
   ordem: number;
@@ -14,6 +18,8 @@ export type PlanoCurso = {
   momentos: PlanoSessaoData["momentos"];
   /** Sumário padrão: o servidor grava-o como sumário da sessão (Gold) em todas as turmas do curso. */
   sumario: { conteudos: string; atividades: string };
+  /** Módulo / tema do programa: o plano vai para as sessões desse módulo (vazio: para a sessão com este número). */
+  modulo: string;
 };
 
 export type ValorFormadorCurso = { nome: string; valorHora: string };
@@ -44,27 +50,32 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
     objetivosEspecificos: String(row.objetivosEspecificos ?? ""),
     momentos,
     sumario: { conteudos: String(s.conteudos ?? ""), atividades: String(s.atividades ?? "") },
+    modulo: String(row.modulo ?? ""),
   };
 }
 
 export function novoPlanoCurso(ordem: number): PlanoCurso {
-  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" } };
+  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulo: "" };
 }
 
-const modeloDaSessao = (modelos: PlanoCurso[], n: number) => modelos.find(p => p.ordem === n);
+/** O plano do curso da sessão lectiva n da turma (pelo módulo da sessão, como no servidor: partilhado/planosModulo.ts). */
+function modeloDaSessao(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number) {
+  const lectivas = sessoesSemFim(cronograma).filter(isSessaoLectiva);
+  return atribuirPlanos(modelos, lectivas)[n - 1] ?? undefined;
+}
 
 /** Sessão ainda sem plano: mostra o do curso (o servidor também o grava ao importar). */
-export function herdarPlanoCurso(modelos: PlanoCurso[], n: number, actual: PlanoSessaoData): PlanoSessaoData {
+export function herdarPlanoCurso(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number, actual: PlanoSessaoData): PlanoSessaoData {
   if (planoTemTexto(actual)) return actual;
-  const base = modeloDaSessao(modelos, n);
+  const base = modeloDaSessao(modelos, cronograma, n);
   if (!base || !planoTemTexto(base)) return actual;
   return { ...actual, objetivosGerais: base.objetivosGerais, objetivosEspecificos: base.objetivosEspecificos, momentos: base.momentos };
 }
 
 /** Sumário vazio e por assinar: começa com o sumário padrão do curso. */
-export function herdarSumarioCurso(modelos: PlanoCurso[], n: number, actual: SumarioSessaoData): SumarioSessaoData {
+export function herdarSumarioCurso(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number, actual: SumarioSessaoData): SumarioSessaoData {
   if (actual.assinado || actual.conteudos.trim() || actual.atividades.trim()) return actual;
-  const base = modeloDaSessao(modelos, n)?.sumario;
+  const base = modeloDaSessao(modelos, cronograma, n)?.sumario;
   if (!base || (!base.conteudos.trim() && !base.atividades.trim())) return actual;
   return { ...actual, conteudos: base.conteudos, atividades: base.atividades };
 }

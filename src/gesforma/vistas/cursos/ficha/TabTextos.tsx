@@ -1,5 +1,6 @@
 // Separadores de texto da ficha: conteúdo do site, programa e planos de sessão.
 import { TOPICOS_CURSO } from "../../../../partilhado/topicosCurso";
+import { MultiSearchSelect } from "../../../../partilhado/FormKit";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
 import { codigoTopico, juntarHoras, novoTopicoId, opcoesDoPrograma, partirHoras, textoPrograma } from "../../../cursoPrograma";
 import { useState, type ReactNode } from "react";
@@ -195,13 +196,14 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
     mudar(i, { momentos: { ...linha.momentos, [m]: { ...linha.momentos[m], [campo]: valor } } });
   };
   const renumerar = (lista: PlanoLinha[]) => lista.map((p, j) => ({ ...p, ordem: j + 1 }));
-  // Módulos / temas do programa (separador Programa): cada plano pode ficar ligado a um, e vai para as sessões dele.
-  const modulos = opcoesDoPrograma(data.organizacaoPrograma, data.topicosPrograma).map(o => ({ valor: o.value, rotulo: o.value }));
+  // Módulos / temas do programa (separador Programa): cada plano pode ficar ligado a um ou mais, e vai para as sessões deles.
+  const modulos = opcoesDoPrograma(data.organizacaoPrograma, data.topicosPrograma);
   const unidade = data.organizacaoPrograma === "livre" ? "tema" : "módulo";
-  // N.º do plano dentro do seu módulo (1.º, 2.º…): é a sessão desse módulo que o recebe.
+  const codigos = (lista: string[]) => lista.map(m => m.split("·")[0]!.trim()).join(" + ");
+  // N.º do plano entre os que têm os mesmos módulos (1.º, 2.º…): é a sessão desses módulos que o recebe.
   const posNoModulo = (i: number) => {
-    const m = data.planosSessao[i]!.modulo;
-    return m ? data.planosSessao.slice(0, i + 1).filter(x => x.modulo === m).length : 0;
+    const k = codigos(data.planosSessao[i]!.modulos);
+    return data.planosSessao.slice(0, i + 1).filter(x => codigos(x.modulos) === k).length;
   };
   return (
     <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano (e o seu sumário) vai para todas as turmas do curso, já aprovado: ligado a um módulo / tema, para as sessões desse módulo, pela ordem; sem módulo, para a sessão com o mesmo número (só sessões presenciais e síncronas, pela ordem do cronograma). Ao gravar a ficha, as turmas abertas recebem as alterações nas sessões que não mudaram o plano ou o sumário nem os assinaram.">
@@ -213,7 +215,7 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
               <p className="m-0 text-[13px] font-semibold">
                 Plano {linha.ordem}
                 <span className="font-normal text-tinta-suave">
-                  {linha.modulo ? ` · ${posNoModulo(i)}.ª sessão de ${linha.modulo.split("·")[0]!.trim()}` : ` · sessão ${linha.ordem} da turma`}
+                  {linha.modulos.length ? ` · ${posNoModulo(i)}.ª sessão de ${codigos(linha.modulos)}` : ` · sessão ${linha.ordem} da turma`}
                 </span>
               </p>
               <span className="flex gap-1">
@@ -222,8 +224,11 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
               </span>
             </div>
             {modulos.length > 0 && (
-              <Campo rotulo={unidade === "tema" ? "Tema" : "Módulo"} ajuda={`Com ${unidade}, o plano vai para as sessões desse ${unidade} na turma (o 1.º plano do ${unidade} para a 1.ª sessão dele…). Sem ${unidade}, vai para a sessão com este número.`}>
-                {p => <Selecao {...p} opcoes={modulos} vazio={`Sem ${unidade} (pelo número da sessão)`} value={linha.modulo} onChange={e => mudar(i, { modulo: e.target.value })} />}
+              <Campo rotulo={unidade === "tema" ? "Temas" : "Módulos"} ajuda={`Com ${unidade}s, o plano vai para as sessões desses ${unidade}s na turma (o 1.º plano do M1 para a 1.ª sessão do M1; um plano do M3 e M4 para as sessões do M3 e M4). Sem ${unidade}, vai para a sessão com este número.`}>
+                {() => (
+                  <MultiSearchSelect values={linha.modulos} onChange={v => mudar(i, { modulos: v })} options={modulos}
+                    placeholder={`Pesquisar ${unidade}…`} noneLabel={`Sem ${unidade} (pelo número da sessão)`} unitSingular={unidade} unitPlural={`${unidade}s`} />
+                )}
               </Campo>
             )}
             <div className="grid gap-2 sm:grid-cols-2">

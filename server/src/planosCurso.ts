@@ -13,7 +13,7 @@ import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from ".
 import { turmaParaPlanos, turmasAbertasDoCurso } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
-import { atribuirPlanos, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
+import { atribuirPlanos, modulosDoPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -54,7 +54,7 @@ export function planoTemTexto(raw: unknown) {
 
 type SumarioCurso = { conteudos: string; atividades: string };
 
-type ModeloCurso = { ordem: number; modulo: string; plano: PlanoSessao | null; sumario: SumarioCurso | null };
+type ModeloCurso = { ordem: number; modulos: string[]; plano: PlanoSessao | null; sumario: SumarioCurso | null };
 
 /** Plano e sumário padrão de cada sessão da ficha do curso (só os que têm texto), com o módulo / tema a que se ligam. */
 async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
@@ -68,7 +68,7 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
     const sumario = { conteudos: txt(s.conteudos, 6000), atividades: txt(s.atividades, 6000) };
     const temSumario = regime === "gold" && Boolean(sumario.conteudos.trim() || sumario.atividades.trim());
     if (planoTemTexto(p.plano) || temSumario) {
-      out.push({ ordem: p.ordem, modulo: txt(asObj(l).modulo, 300), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
+      out.push({ ordem: p.ordem, modulos: modulosDoPlano(asObj(l)).map(m => txt(m, 300)), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
     }
   }
   return out;
@@ -82,7 +82,7 @@ export async function comModulosDosPlanos<T>(db: Db, regime: Regime, curso: stri
   const cursoId = (await cursoPorNome(db, regime, curso))?.id;
   if (!cursoId || !Array.isArray(cronograma)) return cronograma;
   const modelos = await modelosDoCurso(db, regime, Number(cursoId));
-  if (!modelos.some(m => m.modulo.trim())) return cronograma;
+  if (!modelos.some(m => m.modulos.length)) return cronograma;
   const indices: number[] = [];
   cronograma.forEach((item, i) => {
     const m = String((item as { modalidade?: unknown } | null)?.modalidade ?? "presencial");
@@ -92,9 +92,9 @@ export async function comModulosDosPlanos<T>(db: Db, regime: Regime, curso: stri
   const falta = modulosEmFalta(modelos, lectivas);
   if (!falta.size) return cronograma;
   const out = [...cronograma];
-  for (const [pos, modulo] of falta) {
+  for (const [pos, modulos] of falta) {
     const i = indices[pos]!;
-    out[i] = { ...(out[i] as object), modulos: [modulo] } as T;
+    out[i] = { ...(out[i] as object), modulos } as T;
   }
   return out;
 }
@@ -219,7 +219,7 @@ export async function importarDeTurma(db: Db, regime: Regime, turmaId: number, o
   // (sem módulo, a sessão com o mesmo número). Assim um plano do M1 nunca cai numa sessão do M2.
   const daTurma = sessoesLectivas(turma.cronograma);
   const fontes = atribuirPlanos(sessoesLectivas(origem.cronograma).map((s, i) => ({
-    ordem: i + 1, id: String(s.id ?? ""), modulo: Array.isArray(s.modulos) ? String(s.modulos[0] ?? "") : "",
+    ordem: i + 1, id: String(s.id ?? ""), modulos: Array.isArray(s.modulos) ? s.modulos : [],
   })), daTurma);
   let escreveu = false;
   for (let n = 1; n <= daTurma.length; n++) {

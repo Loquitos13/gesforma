@@ -30,7 +30,7 @@ for (let n = 1; n <= total; n++) {
   if (ocupadas.has(n)) continue;
   novos.push({
     ordem: n,
-    modulo: "",
+    modulos: [],
     objetivosGerais: `[Teste] Sessão ${n}: compreender os conteúdos previstos para esta sessão do curso.`,
     objetivosEspecificos: `[Teste] No final da sessão ${n}, o formando deverá identificar e aplicar os conceitos trabalhados.`,
     momentos: {

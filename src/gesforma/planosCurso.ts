@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { apiCursoFicha } from "../partilhado/api";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { emptyPlano, type MomentoKey, type PlanoSessaoData } from "../partilhado/TurmaExtras";
+import { modulosDoPlano } from "../partilhado/planosModulo";
 
 /**
  * Plano de sessão da ficha do curso: o plano completo (os três momentos) e um sumário padrão.
@@ -15,8 +16,8 @@ export type PlanoCurso = {
   momentos: PlanoSessaoData["momentos"];
   /** Sumário padrão: o servidor grava-o como sumário da sessão (Gold) em todas as turmas do curso. */
   sumario: { conteudos: string; atividades: string };
-  /** Módulo / tema do programa: o plano vai para as sessões desse módulo (vazio: para a sessão com este número). */
-  modulo: string;
+  /** Módulos / temas do programa: o plano vai para as sessões desses módulos (vazio: para a sessão com este número). */
+  modulos: string[];
 };
 
 export type ValorFormadorCurso = { nome: string; valorHora: string };
@@ -41,12 +42,12 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
     objetivosEspecificos: String(row.objetivosEspecificos ?? ""),
     momentos,
     sumario: { conteudos: String(s.conteudos ?? ""), atividades: String(s.atividades ?? "") },
-    modulo: String(row.modulo ?? ""),
+    modulos: modulosDoPlano(row),
   };
 }
 
 export function novoPlanoCurso(ordem: number): PlanoCurso {
-  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulo: "" };
+  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulos: [] };
 }
 
 function lerPlanos(raw: unknown): PlanoCurso[] {

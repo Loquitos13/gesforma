@@ -8,12 +8,15 @@ export function LeituraConsentimento({
   label,
   onAceite,
   busy,
+  onSaltar,
 }: {
   token: string;
   tipo: string;
   label: string;
   onAceite: () => void;
   busy: boolean;
+  /** Quando o documento não abre: passar aos outros (este fica por fazer e pode voltar-se a ele). */
+  onSaltar?: () => void;
 }) {
   const caixa = useRef<HTMLDivElement>(null);
   const [paginas, setPaginas] = useState<string[]>([]);
@@ -33,8 +36,12 @@ export function LeituraConsentimento({
     setLido(false);
     setFolhasProntas(0);
     (async () => {
-      const res = await fetch(urlModeloPublico(token, tipo));
-      if (!res.ok) throw new Error("Não foi possível abrir o documento.");
+      const res = await fetch(urlModeloPublico(token, tipo)).catch(() => null);
+      if (!res) throw new Error("Não foi possível abrir o documento. Verifique a ligação à internet e tente de novo.");
+      if (!res.ok) {
+        const corpo = await res.json().catch(() => null) as { error?: string } | null;
+        throw new Error(corpo?.error || "Não foi possível abrir o documento.");
+      }
       const mime = (res.headers.get("content-type") ?? "").split(";")[0]!.trim().toLowerCase();
       const buf = await res.arrayBuffer();
       if (cancel) return;
@@ -118,6 +125,11 @@ export function LeituraConsentimento({
       >
         {busy ? "A registar…" : lido ? "Li e aceito" : "Deslize até ao fim do documento"}
       </button>
+      {erro && onSaltar && (
+        <button type="button" onClick={onSaltar} className="mt-3 block text-sm font-semibold underline decoration-[#ffa900] underline-offset-2">
+          Passar aos outros documentos
+        </button>
+      )}
     </div>
   );
 }

@@ -34,6 +34,22 @@ export async function bloquearPedido(c: Consulta, email: string, curso: string) 
 }
 
 /** Pedido aberto (não validado, nem desistência, nem formando) do mesmo email para o mesmo curso. */
+/**
+ * Pedido repetido no site (mesmo email e curso, ainda aberto): passa a contar como recente (data do pedido) e fica
+ * com o local, o horário e o início escolhidos agora, quando vêm preenchidos. Devolve a data anterior.
+ */
+export async function renovarPedido(c: Consulta, id: number, p: { inscrito: string; local: string; horario: string; inicioCurso: string }) {
+  const antes = await one<{ inscrito: string }>(c, "SELECT inscrito FROM preinscricoes WHERE id = $1", [id]);
+  await one(c,
+    `UPDATE preinscricoes SET inscrito = $2, ultima_actividade_em = now(),
+            local = CASE WHEN $3 <> '' THEN $3 ELSE local END,
+            horario = CASE WHEN $4 <> '' THEN $4 ELSE horario END,
+            inicio_curso = CASE WHEN $5 NOT IN ('', 'A confirmar') THEN $5 ELSE inicio_curso END
+      WHERE id = $1`,
+    [id, p.inscrito, p.local, p.horario, p.inicioCurso]);
+  return antes?.inscrito ?? "";
+}
+
 export async function pedidoAberto(c: Consulta, email: string, curso: string) {
   return one<{
     id: number; nome: string; apelido: string; curso: string; public_id: string; regime: string; ligacao_reenviada_em: unknown;

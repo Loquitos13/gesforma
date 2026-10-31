@@ -215,7 +215,11 @@ export async function criarPreinscricaoPublica(
     return null;
   });
   if (existente) {
-    if (notas) await logLeadEvent(db, existente.id, undefined, "campo", "Novo pedido no site", notas);
+    // O pedido repetido conta como recente (aparece no topo da lista) com o local, horário e turma escolhidos agora.
+    const anterior = await escrita.renovarPedido(db, existente.id, { inscrito: carimboUtc(), local, horario, inicioCurso: inicio });
+    if (turma) await gravarTurmaEscolhida(db, existente.id, { id: turma.turmaId, local, horario, dataInicio: turma.dataInicio, preco });
+    await logLeadEvent(db, existente.id, undefined, "campo", "Novo pedido no site",
+      [notas, /^\d{4}-\d{2}-\d{2}/.test(anterior) ? `Primeiro pedido: ${anterior.slice(0, 10).split("-").reverse().join("-")}` : "", [local, horario, inicio !== "-" ? inicio : ""].filter(Boolean).join(" · ")].filter(Boolean).join(" · "));
     // Só os nomes dos campos: os valores nunca vão para o histórico.
     if (existente.dadosFinJuntos) await logLeadEvent(db, existente.id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;

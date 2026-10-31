@@ -89,7 +89,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!modelo) return reply.code(404).send({ error: "Este documento não tem ficheiro da secretaria." });
     const content = await readDriveContent(db, modelo.driveFileId);
     if (!content) return reply.code(404).send({ error: "ficheiro inexistente" });
-    if (content.redirect && !content.bytes) return reply.redirect(content.redirect);
+    // Sem o conteúdo (ex.: o ficheiro ficou noutra conta da Drive), nada de reencaminhar para a Google: a página lê
+    // o documento por fetch e um reencaminhamento para outro domínio só dá «Failed to fetch».
+    if (!content.bytes) {
+      req.log.warn({ tipo: v.params.tipo, curso: lead.curso }, "modelo do documento sem conteúdo legível");
+      return reply.code(503).send({ error: "Este documento não está disponível de momento. Pode avançar para os outros documentos; a secretaria já foi avisada." });
+    }
     reply.header("Content-Type", content.mime);
     reply.header("Content-Disposition", `inline; filename="${content.name.replace(/["\r\n]/g, "")}"`);
     reply.header("Cache-Control", "private, max-age=60");

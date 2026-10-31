@@ -76,7 +76,14 @@ describe("formulário público", () => {
     expect(Number(lead.rows[0]!.preco)).toBe(100);
 
     await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${id}`, { nif: "123456789", notas: "nota interna" });
-    const dup = await publico(ctx, { nome: "Outra pessoa", email, curso });
+    await ctx.db.query("UPDATE preinscricoes SET inscrito = '2026-01-05T10:00:00.000Z' WHERE id = $1", [id]);
+    const dup = await publico(ctx, { nome: "Outra pessoa", email, curso, local: "Lisboa" });
+    // O pedido repetido passa a contar como recente e fica com o local escolhido agora; o primeiro fica no histórico.
+    const renovado = (await ctx.db.query<{ inscrito: string; local: string }>("SELECT inscrito::text AS inscrito, local FROM preinscricoes WHERE id = $1", [id])).rows[0]!;
+    expect(renovado.inscrito.startsWith("2026-01-05")).toBe(false);
+    expect(renovado.local).toBe("Lisboa");
+    const hist = await ctx.db.query<{ detalhe: string }>("SELECT detalhe FROM lead_eventos WHERE lead_id = $1 AND titulo = 'Novo pedido no site'", [id]);
+    expect(hist.rows[0]!.detalhe).toContain("Primeiro pedido: 05-01-2026");
     // Pedido repetido: a mesma resposta de um pedido novo (sem id, referência nem «duplicado»).
     expect(dup.json()).toEqual(r1.json());
     expect(Object.keys(dup.json()).sort()).toEqual(["aviso", "ok"]);

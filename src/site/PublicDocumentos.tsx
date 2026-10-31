@@ -405,9 +405,10 @@ export function PublicDocumentos({ token }: { token: string }) {
                           {anexo && !recusado && <p className="mt-1 truncate text-sm text-emerald-800">{anexo.nome}</p>}
                           {recusado && anexo?.observacao && <p className="mt-1 text-sm text-red-800">{anexo.observacao}</p>}
                           {ok && <p className="mt-1 text-xs text-[#5c564c]">Já validado pela secretaria: não precisa de o enviar outra vez.</p>}
-                          {anexo && !aberto && !ok && (
+                          {!aberto && !ok && (
+                            // Qualquer documento abre-se a qualquer momento: um que falhe não impede os outros.
                             <button type="button" className="mt-2 text-xs font-semibold underline decoration-[#ffa900] underline-offset-2" onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); }}>
-                              Substituir
+                              {anexo ? "Substituir" : t.modelo ? "Ler e aceitar" : "Anexar"}
                             </button>
                           )}
                         </div>
@@ -418,6 +419,11 @@ export function PublicDocumentos({ token }: { token: string }) {
                             label={t.label}
                             busy={busy}
                             onAceite={() => void consentir(t.id, t.label)}
+                            onSaltar={() => {
+                              const seguinte = tipos.find(x => x.id !== t.id && !porTipo.get(x.id) && x.required)
+                                ?? tipos.find(x => x.id !== t.id && !porTipo.get(x.id));
+                              if (seguinte) { setFoco(seguinte.id); setFicheiro(null); setError(""); }
+                            }}
                           />
                         )}
                         {aberto && !t.modelo && (

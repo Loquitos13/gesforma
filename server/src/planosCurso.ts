@@ -9,7 +9,7 @@ import type { Db } from "./db/pool.js";
 import { asObj } from "./pedagogia/util.js";
 import { lerFicha } from "./repos/cursos.js";
 import { cursoPorNome } from "./repos/leadDocs.js";
-import { gravarSessao, listarSessoes } from "./repos/pedagogiaSessoes.js";
+import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from "./repos/pedagogiaSessoes.js";
 import { turmaParaPlanos, turmasAbertasDoCurso } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
@@ -81,7 +81,7 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
 export async function comModulosDosPlanos<T>(db: Db, regime: Regime, curso: string, cronograma: T[]): Promise<T[]> {
   const cursoId = (await cursoPorNome(db, regime, curso))?.id;
   if (!cursoId || !Array.isArray(cronograma)) return cronograma;
-  const modelos = (await modelosDoCurso(db, regime, Number(cursoId))).filter(m => m.plano);
+  const modelos = await modelosDoCurso(db, regime, Number(cursoId));
   if (!modelos.some(m => m.modulo.trim())) return cronograma;
   const indices: number[] = [];
   cronograma.forEach((item, i) => {
@@ -143,6 +143,7 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
   // Cada plano vai para a sessão do seu módulo (ou, sem módulo, para a sessão n); depois de gravado fica preso ao id.
   const lectivas = sessoesLectivas(turma.cronograma);
   const atribuidos = atribuirPlanos(modelos, lectivas);
+  let escreveu = false;
   for (let n = 1; n <= lectivas.length; n++) {
     const sessaoId = String(lectivas[n - 1]?.id ?? "");
     const modelo = atribuidos[n - 1];
@@ -152,10 +153,11 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
       // vieram do curso e que a turma não alterou nem assinou saem, para não ficarem planos de outra sessão.
       const p0 = asObj(linha?.plano);
       const s0 = asObj(linha?.sumario);
-      const limpar: { plano?: unknown; sumario?: unknown } = {};
-      if (p0.origem === "curso" && p0.assinado !== true) limpar.plano = {};
-      if (s0.origem === "curso" && s0.assinado !== true && s0.presencasValidadas !== true) limpar.sumario = {};
-      if (sessaoId && (limpar.plano || limpar.sumario)) await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, limpar);
+      const limpar = {
+        plano: p0.origem === "curso" && p0.assinado !== true,
+        sumario: s0.origem === "curso" && s0.assinado !== true && s0.presencasValidadas !== true,
+      };
+      if (sessaoId && (limpar.plano || limpar.sumario)) { await limparHerdados(db, regime, turmaId, sessaoId, limpar); escreveu = true; }
       r.semModelo += 1;
       continue;
     }
@@ -179,9 +181,13 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
 
     if (!partes.plano && !partes.sumario) { r.mantidos += 1; continue; }
     await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, partes);
+    escreveu = true;
     if (partes.plano) r.importados += 1;
     if (partes.sumario) r.sumarios += 1;
   }
+  // O n gravado é o do cronograma lido no início: se entretanto mudou (outra pessoa a mexer na grelha), acerta-se pelo
+  // cronograma de agora, para nunca ficarem duas sessões com o mesmo número nem voltar uma que saiu.
+  if (escreveu) await renumerarSessoes(db, regime, turmaId);
   return r;
 }
 
@@ -209,25 +215,35 @@ export async function importarDeTurma(db: Db, regime: Regime, turmaId: number, o
   if (turma.fechada_em) return { ...r, fechada: true };
   const daOrigem = new Map((await listarSessoes(db, regime, origemId)).map(s => [String(s.sessao_id ?? ""), s]));
   const actuais = new Map((await listarSessoes(db, regime, turmaId)).map(s => [String(s.sessao_id ?? ""), s]));
-  for (let n = 1; sessaoLectivaN(turma.cronograma, n); n++) {
-    const sessaoId = String(sessaoLectivaN(turma.cronograma, n)?.id ?? "");
-    const fonte = daOrigem.get(String(sessaoLectivaN(origem.cronograma, n)?.id ?? ""));
+  // A sessão de origem de cada sessão desta turma pela mesma regra dos planos do curso: o mesmo módulo, pela ordem
+  // (sem módulo, a sessão com o mesmo número). Assim um plano do M1 nunca cai numa sessão do M2.
+  const daTurma = sessoesLectivas(turma.cronograma);
+  const fontes = atribuirPlanos(sessoesLectivas(origem.cronograma).map((s, i) => ({
+    ordem: i + 1, id: String(s.id ?? ""), modulo: Array.isArray(s.modulos) ? String(s.modulos[0] ?? "") : "",
+  })), daTurma);
+  let escreveu = false;
+  for (let n = 1; n <= daTurma.length; n++) {
+    const sessaoId = String(daTurma[n - 1]?.id ?? "");
+    const fonte = daOrigem.get(fontes[n - 1]?.id ?? "");
     if (!sessaoId || !fonte) { r.semModelo += 1; continue; }
     const actual = actuais.get(sessaoId);
     const partes: { plano?: unknown; sumario?: unknown } = {};
     const planoActual = asObj(actual?.plano);
     if (planoTemTexto(fonte.plano) && planoActual.assinado !== true && (o.substituir || !planoTemTexto(planoActual))) {
-      partes.plano = { ...asObj(fonte.plano), assinado: false, assinadoEm: undefined, estado: undefined, comentario: undefined, submetidoEm: undefined, revistoPor: undefined, revistoEm: undefined };
+      // A cópia passa a ser da turma (sem a marca «curso»): a importação do curso já não a troca nem a apaga.
+      partes.plano = { ...asObj(fonte.plano), origem: undefined, assinado: false, assinadoEm: undefined, estado: undefined, comentario: undefined, submetidoEm: undefined, revistoPor: undefined, revistoEm: undefined };
     }
     const sumarioActual = asObj(actual?.sumario);
     if (sumarioTemTexto(fonte.sumario) && sumarioActual.assinado !== true && (o.substituir || !sumarioTemTexto(sumarioActual))) {
       const s = asObj(fonte.sumario);
-      partes.sumario = { ...sumarioActual, conteudos: txt(s.conteudos), atividades: txt(s.atividades), assinado: false, assinadoEm: undefined };
+      partes.sumario = { ...sumarioActual, conteudos: txt(s.conteudos), atividades: txt(s.atividades), origem: undefined, assinado: false, assinadoEm: undefined };
     }
     if (!partes.plano && !partes.sumario) { r.mantidos += 1; continue; }
     await gravarSessao(db, regime, turmaId, { id: sessaoId, n }, partes);
+    escreveu = true;
     if (partes.plano) r.importados += 1;
     if (partes.sumario) r.sumarios += 1;
   }
+  if (escreveu) await renumerarSessoes(db, regime, turmaId);
   return r;
 }

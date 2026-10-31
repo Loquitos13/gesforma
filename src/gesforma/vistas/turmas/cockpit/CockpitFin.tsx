@@ -20,7 +20,6 @@ import { DespesasTurma } from "./DespesasTurma";
 import { I, TABS_FORMADOR, estadoBadge, tabDoFormador } from "./base";
 import { CertificadosTurmaTab, DocumentosTurmaTab, SessoesTurmaTab, TurmaTabBar, exportPayload } from "./Separadores";
 import { presencasDaSessao, useCriteriosAvaliacao, useTurmaPedagogia } from "../../../PedagogiaContext";
-import { herdarPlanoCurso, usePlanosCurso } from "../../../planosCurso";
 import type { Separador } from "../../../rotasGesforma";
 import type { Navegar } from "../../../shell/tipos";
 import { TurmaActivaToggle, TurmaInactivaBanner } from "../../../TurmaCronograma";
@@ -68,7 +67,6 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0, turma?.cronograma);
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programa = useProgramaDoCurso("fin", turma?.curso ?? "");
-  const modelosCurso = usePlanosCurso("fin", turma?.curso ?? "");
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [presencasSessao, setPresencasSessao] = useState<SessaoMeta | null>(null);
   const [uploadCert, setUploadCert] = useState<number | null>(null);
@@ -300,7 +298,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
             </div>
 
             <PlanoSessaoModal open={!!planoSessao} onClose={() => setPlanoSessao(null)} sessao={planoSessao ?? undefined}
-              plano={planoSessao ? herdarPlanoCurso(modelosCurso.planos, t.cronograma, planoSessao.n, ped.plano(planoSessao.n)) : emptyPlano()}
+              plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
               coordenacao={staffPodeDossie(user.role)}

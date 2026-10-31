@@ -1,10 +1,7 @@
 import { useEffect, useState } from "react";
 import { apiCursoFicha } from "../partilhado/api";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
-import { emptyPlano, type MomentoKey, type PlanoSessaoData, type SumarioSessaoData } from "../partilhado/TurmaExtras";
-import { sessoesSemFim } from "../partilhado/cronogramaGrelha";
-import { atribuirPlanos } from "../partilhado/planosModulo";
-import { isSessaoLectiva, type SessaoCronograma } from "../partilhado/turmaModel";
+import { emptyPlano, type MomentoKey, type PlanoSessaoData } from "../partilhado/TurmaExtras";
 
 /**
  * Plano de sessão da ficha do curso: o plano completo (os três momentos) e um sumário padrão.
@@ -25,12 +22,6 @@ export type PlanoCurso = {
 export type ValorFormadorCurso = { nome: string; valorHora: string };
 
 const MOMENTOS: MomentoKey[] = ["introducao", "desenvolvimento", "conclusao"];
-
-export function planoTemTexto(p?: Pick<PlanoSessaoData, "objetivosGerais" | "objetivosEspecificos" | "momentos"> | null) {
-  if (!p) return false;
-  if (p.objetivosGerais.trim() || p.objetivosEspecificos.trim()) return true;
-  return Object.values(p.momentos).some(m => Object.values(m).some(v => String(v).trim()));
-}
 
 /** Lê uma linha da ficha (formato novo, ou o antigo com `conteudo` solto, que vai para o desenvolvimento). */
 export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurso {
@@ -56,28 +47,6 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
 
 export function novoPlanoCurso(ordem: number): PlanoCurso {
   return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulo: "" };
-}
-
-/** O plano do curso da sessão lectiva n da turma (pelo módulo da sessão, como no servidor: partilhado/planosModulo.ts). */
-function modeloDaSessao(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number) {
-  const lectivas = sessoesSemFim(cronograma).filter(isSessaoLectiva);
-  return atribuirPlanos(modelos, lectivas)[n - 1] ?? undefined;
-}
-
-/** Sessão ainda sem plano: mostra o do curso (o servidor também o grava ao importar). */
-export function herdarPlanoCurso(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number, actual: PlanoSessaoData): PlanoSessaoData {
-  if (planoTemTexto(actual)) return actual;
-  const base = modeloDaSessao(modelos, cronograma, n);
-  if (!base || !planoTemTexto(base)) return actual;
-  return { ...actual, objetivosGerais: base.objetivosGerais, objetivosEspecificos: base.objetivosEspecificos, momentos: base.momentos };
-}
-
-/** Sumário vazio e por assinar: começa com o sumário padrão do curso. */
-export function herdarSumarioCurso(modelos: PlanoCurso[], cronograma: SessaoCronograma[], n: number, actual: SumarioSessaoData): SumarioSessaoData {
-  if (actual.assinado || actual.conteudos.trim() || actual.atividades.trim()) return actual;
-  const base = modeloDaSessao(modelos, cronograma, n)?.sumario;
-  if (!base || (!base.conteudos.trim() && !base.atividades.trim())) return actual;
-  return { ...actual, conteudos: base.conteudos, atividades: base.atividades };
 }
 
 function lerPlanos(raw: unknown): PlanoCurso[] {

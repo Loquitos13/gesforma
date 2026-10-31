@@ -184,4 +184,48 @@ describe("planos de sessão do curso nas turmas", () => {
     const linhas = await planosDaTurma(ctx, t.json().turma.id as number);
     expect(linhas.filter(l => l.sessao_n != null).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "P1"], [2, "P2"], [3, "P3"]]);
   });
+
+  it("auditoria: número antigo acertado, plano que sai fica sem plano e copiar de outra turma respeita os módulos", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Auditoria Planos");
+    const c = await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "Presencial", horas: 8 });
+    expect(c.statusCode, c.body).toBe(200);
+    const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1", [curso])).rows[0]!.id;
+    await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, { payload: { planosSessao: [plano(1, "A1"), plano(2, "A2"), plano(3, "A3")] } });
+    const s = (id: string, data: string, modulos: string[] = []) => ({ id, data, horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", modulos, formadores: [] });
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-10-01", nome: unico("TAUD"), curso, cronograma: [s("a", "2099-10-01"), s("b", "2099-10-02"), s("c", "2099-10-03")] });
+    const id = t.json().turma.id as number;
+    const ns = async () => (await ctx.db.query<{ sessao_id: string; sessao_n: number | null; plano: { objetivosGerais?: string } | null }>(
+      "SELECT sessao_id, sessao_n, plano FROM turma_sessoes WHERE regime = 'gold' AND turma_id = $1 ORDER BY sessao_id", [id])).rows;
+
+    // 1. Uma gravação com o número antigo (corrida com quem mexe na grelha) é acertada pela importação seguinte.
+    await ctx.db.query("UPDATE turma_sessoes SET sessao_n = 1 WHERE regime = 'gold' AND turma_id = $1", [id]);
+    await ctx.db.query("UPDATE turma_sessoes SET plano = plano || '{\"objetivosGerais\": \"mexido\"}'::jsonb WHERE regime = 'gold' AND turma_id = $1 AND sessao_id = 'c'", [id]);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}/pedagogia`)).statusCode).toBe(200);
+    expect((await ns()).map(r => [r.sessao_id, r.sessao_n])).toEqual([["a", 1], ["b", 2], ["c", 3]]);
+
+    // 4. Os planos passam a ir por módulo e a sessão «b» (sem módulo correspondente) deixa de ter plano: fica sem plano, não «{}».
+    await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, { payload: { planosSessao: [{ ...plano(1, "A1"), modulo: "M1 · X" }] } });
+    const linhas = await ns();
+    expect(linhas.find(r => r.sessao_id === "a")!.plano?.objetivosGerais).toBe("A1");
+    expect(linhas.find(r => r.sessao_id === "b")!.plano).toBeNull();
+
+    // 3. Copiar de outra turma: a sessão do M2 recebe o plano da sessão do M2 da origem, mesmo noutra posição.
+    const origem = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-11-01", nome: unico("TORIG"), curso,
+      cronograma: [s("o1", "2099-11-01", ["M2 · Y"]), s("o2", "2099-11-02", ["M1 · X"])],
+    });
+    const oId = origem.json().turma.id as number;
+    await pedido(ctx, "secretaria", "PUT", `/v1/turmas/gold/${oId}/sessoes/1`, { plano: { objetivosGerais: "Plano do M2", objetivosEspecificos: "", momentos: plano(1, "").momentos } });
+    const destino = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-12-01", nome: unico("TDEST"), curso,
+      cronograma: [s("d1", "2099-12-01", ["M1 · X"]), s("d2", "2099-12-02", ["M2 · Y"])],
+    });
+    const dId = destino.json().turma.id as number;
+    const imp = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${dId}/planos/importar`, { origemTurmaId: oId });
+    expect(imp.statusCode, imp.body).toBe(200);
+    const d = (await ctx.db.query<{ sessao_n: number; plano: { objetivosGerais?: string } | null }>(
+      "SELECT sessao_n, plano FROM turma_sessoes WHERE regime = 'gold' AND turma_id = $1 AND sessao_n IS NOT NULL ORDER BY sessao_n", [dId])).rows;
+    expect(d.map(r => r.plano?.objetivosGerais ?? null)).toEqual(["A1", "Plano do M2"]);
+  });
 });

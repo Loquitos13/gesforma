@@ -64,6 +64,14 @@ export async function renumerarSessoes(c: Consulta, regime: Regime, turmaId: num
   );
 }
 
+/** Tira o plano e/ou o sumário herdados do curso que já não pertencem a esta sessão (ficam sem plano, não `{}`). */
+export async function limparHerdados(c: Consulta, regime: Regime, turmaId: number, sessaoId: string, o: { plano: boolean; sumario: boolean }) {
+  await many(c,
+    `UPDATE turma_sessoes SET plano = CASE WHEN $4 THEN NULL ELSE plano END, sumario = CASE WHEN $5 THEN NULL ELSE sumario END, updated_at = now()
+      WHERE regime = $1 AND turma_id = $2 AND sessao_id = $3`,
+    [regime, turmaId, sessaoId, o.plano, o.sumario]);
+}
+
 /**
  * Grava as partes enviadas na sessão com este id (as que vêm a null mantêm-se); `n` é a posição actual.
  * A `folha` junta-se à gravada (só as chaves enviadas mudam).

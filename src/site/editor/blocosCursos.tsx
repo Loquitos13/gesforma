@@ -157,8 +157,10 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
   const pad = `${e.interior ?? 24}px`;
   const animacao = extra?.animacao || e.animacao;
   const animacaoBotao = extra?.animacaoBotao || e.animacaoBotao;
+  // Duas etiquetas lado a lado (ex.: «Financiada» + «Subsídio de 6€ por dia») ficam mais compactas, para caberem na mesma linha.
+  const duas = Boolean(extra?.etiqueta2);
   const etiqueta = (texto: string, forte = false) => (
-    <span className="inline-flex px-2.5 py-1 text-[11px] font-extrabold uppercase tracking-[0.1em]"
+    <span className={juntar("inline-flex whitespace-nowrap py-1 font-extrabold uppercase", duas ? "px-2 text-[9.5px] tracking-[0.04em]" : "px-2.5 text-[11px] tracking-[0.1em]")}
       style={forte ? { background: acento, color: "#14263D" } : { background: "#14263D", color: "#fff" }}>{texto}</span>
   );
   // Com uma segunda etiqueta (ex.: «Financiada» + «Sub. Alim. 6€ aula»), a primeira fica a azul e a segunda a amarelo.
@@ -197,16 +199,17 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       )}
       {ver.has("descricao") && curso.resumo && e.formato !== "compacto" && <TextoFormatado texto={curso.resumo} className={juntar("mt-3 text-sm leading-6", linhas)} nivel={4} />}
       {(ver.has("preco") || ver.has("duracao") || ver.has("inicio") || ver.has("botao")) && (
-        <div className={juntar("flex flex-wrap items-end justify-between gap-3", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
+        <div className={juntar("flex items-center justify-between gap-3", extra?.imagemRodape ? "flex-nowrap" : "flex-wrap items-end", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
-          {extra?.imagemRodape && <img src={extra.imagemRodape} alt="" className="h-9 max-w-[60%] object-contain object-left" />}
+          {/* Logótipos (ex.: Pessoas 2030, Portugal 2030 e UE) ao lado do botão, a ocupar o espaço que sobra. */}
+          {extra?.imagemRodape && <img src={extra.imagemRodape} alt="" className="min-w-0 flex-1 max-h-12 object-contain object-left" />}
           <div className="space-y-1.5 text-xs font-semibold" style={e.centrar ? { margin: "0 auto" } : undefined}>
             {ver.has("preco") && curso.funding === "Gold" && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
             {ver.has("duracao") && curso.duration && <span className="flex items-center gap-2"><Ico n="relogio" />{curso.duration}</span>}
             {ver.has("inicio") && inicioTxt && <span className="flex items-center gap-2"><Ico n="local" />{inicioTxt}</span>}
           </div>
           {ver.has("botao") && (
-            <a href={href} className={juntar("inline-flex items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}
+            <a href={href} className={juntar("inline-flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}
               style={{ background: corSegura(extra?.corBotao) ?? corSegura(e.corBotao) ?? "var(--c-primaria)", color: corSegura(extra?.corTextoBotao) ?? corSegura(e.corTextoBotao) ?? "#ffffff",borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
               {extra?.botao || e.textoBotao || "Ver curso"} <Ico n="seta" />
             </a>

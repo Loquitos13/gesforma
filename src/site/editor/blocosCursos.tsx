@@ -201,8 +201,8 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       {(ver.has("preco") || ver.has("duracao") || ver.has("inicio") || ver.has("botao")) && (
         <div className={juntar("flex items-center justify-between gap-3", extra?.imagemRodape ? "flex-nowrap" : "flex-wrap items-end", e.formato === "compacto" ? "mt-3" : "mt-auto pt-5")}
           style={e.formato === "compacto" || sobreposto ? undefined : { borderTop: "1px solid rgba(20,38,61,.1)", marginTop: "1.25rem" }}>
-          {/* Logótipos (ex.: Pessoas 2030, Portugal 2030 e UE) ao lado do botão, a ocupar o espaço que sobra. */}
-          {extra?.imagemRodape && <img src={extra.imagemRodape} alt="" className="min-w-0 flex-1 max-h-12 object-contain object-left" />}
+          {/* Logótipos (ex.: Pessoas 2030, Portugal 2030 e UE, uns por baixo dos outros) ao lado do botão, no espaço que sobra. */}
+          {extra?.imagemRodape && <img src={extra.imagemRodape} alt="" className="min-w-0 flex-1 max-h-28 object-contain object-left" />}
           <div className="space-y-1.5 text-xs font-semibold" style={e.centrar ? { margin: "0 auto" } : undefined}>
             {ver.has("preco") && curso.funding === "Gold" && precoTxt && <span className="block text-sm font-bold" style={{ color: sobreposto ? "#fff" : corSegura(e.corTitulo) }}>{precoTxt}</span>}
             {ver.has("duracao") && curso.duration && <span className="flex items-center gap-2"><Ico n="relogio" />{curso.duration}</span>}

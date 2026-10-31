@@ -7,7 +7,7 @@ import { campoCor, campoCurso, campoImagem, campoMarcas, campoNumero, campoOrdem
 import { campoAparencia, campoTipografia } from "./camposGrupos";
 import { corSegura, estiloBloco, estiloTexto, estiloVazio, juntar, ligacaoSegura, tipoVazia, type Estilo, type Tipografia } from "./estilos";
 import { TextoFormatado } from "../../partilhado/TextoFormatadoVista";
-import { ordenarAreas } from "../../partilhado/areasFormacao";
+import { AREA_FINANCIADA, AREAS_FORMACAO } from "../../partilhado/areasFormacao";
 import { ajudaVariaveis, preencherVariaveis, variaveisCurso } from "./blocosCurso";
 
 export const INFO_CARTAO = [
@@ -194,7 +194,8 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
       {ver.has("area") && curso.area && <p className="text-xs font-bold uppercase tracking-[0.12em]" style={{ color: sobreposto ? acento : "var(--c-destaque)" }}>{curso.area}</p>}
       {ver.has("titulo") && (
         <h3 className={juntar("mt-2", tt.className)} style={{ ...tt.style, ...(sobreposto ? { color: "#fff" } : {}) }}>
-          <a href={href} className="hover:opacity-80">{curso.title}</a>
+          {/* O cartão todo leva à página do curso (a ligação do título estende-se por cima; o botão fica por cima dela). */}
+          <a href={href} className="after:absolute after:inset-0 after:z-[1] hover:opacity-80">{curso.title}</a>
         </h3>
       )}
       {ver.has("descricao") && curso.resumo && e.formato !== "compacto" && <TextoFormatado texto={curso.resumo} className={juntar("mt-3 text-sm leading-6", linhas)} nivel={4} />}
@@ -209,7 +210,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
             {ver.has("inicio") && inicioTxt && <span className="flex items-center gap-2"><Ico n="local" />{inicioTxt}</span>}
           </div>
           {ver.has("botao") && (
-            <a href={href} className={juntar("inline-flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}
+            <a href={href} className={juntar("relative z-[2] inline-flex shrink-0 items-center gap-2 px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] text-white transition-colors hover:brightness-110", animacaoBotao && `ena-anim-${animacaoBotao}`)}
               style={{ background: corSegura(extra?.corBotao) ?? corSegura(e.corBotao) ?? "var(--c-primaria)", color: corSegura(extra?.corTextoBotao) ?? corSegura(e.corTextoBotao) ?? "#ffffff",borderRadius: e.raio ? Math.min(e.raio, 999) : 0, ...(e.centrar ? { margin: "0 auto" } : {}) }}>
               {extra?.botao || e.textoBotao || "Ver curso"} <Ico n="seta" />
             </a>
@@ -220,7 +221,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
   );
   return (
     <article
-      className={juntar(caixa.className, "flex min-w-0", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", sobreposto && "relative", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom", animacao && `ena-anim-${animacao}`)}
+      className={juntar(caixa.className, "relative flex min-w-0 cursor-pointer", e.formato === "lista" ? "flex-row" : e.formato === "horizontal" ? "ena-cartao-h" : "flex-col", e.efeito === "subir" && "ena-cartao-hover-subir", e.efeito === "zoom" && "ena-cartao-hover-zoom", animacao && `ena-anim-${animacao}`)}
       style={{ ...estilo, ...ordem }}
     >
       {img}
@@ -447,7 +448,8 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
       return porProcura.sort((a, b) => (pos.get(a.id) ?? Number.MAX_SAFE_INTEGER) - (pos.get(b.id) ?? Number.MAX_SAFE_INTEGER));
     }, [cursos, regime, ordem, ordemManual]);
     const modos = useMemo(() => ["Todos", ...["Presencial", "B-learning", "E-learning"].filter(m => base.some(c => c.format === m))], [base]);
-    const listaAreas = useMemo(() => ordenarAreas([...new Set(base.map(c => c.area.trim()).filter(Boolean))]), [base]);
+    // As áreas do site são sempre as mesmas, pela ordem fixa (a Financiada só quando o bloco mostra cursos financiados).
+    const listaAreas = useMemo(() => AREAS_FORMACAO.filter(a => regime === "todos" || (regime === "fin") === (a === AREA_FINANCIADA)), [regime]);
     const lista = base
       .filter(c => (filtro === "Todos" || c.format === filtro) && (!area || c.area.trim() === area)
         && `${c.title} ${c.area}`.toLowerCase().includes(q.trim().toLowerCase()))

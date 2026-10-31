@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { generateCronograma } from "../cronograma.js";
-import { importarPlanosCurso } from "../planosCurso.js";
+import { comModulosDosPlanos, importarPlanosCurso } from "../planosCurso.js";
 import { erroSobreposicao } from "../conflitos.js";
 import { docsBase } from "../docsCurso.js";
 import { largarDespesasFormadorDaTurma, sincronizarDespesasDaTurma, sincronizarDespesasFormador } from "../despesasFormador.js";
@@ -235,9 +235,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (slotErro) return reply.code(400).send({ error: slotErro });
     d.horas ??= (await repo.dadosDoCurso(db, "gold", d.curso))?.horas || 90;
     const modulos = await modulosDaFicha(db, "gold", d.curso);
-    const cronograma = comIdsUnicos(d.cronograma?.length
+    // As sessões sem módulo que recebem um plano do curso ligado a um módulo ficam já com esse módulo.
+    const cronograma = await comModulosDosPlanos(db, "gold", d.curso, comIdsUnicos(d.cronograma?.length
       ? d.cronograma
-      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos }));
+      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos })));
     const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     if (await repo.existeNome(db, "gold", d.nome, null)) {
@@ -294,7 +295,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
-      d.cronograma = comIdsUnicos(d.cronograma);
+      d.cronograma = await comModulosDosPlanos(db, "gold", d.curso ?? String(antes.curso ?? ""), comIdsUnicos(d.cronograma));
       const cruzamento = await erroSobreposicao(db, "gold", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
     }
@@ -338,12 +339,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     d.horas ??= curso?.horas || 25;
     d.ufcdCod ||= curso?.ufcd ?? "";
     const modulos = await modulosDaFicha(db, "fin", d.curso);
-    const cronograma = comIdsUnicos(d.cronograma?.length
+    const cronograma = await comModulosDosPlanos(db, "fin", d.curso, comIdsUnicos(d.cronograma?.length
       ? d.cronograma
       : generateCronograma({
         inicio: d.dataInicio, horario: d.horario === "Online" ? "Pós Laboral" : d.horario, horas: d.horas,
         formador: d.formador, curso: d.curso, hoursPerSession: 3, modulos,
-      }));
+      })));
     const cruzamento = await erroSobreposicao(db, "fin", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     const slotErro = await erroDisponibilidade(db, [d.formador, ...d.formadores], d.horario);
@@ -401,7 +402,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
-      d.cronograma = comIdsUnicos(d.cronograma);
+      d.cronograma = await comModulosDosPlanos(db, "fin", d.curso ?? String(antes.curso ?? ""), comIdsUnicos(d.cronograma));
       const cruzamento = await erroSobreposicao(db, "fin", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
     }

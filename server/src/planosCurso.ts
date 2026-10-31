@@ -13,7 +13,7 @@ import { gravarSessao, listarSessoes } from "./repos/pedagogiaSessoes.js";
 import { turmaParaPlanos, turmasAbertasDoCurso } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
-import { atribuirPlanos } from "../../src/partilhado/planosModulo.js";
+import { atribuirPlanos, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -70,6 +70,31 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
     if (planoTemTexto(p.plano) || temSumario) {
       out.push({ ordem: p.ordem, modulo: txt(asObj(l).modulo, 300), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
     }
+  }
+  return out;
+}
+
+/**
+ * Antes de gravar o cronograma de uma turma: as sessões lectivas sem módulo que vão receber um plano do curso ligado a
+ * um módulo ficam com esse módulo (assim a turma nova herda o plano e o módulo de cada sessão).
+ */
+export async function comModulosDosPlanos<T>(db: Db, regime: Regime, curso: string, cronograma: T[]): Promise<T[]> {
+  const cursoId = (await cursoPorNome(db, regime, curso))?.id;
+  if (!cursoId || !Array.isArray(cronograma)) return cronograma;
+  const modelos = (await modelosDoCurso(db, regime, Number(cursoId))).filter(m => m.plano);
+  if (!modelos.some(m => m.modulo.trim())) return cronograma;
+  const indices: number[] = [];
+  cronograma.forEach((item, i) => {
+    const m = String((item as { modalidade?: unknown } | null)?.modalidade ?? "presencial");
+    if (item && typeof item === "object" && (m === "presencial" || m === "sincrona")) indices.push(i);
+  });
+  const lectivas = indices.map(i => cronograma[i] as { modulos?: unknown });
+  const falta = modulosEmFalta(modelos, lectivas);
+  if (!falta.size) return cronograma;
+  const out = [...cronograma];
+  for (const [pos, modulo] of falta) {
+    const i = indices[pos]!;
+    out[i] = { ...(out[i] as object), modulos: [modulo] } as T;
   }
   return out;
 }

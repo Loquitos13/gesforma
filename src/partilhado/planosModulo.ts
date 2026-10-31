@@ -10,26 +10,45 @@ export function chaveModuloPlano(nome: string) {
   return base.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "").toLowerCase();
 }
 
-/** Para cada sessão (pela ordem do cronograma), o plano que lhe cabe, ou null. */
+/**
+ * Para cada sessão (pela ordem do cronograma), o plano que lhe cabe, ou null. Sessão com módulo: o próximo plano
+ * desse módulo. Sessão sem módulo: o plano com o mesmo número, se ainda não foi usado (e a sessão passa a ter o
+ * módulo desse plano: `modulosEmFalta`).
+ */
 export function atribuirPlanos<P extends { ordem: number; modulo?: string | null }>(planos: P[], sessoes: { modulos?: unknown }[]): (P | null)[] {
+  const ordenados = [...planos].sort((a, b) => a.ordem - b.ordem);
   const porModulo = new Map<string, P[]>();
-  const semModulo = new Map<number, P>();
-  for (const p of [...planos].sort((a, b) => a.ordem - b.ordem)) {
+  for (const p of ordenados) {
     const k = p.modulo?.trim() ? chaveModuloPlano(p.modulo) : "";
     if (k) porModulo.set(k, [...(porModulo.get(k) ?? []), p]);
-    else if (!semModulo.has(p.ordem)) semModulo.set(p.ordem, p);
   }
-  const usados = new Map<string, number>();
-  return sessoes.map((s, i) => {
+  const usados = new Set<P>();
+  // Primeiro as sessões com módulo (cada uma leva o próximo plano desse módulo), depois as sem módulo (pelo número).
+  const out: (P | null)[] = sessoes.map(() => null);
+  sessoes.forEach((s, i) => {
     const modulos = Array.isArray(s.modulos) ? s.modulos.map(m => chaveModuloPlano(String(m ?? ""))).filter(Boolean) : [];
     for (const k of modulos) {
-      const grupo = porModulo.get(k);
-      const j = usados.get(k) ?? 0;
-      if (grupo && j < grupo.length) {
-        usados.set(k, j + 1);
-        return grupo[j]!;
-      }
+      const p = (porModulo.get(k) ?? []).find(x => !usados.has(x));
+      if (p) { usados.add(p); out[i] = p; return; }
     }
-    return semModulo.get(i + 1) ?? null;
   });
+  sessoes.forEach((s, i) => {
+    const temModulo = Array.isArray(s.modulos) && s.modulos.some(m => String(m ?? "").trim());
+    if (temModulo || out[i]) return;
+    const p = ordenados.find(x => x.ordem === i + 1 && !usados.has(x));
+    if (p) { usados.add(p); out[i] = p; }
+  });
+  return out;
+}
+
+/** Sessões sem módulo que recebem um plano com módulo: o módulo que lhes falta (posição na lista → módulo). */
+export function modulosEmFalta<P extends { ordem: number; modulo?: string | null }>(planos: P[], sessoes: { modulos?: unknown }[]) {
+  const atribuidos = atribuirPlanos(planos, sessoes);
+  const out = new Map<number, string>();
+  sessoes.forEach((s, i) => {
+    const temModulo = Array.isArray(s.modulos) && s.modulos.some(m => String(m ?? "").trim());
+    const modulo = atribuidos[i]?.modulo?.trim();
+    if (!temModulo && modulo) out.set(i, modulo);
+  });
+  return out;
 }

@@ -150,24 +150,25 @@ export function TabOferta({ f }: { f: FichaCurso }) {
             <Campo rotulo="Novo Moodle a partir de" ajuda="As turmas que começam neste dia ou depois usam o novo Moodle. A página de entrada diz «cursos iniciados até» o dia anterior.">
               {p => <Entrada {...p} type="date" disabled={!data.moodleNovoUrl} value={data.moodleNovoDesde} onChange={e => patch({ moodleNovoDesde: e.target.value })} />}
             </Campo>
-            {data.moodleNovoUrl && turmas.length > 0 && (
-              <fieldset className="sm:col-span-2 m-0 rounded-controlo border border-linha p-3">
-                <legend className="px-1 text-xs font-semibold text-tinta">Turmas existentes que passam já para o novo Moodle</legend>
-                <div className="grid gap-1.5 sm:grid-cols-2">
-                  {turmas.map(t => {
-                    const pelaData = Boolean(data.moodleNovoDesde && t.inicio && t.inicio.slice(0, 10) >= data.moodleNovoDesde);
-                    const marcada = pelaData || data.moodleNovoTurmas.includes(t.id);
-                    return (
-                      <label key={t.id} className="flex items-center gap-2 text-sm text-tinta">
-                        <input type="checkbox" checked={marcada} disabled={pelaData}
-                          onChange={e => patch({ moodleNovoTurmas: e.target.checked ? [...data.moodleNovoTurmas, t.id] : data.moodleNovoTurmas.filter(x => x !== t.id) })} />
-                        <span>{t.nome}{t.inicio ? <span className="text-tinta-suave"> · início {fmtData(t.inicio)}</span> : null}{pelaData ? <span className="text-tinta-suave"> (pela data)</span> : null}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-            )}
+            {data.moodleNovoUrl && turmas.length > 0 && (() => {
+              // As que começam a partir da data já usam o novo Moodle; aqui escolhem-se as que já existiam.
+              const pelaData = (t: { inicio: string }) => Boolean(data.moodleNovoDesde && t.inicio && t.inicio.slice(0, 10) >= data.moodleNovoDesde);
+              const escolhiveis = turmas.filter(t => !pelaData(t));
+              const nPelaData = turmas.length - escolhiveis.length;
+              return (
+                <Campo className="sm:col-span-2" rotulo="Turmas existentes que passam já para o novo Moodle"
+                  ajuda={nPelaData ? `${nPelaData === 1 ? "1 turma começa" : `${nPelaData} turmas começam`} a partir da data e já usa${nPelaData === 1 ? "" : "m"} o novo Moodle.` : "As turmas que começam a partir da data passam sozinhas para o novo Moodle."}>
+                  {() => (
+                    <MultiSearchSelect
+                      values={escolhiveis.filter(t => data.moodleNovoTurmas.includes(t.id)).map(t => String(t.id))}
+                      onChange={ids => patch({ moodleNovoTurmas: ids.map(Number) })}
+                      options={escolhiveis.map(t => ({ value: String(t.id), label: t.nome, sub: [t.inicio ? `início ${fmtData(t.inicio)}` : "", t.local].filter(Boolean).join(" · ") }))}
+                      placeholder="Pesquisar turma…" noneLabel="Nenhuma (só pela data)" unitSingular="turma" unitPlural="turmas"
+                    />
+                  )}
+                </Campo>
+              );
+            })()}
             </>
           )}
           {regime === "fin" && (

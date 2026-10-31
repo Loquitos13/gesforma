@@ -2,7 +2,7 @@
 // acções em lote e a ficha da pré-inscrição. Tudo vem do servidor (`/v1/crm/*`).
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
-  Botao, ConfirmarPerigo, ErroCarregar, Filtros, PageHeader, Paginacao, Separadores, Vazio, num, useFiltrosUrl,
+  Botao, ConfirmarPerigo, ErroCarregar, FiltrosColapsaveis, PageHeader, Paginacao, Separadores, Vazio, num, useFiltrosUrl,
 } from "../../../partilhado/ui";
 import {
   apiApagarLead, apiComerciais, apiEditarLead, apiEtiquetas, apiExportarLeads, apiLeads, apiNota,
@@ -163,7 +163,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
         itens={filas.map(x => ({ id: x.id, rotulo: x.rotulo, contagem: x.contagem }))}
       />
 
-      <Filtros
+      <FiltrosColapsaveis
         pesquisa={{ valor: f.q, onMudar: v => setF({ q: v }), placeholder: "Nome, email, telemóvel, NIF, curso ou n.º", rotulo: "Pesquisar pré-inscrições" }}
         periodo={{ de: f.de, ate: f.ate, onMudar: (de, ate) => setF({ de, ate }) }}
         selecoes={[

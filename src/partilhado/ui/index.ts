@@ -5,7 +5,7 @@ export { Chip, Estado, Evolucao } from "./Chip";
 export { Separadores, type Separador } from "./Separadores";
 export { Campo, Entrada, AreaTexto, Selecao, Caixa, Interruptor, type OpcaoSelecao } from "./Campo";
 export { SelecaoPesquisa } from "./SelecaoPesquisa";
-export { Filtros, useFiltrosUrl, type FiltroSelecao } from "./Filtros";
+export { Filtros, FiltrosColapsaveis, useFiltrosUrl, type FiltroSelecao } from "./Filtros";
 export { Tabela, type Coluna } from "./Tabela";
 export { Paginacao } from "./Paginacao";
 export { Modal, ConfirmarPerigo } from "./Dialogos";

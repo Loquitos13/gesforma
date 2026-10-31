@@ -155,3 +155,89 @@ export function Filtros({
     </div>
   );
 }
+
+/**
+ * Filtros que se abrem e fecham: a pesquisa e o `extra` ficam sempre à vista; as seleções e o período ficam num
+ * painel que se abre com «Filtros». Lá, as escolhas só valem ao carregar em «Aplicar», que fecha o painel para a
+ * tabela ficar à vista.
+ */
+export function FiltrosColapsaveis({
+  pesquisa, selecoes = [], periodo, ativos = 0, onLimpar, extra,
+}: {
+  pesquisa?: { valor: string; onMudar: (v: string) => void; placeholder?: string; rotulo?: string };
+  selecoes?: FiltroSelecao[];
+  periodo?: { de: string; ate: string; onMudar: (de: string, ate: string) => void };
+  ativos?: number;
+  onLimpar?: () => void;
+  extra?: ReactNode;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const atuais = useCallback(() => ({
+    sel: Object.fromEntries(selecoes.map(s => [s.chave, s.valor])) as Valores,
+    de: periodo?.de ?? "", ate: periodo?.ate ?? "",
+  }), [selecoes, periodo?.de, periodo?.ate]);
+  const [rascunho, setRascunho] = useState(atuais);
+  // Ao abrir, o rascunho parte do que está aplicado.
+  useEffect(() => { if (aberto) setRascunho(atuais()); }, [aberto]); // eslint-disable-line react-hooks/exhaustive-deps
+  const noPainel = selecoes.filter(s => s.valor).length + (periodo && (periodo.de || periodo.ate) ? 1 : 0);
+
+  function aplicar() {
+    for (const s of selecoes) if ((rascunho.sel[s.chave] ?? "") !== s.valor) s.onMudar(rascunho.sel[s.chave] ?? "");
+    if (periodo && (rascunho.de !== periodo.de || rascunho.ate !== periodo.ate)) periodo.onMudar(rascunho.de, rascunho.ate);
+    setAberto(false);
+  }
+
+  return (
+    <div className="bg-superficie border border-linha rounded-cartao">
+      <Filtros
+        moldura={false}
+        className="px-3 py-2.5"
+        pesquisa={pesquisa}
+        ativos={ativos}
+        onLimpar={onLimpar ? () => { onLimpar(); setAberto(false); } : undefined}
+        extra={(
+          <>
+            <button type="button" aria-expanded={aberto} onClick={() => setAberto(a => !a)}
+              className={cx("inline-flex h-9 items-center gap-2 rounded-controlo border px-3 text-[13px] font-semibold",
+                aberto || noPainel ? "border-tinta text-tinta" : "border-linha-forte text-tinta-suave hover:text-tinta")}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M3 5h18l-7 8v6l-4-2v-4z" /></svg>
+              Filtros{noPainel ? ` (${noPainel})` : ""}
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" aria-hidden="true" className={cx("transition-transform", aberto && "rotate-180")}><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            {extra}
+          </>
+        )}
+      />
+      {aberto && (
+        <form className="border-t border-linha px-3 py-3" onSubmit={e => { e.preventDefault(); aplicar(); }}>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {selecoes.map(s => (
+              <label key={s.chave} className="block">
+                <span className="mb-1 block text-xs font-semibold text-tinta-suave">{s.rotulo}</span>
+                <Selecao opcoes={s.opcoes} vazio={s.vazio ?? `${s.rotulo}: todos`} value={rascunho.sel[s.chave] ?? ""}
+                  onChange={e => { const v = e.target.value; setRascunho(r => ({ ...r, sel: { ...r.sel, [s.chave]: v } })); }} />
+              </label>
+            ))}
+            {periodo && (
+              <div className="block">
+                <span className="mb-1 block text-xs font-semibold text-tinta-suave">Período</span>
+                <span className="inline-flex h-9 w-full items-center gap-1.5 rounded-controlo border border-linha-forte px-2.5 text-[13px] text-tinta-suave">
+                  <label className="inline-flex items-center gap-1.5">De
+                    <input type="date" value={rascunho.de} onChange={e => { const v = e.target.value; setRascunho(r => ({ ...r, de: v })); }} className="bg-transparent border-0 text-tinta text-[13px]" />
+                  </label>
+                  <label className="inline-flex items-center gap-1.5">até
+                    <input type="date" value={rascunho.ate} onChange={e => { const v = e.target.value; setRascunho(r => ({ ...r, ate: v })); }} className="bg-transparent border-0 text-tinta text-[13px]" />
+                  </label>
+                </span>
+              </div>
+            )}
+          </div>
+          <div className="mt-3 flex justify-end gap-2">
+            <Botao variante="secundario" tamanho="sm" onClick={() => setAberto(false)}>Cancelar</Botao>
+            <Botao variante="primario" tamanho="sm" type="submit">Aplicar filtros</Botao>
+          </div>
+        </form>
+      )}
+    </div>
+  );
+}

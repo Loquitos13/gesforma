@@ -4,12 +4,11 @@ import { z } from "zod";
 import { erroSobreposicao } from "../../conflitos.js";
 import { htmlCronograma, sessoesPublicas } from "../../cronogramaPublico.js";
 import { sincronizarDespesasFormador } from "../../despesasFormador.js";
-import { comModulosDosPlanos, importarPlanosCurso } from "../../planosCurso.js";
 import { storeDriveFile } from "../../driveFicheiros.js";
 import { ligarAnexoGerado } from "../../pedagogia/ficheiros.js";
 import { definirEstadoManual } from "../../repos/dtp.js";
 import { renumerarSessoes } from "../../repos/pedagogiaSessoes.js";
-import { carregarTurma, gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
+import { gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
 import { lerEntidadePublica } from "../../regrasConfig.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
 import { comIdsUnicos, erroGravarCronograma, versaoCronograma } from "../../sessaoAcesso.js";
@@ -24,8 +23,7 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
     const v = validar(reply, { params: regimeIdParam, body: publicarSchema }, req);
     if (!v) return;
     const { regime, id } = v.params;
-    const curso = v.body.sessoes ? (await carregarTurma(db, regime, id))?.curso : undefined;
-    const novas = v.body.sessoes ? await comModulosDosPlanos(db, regime, String(curso ?? ""), comIdsUnicos(v.body.sessoes)) : undefined;
+    const novas = v.body.sessoes ? comIdsUnicos(v.body.sessoes) : undefined;
     if (novas && novas.length > 0) {
       if (await turmaFechada(db, regime, id)) return reply.code(409).send({ error: ERRO_TURMA_FECHADA });
       const cruzamento = await erroSobreposicao(db, regime, id, novas);
@@ -40,7 +38,6 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
         return null;
       });
       if (recusa) return reply.code(409).send({ error: recusa });
-      await importarPlanosCurso(db, regime, id).catch(() => undefined);
     }
     const turma = await turmaParaCronograma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });

@@ -46,28 +46,29 @@ describe("planos de sessão do curso nas turmas", () => {
     const proprio = { objetivosGerais: "Plano próprio", objetivosEspecificos: "", momentos: plano(3, "").momentos };
     expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/gold/${turmaId}/sessoes/3`, { plano: proprio })).statusCode).toBe(200);
 
-    // Gravar a ficha do curso (2 planos, um no formato antigo) leva-os às turmas abertas.
+    // Gravar a ficha do curso NÃO mexe nas turmas que já existem (era isso que duplicava planos e módulos).
     const ficha = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, {
       payload: { planosSessao: [plano(1, "Gerais 1"), { ordem: 2, objetivosGerais: "Gerais 2", objetivosEspecificos: "", conteudo: "Conteúdo antigo" }, plano(3, "Gerais 3")] },
     });
     expect(ficha.statusCode, ficha.body).toBe(200);
-    // Planos das sessões 1 e 2; sumários das sessões 1 e 3 (a 3 tem plano próprio, mas o sumário estava vazio).
-    expect(ficha.json().planosImportados).toBe(4);
     let linhas = await planosDaTurma(ctx, turmaId);
+    expect(linhas.map(l => [l.sessao_n, l.plano?.objetivosGerais])).toEqual([[3, "Plano próprio"]]);
+
+    // Na turma que já existia, só pelo botão «Importar planos do curso»: sessões sem plano recebem-no; o próprio fica.
+    expect((await pedido(ctx, "formador", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, {})).statusCode).toBe(403);
+    const imp0 = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, {});
+    expect(imp0.statusCode, imp0.body).toBe(200);
+    linhas = await planosDaTurma(ctx, turmaId);
     expect(linhas.map(l => [l.sessao_n, l.plano?.objetivosGerais])).toEqual([[1, "Gerais 1"], [2, "Gerais 2"], [3, "Plano próprio"]]);
     expect(linhas[1]!.plano!.momentos.desenvolvimento.conteudo).toBe("Conteúdo antigo");
-    // Definido na ficha do curso: chega aprovado.
     expect(linhas[0]!.plano).toMatchObject({ estado: "aprovado", origem: "curso" });
-    // O sumário padrão também passa a sumário da sessão (por assinar).
     const sumarios = linhas.map(l => (l.sumario as { conteudos?: string; assinado?: boolean } | null));
     expect(sumarios.map(x => x?.conteudos ?? null)).toEqual(["Sumário padrão 1", null, "Sumário padrão 3"]);
     expect(sumarios[0]!.assinado).toBe(false);
 
-    // Botão: com substituir, a sessão 3 (não assinada) passa ao plano do curso. Há 3 sessões lectivas, todas com modelo.
-    expect((await pedido(ctx, "formador", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true })).statusCode).toBe(403);
+    // Com substituir, a sessão 3 (não assinada) passa ao plano do curso.
     const imp = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true });
     expect(imp.statusCode, imp.body).toBe(200);
-    // Só se grava o que muda: as sessões 1 e 2 já tinham o plano do curso.
     expect(imp.json()).toMatchObject({ importados: 1, mantidos: 2, semModelo: 0 });
     linhas = await planosDaTurma(ctx, turmaId);
     expect(linhas.find(l => l.sessao_n === 3)!.plano!.objetivosGerais).toBe("Gerais 3");
@@ -77,37 +78,19 @@ describe("planos de sessão do curso nas turmas", () => {
     const imp2 = await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, { substituir: true });
     expect(imp2.json()).toMatchObject({ importados: 0, mantidos: 3 });
 
-    // Mudar a ficha do curso chega às turmas que não alteraram nem assinaram; o que a turma alterou fica.
-    const editado = { objetivosGerais: "Alterado na turma", objetivosEspecificos: "", momentos: plano(2, "").momentos };
-    expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/gold/${turmaId}/sessoes/2`, { plano: editado })).statusCode).toBe(200);
+    // Mudar a ficha depois: a turma existente fica como estava; uma turma nova já nasce com os planos novos.
     const ficha2 = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, {
       payload: { planosSessao: [plano(1, "Gerais 1 v2"), plano(2, "Gerais 2 v2"), plano(3, "Gerais 3 v2")] },
     });
     expect(ficha2.statusCode, ficha2.body).toBe(200);
     linhas = await planosDaTurma(ctx, turmaId);
-    expect(linhas.map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1", "Alterado na turma", "Gerais 3 v2"]);
-
-    // Uma turma nova do curso já nasce com os planos.
+    expect(linhas.map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1", "Gerais 2", "Gerais 3"]);
     const t2 = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
       dataInicio: "2099-05-04", nome: unico("TPL2"), curso,
       cronograma: [{ id: "1", data: "2099-05-04", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] }],
     });
     expect(t2.statusCode, t2.body).toBe(200);
     expect((await planosDaTurma(ctx, t2.json().turma.id as number)).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1 v2"]);
-
-    // Turma nova (com a grelha que a criação gerar) a que depois se muda o cronograma no cockpit: as sessões recebem os planos.
-    const t3 = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-06-01", nome: unico("TPL3"), curso });
-    expect(t3.statusCode, t3.body).toBe(200);
-    const t3Id = t3.json().turma.id as number;
-    const cron = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${t3Id}`, {
-      cronograma: [
-        { id: "a", data: "2099-06-01", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
-        { id: "b", data: "2099-06-02", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
-      ],
-    });
-    expect(cron.statusCode, cron.body).toBe(200);
-    // (As sessões que saíram da grelha gerada ficam sem número.)
-    expect((await planosDaTurma(ctx, t3Id)).filter(l => l.sessao_n != null).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1 v2", "Gerais 2 v2"]);
 
     // Turma fechada: não se importa.
     await ctx.db.query("UPDATE turmas_gold SET fechada_em = now() WHERE id = $1", [turmaId]);
@@ -201,11 +184,12 @@ describe("planos de sessão do curso nas turmas", () => {
     // 1. Uma gravação com o número antigo (corrida com quem mexe na grelha) é acertada pela importação seguinte.
     await ctx.db.query("UPDATE turma_sessoes SET sessao_n = 1 WHERE regime = 'gold' AND turma_id = $1", [id]);
     await ctx.db.query("UPDATE turma_sessoes SET plano = plano || '{\"objetivosGerais\": \"mexido\"}'::jsonb WHERE regime = 'gold' AND turma_id = $1 AND sessao_id = 'c'", [id]);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}/pedagogia`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${id}/planos/importar`, {})).statusCode).toBe(200);
     expect((await ns()).map(r => [r.sessao_id, r.sessao_n])).toEqual([["a", 1], ["b", 2], ["c", 3]]);
 
     // 4. Os planos passam a ir por módulo e a sessão «b» (sem módulo correspondente) deixa de ter plano: fica sem plano, não «{}».
     await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, { payload: { planosSessao: [{ ...plano(1, "A1"), modulo: "M1 · X" }] } });
+    await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${id}/planos/importar`, {});
     const linhas = await ns();
     expect(linhas.find(r => r.sessao_id === "a")!.plano?.objetivosGerais).toBe("A1");
     expect(linhas.find(r => r.sessao_id === "b")!.plano).toBeNull();

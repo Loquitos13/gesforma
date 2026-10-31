@@ -6,17 +6,6 @@ export async function turmaParaPlanos(c: Consulta, regime: Regime, id: number) {
     `SELECT curso_id, curso, cronograma, fechada_em FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [id]);
 }
 
-/** Turmas ainda abertas (não fechadas) ligadas a este curso. */
-export async function turmasAbertasDoCurso(c: Consulta, regime: Regime, cursoId: number) {
-  return (await many<{ id: number }>(c,
-    `SELECT id FROM ${tabelaRegime("turmas", regime)}
-      WHERE fechada_em IS NULL AND (curso_id = $1 OR (curso_id IS NULL AND lower(trim(curso)) IN (${regime === "fin"
-      ? "(SELECT lower(trim(nome_comercial)) FROM cursos_fin WHERE id = $1), (SELECT lower(trim(ufcd)) FROM cursos_fin WHERE id = $1)"
-      : "(SELECT lower(trim(nome)) FROM cursos_gold WHERE id = $1)"})))
-      ORDER BY id`, [cursoId]))
-    .map(r => Number(r.id));
-}
-
 /** Outras turmas do mesmo curso e do mesmo regime (de onde se podem copiar planos e sumários). */
 export async function turmasDoMesmoCurso(c: Consulta, regime: Regime, id: number) {
   const t = tabelaRegime("turmas", regime);

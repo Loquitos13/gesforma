@@ -2,15 +2,15 @@
  * Planos de sessão do curso (ficha do curso) levados para as turmas desse curso.
  * O plano do curso com a ordem n vai para a sessão lectiva n da turma (presencial ou síncrona).
  * O plano e o sumário (conteúdos e atividades; só na Gold, a Financiada não tem sumário) são iguais em todas as turmas:
- * gravam-se nas sessões sem eles, marcados `origem: "curso"`. Enquanto a turma não os altera (gravar na turma tira a
- * marca) nem os assina, acompanham as mudanças da ficha do curso. Nunca em turmas fechadas.
+ * gravam-se nas sessões sem eles, marcados `origem: "curso"`, quando a turma é criada (ou pelo botão «Importar planos
+ * do curso» da turma). Mudar a ficha depois não altera turmas já criadas. Nunca em turmas fechadas.
  */
 import type { Db } from "./db/pool.js";
 import { asObj } from "./pedagogia/util.js";
 import { lerFicha } from "./repos/cursos.js";
 import { cursoPorNome } from "./repos/leadDocs.js";
 import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from "./repos/pedagogiaSessoes.js";
-import { turmaParaPlanos, turmasAbertasDoCurso } from "./repos/planosCurso.js";
+import { turmaParaPlanos } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
 import { atribuirPlanos, modulosDoPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
@@ -106,15 +106,10 @@ function sessoesLectivas(cronograma: unknown) {
   return out;
 }
 
-/** Posições (n) das sessões cujo plano vem da ficha do curso: o formador vê-o mas não o altera. */
+/** Posições (n) das sessões cujo plano veio da ficha do curso (e ainda é esse): o formador vê-o mas não o altera. */
 export async function ordensComPlanoDoCurso(db: Db, regime: Regime, turmaId: number) {
-  const turma = await turmaParaPlanos(db, regime, turmaId);
-  if (!turma) return new Set<number>();
-  const cursoId = turma.curso_id ?? (await cursoPorNome(db, regime, turma.curso))?.id ?? null;
-  if (!cursoId) return new Set<number>();
-  const modelos = await modelosDoCurso(db, regime, Number(cursoId));
-  const atribuidos = atribuirPlanos(modelos, sessoesLectivas(turma.cronograma));
-  return new Set(atribuidos.flatMap((m, i) => (m?.plano ? [i + 1] : [])));
+  const linhas = await listarSessoes(db, regime, turmaId);
+  return new Set(linhas.flatMap(l => (asObj(l.plano).origem === "curso" && l.sessao_n != null ? [Number(l.sessao_n)] : [])));
 }
 
 export type ResultadoImportacao = { importados: number; mantidos: number; semModelo: number; sumarios?: number; fechada?: boolean };
@@ -191,15 +186,6 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
   return r;
 }
 
-/** Depois de gravar a ficha do curso: leva os planos e os sumários às turmas abertas do curso. */
-export async function importarParaTurmasDoCurso(db: Db, regime: Regime, cursoId: number) {
-  let importados = 0;
-  for (const id of await turmasAbertasDoCurso(db, regime, cursoId)) {
-    const r = await importarPlanosCurso(db, regime, id);
-    importados += r.importados + (r.sumarios ?? 0);
-  }
-  return importados;
-}
 
 const SUMARIO_COPIA = ["conteudos", "atividades"] as const;
 const sumarioTemTexto = (raw: unknown) => SUMARIO_COPIA.some(k => String(asObj(raw)[k] ?? "").trim());

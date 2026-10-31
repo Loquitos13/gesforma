@@ -1,6 +1,6 @@
 /**
  * Planos de sessão de TESTE na ficha de um curso Gold: completa a ficha até N planos (por omissão 10) com planos
- * marcados «[Teste]», sem mexer nos que já existem, e leva-os às turmas abertas do curso (como gravar a ficha).
+ * marcados «[Teste]», sem mexer nos que já existem. As turmas criadas a seguir recebem-nos (as que já existem não mudam).
  *
  * Corre dentro do contentor da API:
  *   docker compose exec api npx tsx scripts/planos-teste.ts ["Nome do curso"] [N]
@@ -8,7 +8,6 @@
  */
 import "../src/env.js";
 import { createDb } from "../src/db/pool.js";
-import { importarParaTurmasDoCurso } from "../src/planosCurso.js";
 import { cursoPorNome } from "../src/repos/leadDocs.js";
 import { gravarFicha, lerFicha } from "../src/repos/cursos.js";
 
@@ -54,8 +53,7 @@ if (!intactos || gravados.length !== existentes.length + novos.length) {
   await gravarFicha(db, "gold", curso.id, payload, null);
   throw new Error("Os planos existentes não ficaram iguais: a ficha foi reposta como estava e nada mudou.");
 }
-const levados = await importarParaTurmasDoCurso(db, "gold", curso.id);
 console.log(`${nome}: ${existentes.length} planos já existiam, ${novos.length} de teste acrescentados (ordens ${novos.map(p => p.ordem).join(", ") || "nenhuma"}).`);
-console.log(`Planos e sumários levados às turmas abertas do curso: ${levados}.`);
+console.log("As turmas criadas a partir de agora recebem estes planos; as que já existem ficam como estão.");
 await db.close();
 process.exit(0);

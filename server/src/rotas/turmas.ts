@@ -295,7 +295,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
-      d.cronograma = await comModulosDosPlanos(db, "gold", d.curso ?? String(antes.curso ?? ""), comIdsUnicos(d.cronograma));
+      d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "gold", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
     }
@@ -319,7 +319,6 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await propagarCursoDaTurma(db, "gold", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);
       await repo.ligarCurso(db, "gold", id);
     }
-    if ((d.cronograma || d.curso) && req.actor!.role !== "formador") await importarPlanosCurso(db, "gold", id).catch(() => undefined);
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_gold", String(id), req.ip, { campos: Object.keys(d) });
     }
@@ -402,7 +401,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (slotErro) return reply.code(400).send({ error: slotErro });
     }
     if (d.cronograma) {
-      d.cronograma = await comModulosDosPlanos(db, "fin", d.curso ?? String(antes.curso ?? ""), comIdsUnicos(d.cronograma));
+      d.cronograma = comIdsUnicos(d.cronograma);
       const cruzamento = await erroSobreposicao(db, "fin", id, d.cronograma);
       if (cruzamento) return reply.code(400).send({ error: cruzamento });
     }
@@ -430,7 +429,6 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await propagarCursoDaTurma(db, "fin", id, String(d.nome ?? antes.nome ?? ""), String(antes.curso ?? ""), d.curso);
       await repo.ligarCurso(db, "fin", id);
     }
-    if ((d.cronograma || d.curso) && req.actor!.role !== "formador") await importarPlanosCurso(db, "fin", id).catch(() => undefined);
     if (req.actor!.role !== "formador") {
       await audit(db, req.actor!.id, "turma.alterar", "turma_fin", String(id), req.ip, { campos: Object.keys(d) });
     }

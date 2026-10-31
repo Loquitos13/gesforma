@@ -196,6 +196,8 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
     mudar(i, { momentos: { ...linha.momentos, [m]: { ...linha.momentos[m], [campo]: valor } } });
   };
   const renumerar = (lista: PlanoLinha[]) => lista.map((p, j) => ({ ...p, ordem: j + 1 }));
+  // Cada plano recolhe-se (como um «collapse»): abrem-se só os que se estão a escrever; os vazios começam abertos.
+  const [abertos, setAbertos] = useState<Set<number>>(() => new Set(data.planosSessao.filter(p => !p.objetivosGerais.trim()).map(p => p.ordem)));
   // Módulos / temas do programa (separador Programa): cada plano pode ficar ligado a um ou mais, e vai para as sessões deles.
   const modulos = opcoesDoPrograma(data.organizacaoPrograma, data.topicosPrograma);
   const unidade = data.organizacaoPrograma === "livre" ? "tema" : "módulo";
@@ -206,23 +208,36 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
     return data.planosSessao.slice(0, i + 1).filter(x => codigos(x.modulos) === k).length;
   };
   return (
-    <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano (e o seu sumário) vai para todas as turmas do curso, já aprovado: ligado a um módulo / tema, para as sessões desse módulo, pela ordem; sem módulo, para a sessão com o mesmo número (só sessões presenciais e síncronas, pela ordem do cronograma). Ao gravar a ficha, as turmas abertas recebem as alterações nas sessões que não mudaram o plano ou o sumário nem os assinaram.">
+    <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano (e o seu sumário) entra, já aprovado, nas turmas do curso criadas daqui em diante: ligado a módulos / temas, nas sessões desses módulos, pela ordem; sem módulo, na sessão com o mesmo número (só sessões presenciais e síncronas). As turmas que já existem não mudam; nelas usa-se o botão «Importar planos do curso».">
       <div className="space-y-3">
         {data.planosSessao.length === 0 && <Vazio compacto titulo="Ainda sem planos." descricao="Acrescente a primeira sessão." />}
+        {data.planosSessao.length > 1 && (
+          <div className="flex justify-end gap-3 text-xs">
+            <button type="button" className="font-semibold text-ligacao hover:underline" onClick={() => setAbertos(new Set(data.planosSessao.map(p => p.ordem)))}>Abrir todos</button>
+            <button type="button" className="font-semibold text-ligacao hover:underline" onClick={() => setAbertos(new Set())}>Recolher todos</button>
+          </div>
+        )}
         {data.planosSessao.map((linha, i) => (
-          <div key={linha.ordem} className="space-y-2 rounded-controlo border border-linha p-3">
-            <div className="flex items-center justify-between gap-2">
-              <p className="m-0 text-[13px] font-semibold">
+          <details key={linha.ordem} open={abertos.has(linha.ordem)}
+            onToggle={e => { const aberto = (e.currentTarget as HTMLDetailsElement).open; setAbertos(prev => { const n = new Set(prev); if (aberto) n.add(linha.ordem); else n.delete(linha.ordem); return n; }); }}
+            className="group/plano rounded-controlo border border-linha">
+            <summary className="flex cursor-pointer list-none items-center justify-between gap-2 px-3 py-2.5">
+              <p className="m-0 min-w-0 text-[13px] font-semibold">
+                <span aria-hidden="true" className="mr-1.5 inline-block text-tinta-suave transition-transform group-open/plano:rotate-90">›</span>
                 Plano {linha.ordem}
                 <span className="font-normal text-tinta-suave">
                   {linha.modulos.length ? ` · ${posNoModulo(i)}.ª sessão de ${codigos(linha.modulos)}` : ` · sessão ${linha.ordem} da turma`}
                 </span>
+                {!abertos.has(linha.ordem) && linha.objetivosGerais.trim() && (
+                  <span className="mt-0.5 block truncate text-xs font-normal text-tinta-suave">{linha.objetivosGerais.trim()}</span>
+                )}
               </p>
-              <span className="flex gap-1">
-                <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar([...data.planosSessao.slice(0, i + 1), { ...linha }, ...data.planosSessao.slice(i + 1)]) })}>Duplicar</Botao>
-                <Botao tamanho="sm" variante="fantasma" onClick={() => patch({ planosSessao: renumerar(data.planosSessao.filter((_, j) => j !== i)) })}>Remover</Botao>
+              <span className="flex shrink-0 gap-1">
+                <Botao tamanho="sm" variante="fantasma" onClick={e => { e.preventDefault(); patch({ planosSessao: renumerar([...data.planosSessao.slice(0, i + 1), { ...linha }, ...data.planosSessao.slice(i + 1)]) }); setAbertos(prev => new Set(prev).add(linha.ordem + 1)); }}>Duplicar</Botao>
+                <Botao tamanho="sm" variante="fantasma" onClick={e => { e.preventDefault(); patch({ planosSessao: renumerar(data.planosSessao.filter((_, j) => j !== i)) }); }}>Remover</Botao>
               </span>
-            </div>
+            </summary>
+            <div className="space-y-2 border-t border-linha-suave p-3">
             {modulos.length > 0 && (
               <Campo rotulo={unidade === "tema" ? "Temas" : "Módulos"} ajuda={`Com ${unidade}s, o plano vai para as sessões desses ${unidade}s na turma (o 1.º plano do M1 para a 1.ª sessão do M1; um plano do M3 e M4 para as sessões do M3 e M4). Sem ${unidade}, vai para a sessão com este número.`}>
                 {() => (
@@ -250,9 +265,10 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
                 onChange={e => mudar(i, { sumario: { ...linha.sumario, atividades: e.target.value } })} />
               <p className="m-0 text-xs text-tinta-suave sm:col-span-2">Gold: fica como sumário da sessão em todas as turmas do curso; o formador só tem de o assinar (ou acrescentar as observações).</p>
             </Recolhivel>
-          </div>
+            </div>
+          </details>
         ))}
-        <Botao variante="secundario" tamanho="sm" onClick={() => patch({ planosSessao: [...data.planosSessao, novoPlanoCurso(data.planosSessao.length + 1)] })}>
+        <Botao variante="secundario" tamanho="sm" onClick={() => { const n = data.planosSessao.length + 1; patch({ planosSessao: [...data.planosSessao, novoPlanoCurso(n)] }); setAbertos(prev => new Set(prev).add(n)); }}>
           Acrescentar sessão
         </Botao>
       </div>

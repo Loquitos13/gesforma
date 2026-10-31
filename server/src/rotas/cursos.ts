@@ -15,7 +15,6 @@ import {
   cursoPedeDocsPreinscricao, docsBase, gravarDocsPreinscricao, lerDocsPreinscricao, limparModelosFora, listarModelosConsentimento,
 } from "../docsCurso.js";
 import * as repo from "../repos/cursos.js";
-import { importarParaTurmasDoCurso } from "../planosCurso.js";
 import { idNum, regime as regimeEnum, regimeIdParam, regimeParam, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -286,10 +285,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }
     }
     await repo.gravarFicha(db, regime, id, payload, v.body.criterios ?? null);
-    // Os planos de sessão da ficha passam para as turmas abertas do curso (só nas sessões ainda sem plano).
-    const planosImportados = payload ? await importarParaTurmasDoCurso(db, regime, id).catch(() => 0) : 0;
-    await audit(db, req.actor?.id, "curso.ficha", "curso", String(id), req.ip, { regime, planosImportados });
-    return { ok: true, planosImportados };
+    // Os planos de sessão da ficha só entram nas turmas criadas daqui em diante (nas que já existem, pelo botão
+    // «Importar planos do curso» da turma): mexer na ficha nunca altera turmas já criadas.
+    await audit(db, req.actor?.id, "curso.ficha", "curso", String(id), req.ip, { regime });
+    return { ok: true };
   });
 
   app.post("/v1/cursos/:regime/:id/imagem/:slot", async (req, reply) => {

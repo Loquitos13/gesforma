@@ -88,7 +88,8 @@ function EscolherServico({ value, onChange, vazio }: { value: string; onChange: 
 function useCartoesFilhos(s: ServicoSite): CartaoServico[] {
   const { servicos } = useContext(ServicoAtualCtx);
   const proprio = slugServico(s);
-  const ligados = new Set((s.cartoes ?? []).map(c => ligacaoSegura(c.ligacao) ?? "").filter(Boolean));
+  // Só contam os cartões que se veem (com título): um cartão sem título com a ligação não mostra nada.
+  const ligados = new Set((s.cartoes ?? []).filter(c => c.titulo?.trim()).map(c => ligacaoSegura(c.ligacao) ?? "").filter(Boolean));
   return servicos
     .filter(x => x.pai && x.pai === proprio && slugServico(x) !== proprio)
     .map(x => ({ titulo: x.titulo, texto: x.texto, rotulo: "", ligacao: `/empresas/${slugServico(x)}` }))

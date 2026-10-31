@@ -41,8 +41,19 @@ for (let n = 1; n <= total; n++) {
     sumario: { conteudos: `[Teste] Sumário padrão da sessão ${n}.`, atividades: "Exercícios práticos e síntese final." },
   });
 }
-const planosSessao = [...existentes, ...novos].sort((a, b) => Number(a.ordem) - Number(b.ordem));
+// Cópia de segurança dos planos que já existem (para repor à mão, se for preciso), antes de gravar.
+console.log(`Cópia dos ${existentes.length} planos existentes:`);
+console.log(JSON.stringify(existentes));
+// Os existentes ficam exatamente como estão (mesma ordem e conteúdo); os novos só ocupam números livres.
+const planosSessao = [...existentes, ...novos];
 await gravarFicha(db, "gold", curso.id, { ...payload, planosSessao }, null);
+const gravados = ((await lerFicha(db, "gold", curso.id))?.payload as { planosSessao?: unknown[] } | undefined)?.planosSessao ?? [];
+const intactos = existentes.every((p, i) => JSON.stringify(gravados[i]) === JSON.stringify(p));
+if (!intactos || gravados.length !== existentes.length + novos.length) {
+  // Nunca deve acontecer: repõe a ficha como estava e pára.
+  await gravarFicha(db, "gold", curso.id, payload, null);
+  throw new Error("Os planos existentes não ficaram iguais: a ficha foi reposta como estava e nada mudou.");
+}
 const levados = await importarParaTurmasDoCurso(db, "gold", curso.id);
 console.log(`${nome}: ${existentes.length} planos já existiam, ${novos.length} de teste acrescentados (ordens ${novos.map(p => p.ordem).join(", ") || "nenhuma"}).`);
 console.log(`Planos e sumários levados às turmas abertas do curso: ${levados}.`);

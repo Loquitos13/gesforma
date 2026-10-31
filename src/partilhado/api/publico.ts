@@ -7,7 +7,7 @@ export type AreaFormandoDados = {
     nome: string; apelido: string; email: string; telf: string; novidades: boolean;
     canais: { email: boolean; sms: boolean; whatsapp: boolean; plataforma: boolean };
   };
-  cursos: { id: string; regime: "gold" | "fin"; titulo: string; turma: string; estado: string; progresso: number; sessoes: number; feitas: number; ultimo: string; modulos: string[] }[];
+  cursos: { id: string; regime: "gold" | "fin"; titulo: string; turma: string; estado: string; progresso: number; sessoes: number; feitas: number; ultimo: string; modulos: string[]; moodle?: string }[];
   agenda: { id: string; cursoId: string; data: string; dia: string; mes: string; ano: string; titulo: string; curso: string; horas: string; futura: boolean }[];
   certificados: { id: string; curso: string; data: string; nota: string; url: string; nome: string }[];
   pagamentos: { id: string; curso: string; data: string; valor: string; estado: string; metodo: string }[];

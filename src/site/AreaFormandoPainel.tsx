@@ -92,6 +92,13 @@ export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL 
                     <span className="text-xs font-bold text-[var(--c-primaria,#1C3350)]/50">{curso.feitas} de {curso.sessoes} sessões</span>
                     <button type="button" onClick={() => setSala(curso.id)} className="flex items-center gap-2 font-bold text-[var(--c-destaque,#A60000)]">Ver sessões <Icon name="arrow" /></button>
                   </div>
+                  {/* O Moodle desta turma (o atual do curso ou o novo, conforme a turma). */}
+                  {curso.moodle && (
+                    <a href={curso.moodle} target="_blank" rel="noreferrer"
+                      className="mt-5 flex items-center justify-center gap-2 bg-[#FFA900] px-4 py-3 text-sm font-extrabold uppercase tracking-[0.1em] text-[#14263D] hover:brightness-95">
+                      Entrar no Moodle <Icon name="arrow" />
+                    </a>
+                  )}
                 </article>
               ))}
             </div>

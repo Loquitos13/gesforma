@@ -42,6 +42,21 @@ export async function cronogramaDaTurma(c: Consulta, regime: Regime, id: number)
   return one<{ cronograma: unknown }>(c, `SELECT cronograma FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [id]);
 }
 
+/** A data de início da turma e a ficha do curso dela (pelo curso_id, ou pelo nome nas turmas antigas). */
+export async function fichaDoCursoDaTurma(c: Consulta, regime: Regime, id: number) {
+  const cursos = regime === "gold" ? "cursos_gold" : "cursos_fin";
+  const nome = regime === "gold" ? "lower(trim(k.nome)) = lower(trim(t.curso))"
+    : "(lower(trim(k.nome_comercial)) = lower(trim(t.curso)) OR lower(trim(k.ufcd)) = lower(trim(t.curso)))";
+  return one<{ data_inicio: string; payload: Record<string, unknown> | null }>(c,
+    `SELECT coalesce(t.data_inicio::text, '') AS data_inicio, f.payload
+       FROM ${tabelaRegime("turmas", regime)} t
+       LEFT JOIN ${cursos} k ON k.id = t.curso_id OR (t.curso_id IS NULL AND ${nome})
+       LEFT JOIN curso_fichas f ON f.regime = $2 AND f.curso_id = k.id
+      WHERE t.id = $1
+      ORDER BY f.payload IS NULL
+      LIMIT 1`, [id, regime]);
+}
+
 /** O cronograma com a linha da turma bloqueada até ao fim da transacção (gravar uma sessão sem a ver mudar de lugar). */
 export async function cronogramaParaGravar(c: Consulta, regime: Regime, id: number) {
   return one<{ cronograma: unknown }>(c, `SELECT cronograma FROM ${tabelaRegime("turmas", regime)} WHERE id = $1 FOR UPDATE`, [id]);

@@ -140,9 +140,35 @@ export function TabOferta({ f }: { f: FichaCurso }) {
             {p => <Selecao {...p} opcoes={[...OPCOES_SINCRONIA]} vazio="Por definir" value={data.regimeSincronia} onChange={e => patch(comLocalElearning({ regimeSincronia: regimeSincronia(e.target.value) }))} />}
           </Campo>
           {(/b-learning|e-learning/i.test(data.regime) || data.regimeSincronia === "assincrono" || data.regimeSincronia === "misto") && (
+            <>
             <Campo className="sm:col-span-2" rotulo="Endereço do Moodle" ajuda="B-learning, e-learning assíncrono ou misto: o curso aparece na página de entrada do site com o botão «Entrar», que abre este endereço.">
               {p => <Entrada {...p} type="url" placeholder="https://…" value={data.moodleUrl} onChange={e => patch({ moodleUrl: e.target.value.trim() })} />}
             </Campo>
+            <Campo rotulo="Novo Moodle (opcional)" ajuda="Enquanto o Moodle é refeito: as turmas novas e as escolhidas abaixo usam este endereço; as outras continuam no de cima.">
+              {p => <Entrada {...p} type="url" placeholder="https://…" value={data.moodleNovoUrl} onChange={e => patch({ moodleNovoUrl: e.target.value.trim() })} />}
+            </Campo>
+            <Campo rotulo="Novo Moodle a partir de" ajuda="As turmas que começam neste dia ou depois usam o novo Moodle. A página de entrada diz «cursos iniciados até» o dia anterior.">
+              {p => <Entrada {...p} type="date" disabled={!data.moodleNovoUrl} value={data.moodleNovoDesde} onChange={e => patch({ moodleNovoDesde: e.target.value })} />}
+            </Campo>
+            {data.moodleNovoUrl && turmas.length > 0 && (
+              <fieldset className="sm:col-span-2 m-0 rounded-controlo border border-linha p-3">
+                <legend className="px-1 text-xs font-semibold text-tinta">Turmas existentes que passam já para o novo Moodle</legend>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {turmas.map(t => {
+                    const pelaData = Boolean(data.moodleNovoDesde && t.inicio && t.inicio.slice(0, 10) >= data.moodleNovoDesde);
+                    const marcada = pelaData || data.moodleNovoTurmas.includes(t.id);
+                    return (
+                      <label key={t.id} className="flex items-center gap-2 text-sm text-tinta">
+                        <input type="checkbox" checked={marcada} disabled={pelaData}
+                          onChange={e => patch({ moodleNovoTurmas: e.target.checked ? [...data.moodleNovoTurmas, t.id] : data.moodleNovoTurmas.filter(x => x !== t.id) })} />
+                        <span>{t.nome}{t.inicio ? <span className="text-tinta-suave"> · início {fmtData(t.inicio)}</span> : null}{pelaData ? <span className="text-tinta-suave"> (pela data)</span> : null}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+              </fieldset>
+            )}
+            </>
           )}
           {regime === "fin" && (
             <Campo rotulo="Programa" ajuda="Programa, prioridade e tipologias dos documentos das turmas deste curso (Edição de cursos › Programas). Cada turma pode escolher outro; sem programa, vale o primeiro activo.">

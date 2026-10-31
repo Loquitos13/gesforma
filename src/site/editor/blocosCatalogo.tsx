@@ -23,10 +23,11 @@ type CatalogoProps = {
   aparencia: Estilo;
 };
 
+// Ordem pedida pelo cliente: Gold, Financiada e, no fim, toda a formação.
 const LINHAS: [Linha, string, string][] = [
-  ["Todas", "Toda a formação", "Explore a oferta completa da ENA"],
+  ["Gold", "Cursos Gold", "Formação premium autofinanciada"],
   ["Financiada", "Formação financiada", "Percursos elegíveis com financiamento"],
-  ["Gold", "ENA Gold", "Formação premium autofinanciada"],
+  ["Todas", "Toda a formação", "Explore a oferta completa da ENA"],
 ];
 
 function Radio<T extends string>({ nome, legenda, opcoes, valor, mudar, rotulo }: {
@@ -192,7 +193,7 @@ function CatalogoVista(p: Omit<CatalogoProps, "zonaTopo" | "zonaLista"> & { zona
               {/* Ordem: área, modalidade e, por fim, a linha de formação (com o acesso Gold). */}
               <Radio nome="area" legenda="Área de formação" opcoes={areas} valor={area} mudar={setArea} />
               <Radio nome="formato" legenda="Modalidade" opcoes={modalidades} valor={formato} mudar={setFormato} />
-              <Radio nome="linha" legenda="Linha de formação" opcoes={["Todas", "Financiada", "Gold"] as const} valor={linha} mudar={mudarLinha} rotulo={v => (v === "Gold" ? "ENA Gold" : v)} />
+              <Radio nome="linha" legenda="Linha de formação" opcoes={["Gold", "Financiada", "Todas"] as const} valor={linha} mudar={mudarLinha} rotulo={v => (v === "Gold" ? "Cursos Gold" : v)} />
               {linha === "Gold" && <Radio nome="acesso" legenda="Acesso Gold" opcoes={["Todas", "Pré-inscrição", "Pré-pago", "Acesso direto"] as const} valor={acesso} mudar={setAcesso} />}
               <button type="button" onClick={() => setFiltrosAbertos(false)}
                 className="mt-6 w-full bg-[var(--c-destaque)] px-4 py-3 text-sm font-bold text-white lg:hidden">

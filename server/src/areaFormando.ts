@@ -17,6 +17,8 @@ import {
 import { hashPassword, isEmail, normalizeEmail, sha256 } from "./security.js";
 import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
+import { moodleDaTurma } from "../../src/partilhado/moodle.js";
+import { fichaDoCursoDaTurma } from "./repos/pedagogiaTurma.js";
 import { diaLisboa, hojeLisboa, lerInstante, stampLisboa } from "./datas.js";
 
 /** Área do formando: conta, inscrições, agenda, certificados, pagamentos e documentos. */
@@ -243,6 +245,9 @@ export async function montarArea(db: Db, user: Actor) {
 
   for (const ins of inscricoes) {
     const turma = ins.turmaId ? await cronogramaDaTurma(db, ins.regime, ins.turmaId) : null;
+    // O Moodle desta turma: o atual do curso, ou o novo se a turma começa depois da data escolhida ou foi escolhida.
+    const ficha = ins.turmaId ? await fichaDoCursoDaTurma(db, ins.regime, ins.turmaId) : null;
+    const moodle = ficha?.payload && ins.turmaId ? moodleDaTurma(ficha.payload, { id: ins.turmaId, dataInicio: ficha.data_inicio }) : "";
     const sessoes = sessoesDe(turma?.cronograma);
     const feitas = sessoes.filter(s => s.data <= hoje).length;
     const progresso = sessoes.length ? Math.round((feitas / sessoes.length) * 100) : 0;
@@ -260,6 +265,7 @@ export async function montarArea(db: Db, user: Actor) {
       feitas,
       ultimo,
       modulos: [...new Set(sessoes.flatMap(s => s.modulos))].slice(0, 12),
+      moodle,
     });
     for (const s of sessoes) {
       const [ano, mes, dia] = s.data.split("-");

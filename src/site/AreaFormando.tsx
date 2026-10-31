@@ -117,7 +117,7 @@ export function irPosLogin(role: string) {
   window.location.assign(destinoPosLogin(role, params.get("destino")));
 }
 
-type CursoMoodle = { id: string; titulo: string; area: string; imagem: string; moodle: string };
+type CursoMoodle = { id: string; titulo: string; area: string; imagem: string; moodle: string; ate: string };
 
 /** Os cursos com endereço do Moodle (ficha do curso › Oferta), para quem começou no Moodle antigo. */
 function useCursosMoodle() {
@@ -126,14 +126,20 @@ function useCursosMoodle() {
     let vivo = true;
     fetch("/api/v1/public/catalogo")
       .then(r => (r.ok ? r.json() : null))
-      .then((r: { cursos?: { id: string; titulo: string; area: string; capa: string | null; miniatura: string | null; moodle?: string }[] } | null) => {
+      .then((r: { cursos?: { id: string; titulo: string; area: string; capa: string | null; miniatura: string | null; moodle?: string; moodleAte?: string }[] } | null) => {
         if (!vivo || !r) return;
-        setCursos((r.cursos ?? []).filter(c => c.moodle).map(c => ({ id: c.id, titulo: c.titulo, area: c.area, imagem: c.miniatura || c.capa || "", moodle: c.moodle! })));
+        setCursos((r.cursos ?? []).filter(c => c.moodle).map(c => ({ id: c.id, titulo: c.titulo, area: c.area, imagem: c.miniatura || c.capa || "", moodle: c.moodle!, ate: c.moodleAte ?? "" })));
       })
       .catch(() => undefined);
     return () => { vivo = false; };
   }, []);
   return cursos;
+}
+
+/** «Cursos iniciados até …»: o dia antes do novo Moodle (ficha do curso), o mais tardio entre os cursos; sem data, 30/10/2026. */
+function dataLimiteMoodle(cursos: CursoMoodle[]) {
+  const datas = cursos.map(c => c.ate).filter(Boolean).sort((a, b) => a.split("/").reverse().join("").localeCompare(b.split("/").reverse().join("")));
+  return datas[datas.length - 1] ?? "30/10/2026";
 }
 
 /** Caixa a pulsar e a lista dos cursos no Moodle, cada um com «Entrar». */
@@ -142,7 +148,7 @@ function EntradaMoodle({ cursos, escuro }: { cursos: CursoMoodle[]; escuro: bool
   return (
     <div className="relative">
       <p className="ena-anim-pulsar rounded-lg border-2 border-[#FFA900] bg-[#FFA900] px-5 py-4 text-center text-base font-extrabold text-[#14263D] shadow-[0_0_0_6px_rgba(255,169,0,.25)]">
-        Entra no Moodle para cursos iniciados até 30/10/2026
+        Entra no Moodle para cursos iniciados até {dataLimiteMoodle(cursos)}
       </p>
       <ul className="mt-5 space-y-3">
         {cursos.map(c => (
@@ -368,7 +374,9 @@ export function Sala({ curso, sessoes, onVoltar }: { curso: AreaFormandoDados["c
         <article className="border border-[#1C3350]/10 bg-white p-6 sm:p-8">
           <p className="text-xs font-bold uppercase tracking-wider text-[#A60000]">Módulo {activo + 1}</p>
           <h2 className="mt-2 font-serif text-3xl font-bold text-[#1C3350]">{modulos[activo]}</h2>
-          <p className="mt-4 leading-7 text-[#1C3350]/60">O Moodle ainda não está ligado. As sessões são as do cronograma da turma no GesForma.</p>
+          {curso.moodle
+            ? <a href={curso.moodle} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 bg-[#FFA900] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#14263D] hover:brightness-95">Entrar no Moodle</a>
+            : <p className="mt-4 leading-7 text-[#1C3350]/60">O Moodle ainda não está ligado. As sessões são as do cronograma da turma no GesForma.</p>}
           <ul className="mt-6 space-y-3">
             {sessoes.length === 0 && <li className="text-sm text-[#1C3350]/50">Esta turma ainda não tem sessões datadas.</li>}
             {sessoes.map(sessao => (

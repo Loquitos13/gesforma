@@ -9,6 +9,7 @@ import { eur } from "../../src/partilhado/ui/formatos.js";
 import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
 import { textosCurso } from "../../src/partilhado/textosCurso.js";
 import { AREA_FINANCIADA, areaCanonica } from "../../src/partilhado/areasFormacao.js";
+import { diaAntesDe } from "../../src/partilhado/moodle.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 
@@ -66,6 +67,8 @@ export type CursoPublico = {
   video: string;
   /** Endereço do curso no Moodle (ficha › Oferta), para a página de entrada; só http(s). */
   moodle: string;
+  /** Com um Moodle novo a partir de uma data: «cursos iniciados até» este dia (dd/mm/aaaa) no Moodle atual. */
+  moodleAte: string;
   seoTitulo: string; seoDescricao: string;
   /** Contactos de cada local do curso: os da ficha do curso (se o local lhe estiver atribuído), senão os de Locais. */
   contactosLocais: ContactoLocal[];
@@ -379,6 +382,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       topicos: topicosDoPayload(payload),
       video: texto(payload.video),
       moodle: /^https?:\/\//i.test(texto(payload.moodleUrl)) ? texto(payload.moodleUrl) : "",
+      moodleAte: texto(payload.moodleNovoUrl) ? diaAntesDe(payload.moodleNovoDesde) : "",
       seoTitulo: texto(payload.seoTitulo), seoDescricao: texto(payload.seoDescricao),
       contactosLocais: contactosDoCurso(payload, [
         ...curso.chaves.flatMap(key => (sessoes.get(key) ?? []).map(s => s.local)),

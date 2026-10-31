@@ -4,6 +4,7 @@ import type { Opcao } from "../../../../partilhado/api/catalogos";
 import { avaliacaoCcp, avaliacaoPadrao, cursoECcp, parseAvaliacaoCurso, type AvaliacaoCurso } from "../../../avaliacaoCurso";
 import { linhasPrincipais, modeloAplica, programaDePayload, topicosDeTexto, type OrganizacaoPrograma, type TopicoPrograma } from "../../../cursoPrograma";
 import { parseConteudosMoodle, type ConteudoMoodle } from "../../../ConteudosMoodle";
+import { idsTurmasMoodleNovo } from "../../../../partilhado/moodle";
 import { normalizarPlanoCurso, type PlanoCurso } from "../../../planosCurso";
 import { codigoCursoValido } from "../../../../partilhado/codigoCurso";
 import { regimeSincronia, type RegimeSincronia } from "../../../../partilhado/regimeSincronia";
@@ -52,6 +53,8 @@ export type CursoSite = {
   valoresFormador: ValorFormador[]; entidadeResponsavel: string; conteudosMoodle: ConteudoMoodle[];
   /** Endereço do curso no Moodle (b-learning, e-learning assíncrono ou misto): aparece na página de entrada do site. */
   moodleUrl: string;
+  /** Moodle novo (enquanto o atual é refeito): turmas que começam a partir de `moodleNovoDesde` e as escolhidas. */
+  moodleNovoUrl: string; moodleNovoDesde: string; moodleNovoTurmas: number[];
 };
 
 export const TABS: { id: TabId; rotulo: string; precisaId?: boolean }[] = [
@@ -142,6 +145,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     entidadeResponsavel: "",
     conteudosMoodle: [],
     moodleUrl: "",
+    moodleNovoUrl: "", moodleNovoDesde: "", moodleNovoTurmas: [],
   };
 }
 
@@ -171,6 +175,9 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     regimeSincronia: regimeSincronia(guardado.regimeSincronia),
     programaFin: typeof guardado.programaFin === "string" ? guardado.programaFin : "",
     moodleUrl: typeof guardado.moodleUrl === "string" ? guardado.moodleUrl : "",
+    moodleNovoUrl: typeof guardado.moodleNovoUrl === "string" ? guardado.moodleNovoUrl : "",
+    moodleNovoDesde: typeof guardado.moodleNovoDesde === "string" ? guardado.moodleNovoDesde : "",
+    moodleNovoTurmas: idsTurmasMoodleNovo(guardado.moodleNovoTurmas),
     topicosPrograma: programa.topicos.length ? programa.topicos : base.topicosPrograma,
     avaliacaoCurso: cursoECcp(nome) && avaliacao.estrutura !== "ccp" ? avaliacaoCcp() : avaliacao,
     banner: mediaComUrl(guardado.banner) ?? base.banner,

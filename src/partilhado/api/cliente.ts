@@ -37,6 +37,7 @@ export async function api<T>(path: string, resto: Opcoes = {}): Promise<T> {
   if (res.status === 429) {
     throw new ApiError(429, typeof data.error === "string" ? data.error : "Demasiadas tentativas. Aguarde um minuto e tente de novo.");
   }
+  if (res.status === 413) throw new ApiError(413, "Há demasiado conteúdo para gravar de uma vez. Avise o suporte: nada foi gravado.");
   if (!res.ok) {
     throw new ApiError(res.status, typeof data.error === "string" ? data.error : "pedido recusado", Array.isArray(data.campos) ? data.campos : undefined, data);
   }

@@ -263,7 +263,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { ficha: { payload: fichaParaPapel(payload, req.actor!.role), criterios: asArr(found.criterios) } };
   });
 
-  app.put("/v1/cursos/:regime/:id/ficha", async (req, reply) => {
+  // A ficha leva os textos do site, o programa e os planos de todas as sessões: passa muito dos 32 KB por omissão
+  // (com 4 ou 5 planos preenchidos o «Guardar» falhava sempre).
+  app.put("/v1/cursos/:regime/:id/ficha", { bodyLimit: 4 * 1024 * 1024 }, async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idsCurso, body: fichaSchema }, req);
     if (!v) return;

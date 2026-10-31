@@ -1,5 +1,5 @@
 // Ficha do curso (Gold ou Financiada): página pública, oferta, programa, avaliação, documentos e dossiê.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
 import { Aviso, Botao, ErroCarregar, Esqueleto, PageHeader, Separadores } from "../../../partilhado/ui";
 import { ConteudosMoodle } from "../../ConteudosMoodle";
@@ -25,6 +25,22 @@ export default function CursoFicha({ view, params, navigate }: VistaProps) {
   const f = useFichaCurso(regime, params.cursoId, id => navigate({ view, cursoId: id }));
   const [verSite, setVerSite] = useState(false);
   const { data, tab, setTab, pronto } = f;
+
+  // Gravação automática: 1,5 s depois da última alteração, como rascunho (sem exigir os campos obrigatórios, que o
+  // «Guardar» continua a verificar). Uma alteração feita durante a gravação volta a gravar a seguir.
+  const { alterado, gravando, cursoId, guardar, criterios } = f;
+  useEffect(() => {
+    if (!podeEditar || !alterado || gravando || cursoId == null) return;
+    const t = window.setTimeout(() => void guardar({ rascunho: true }), 1500);
+    return () => window.clearTimeout(t);
+  }, [podeEditar, alterado, gravando, cursoId, data, criterios]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Ainda por gravar ao sair da página: o browser pergunta antes de fechar.
+  useEffect(() => {
+    if (!alterado) return;
+    const aviso = (e: BeforeUnloadEvent) => { e.preventDefault(); };
+    window.addEventListener("beforeunload", aviso);
+    return () => window.removeEventListener("beforeunload", aviso);
+  }, [alterado]);
 
   const titulo = data.titulo || (params.cursoId === "new" || params.cursoId == null ? (regime === "fin" ? "Nova UFCD" : "Novo curso") : "Curso");
   const meta = [regime === "fin" ? (data.ufcdCod ? `${rotuloCodigoCurso(data.ufcdCod)}` : "") : data.tipo, data.horas ? `${data.horas} h` : "", data.regime].filter(Boolean).join(" · ");
@@ -59,7 +75,9 @@ export default function CursoFicha({ view, params, navigate }: VistaProps) {
             )}
             <Botao variante="secundario" className="xl:hidden" onClick={() => setVerSite(v => !v)}>{verSite ? "Editar" : "Ver página"}</Botao>
             {podeEditar && (
-              <Botao variante="primario" aCarregar={f.gravando} onClick={() => void f.guardar()}>{f.alterado || f.cursoId == null ? "Guardar" : "Guardado"}</Botao>
+              <Botao variante="primario" aCarregar={f.gravando} onClick={() => void f.guardar()}>
+                {f.cursoId == null ? "Guardar" : f.gravando ? "A gravar…" : f.alterado ? "Guardar" : "Gravado automaticamente"}
+              </Botao>
             )}
           </>
         )}

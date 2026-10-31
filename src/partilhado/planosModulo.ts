@@ -11,9 +11,9 @@ export function chaveModuloPlano(nome: string) {
 }
 
 /**
- * Para cada sessão (pela ordem do cronograma), o plano que lhe cabe, ou null. Sessão com módulo: o próximo plano
- * desse módulo. Sessão sem módulo: o plano com o mesmo número, se ainda não foi usado (e a sessão passa a ter o
- * módulo desse plano: `modulosEmFalta`).
+ * Para cada sessão (pela ordem do cronograma), o plano que lhe cabe, ou null. Sessão de um módulo com planos ligados:
+ * o próximo plano desse módulo. As outras: o plano com o mesmo número, se ainda não foi usado (e a sessão sem módulo
+ * passa a ter o módulo desse plano: `modulosEmFalta`).
  */
 export function atribuirPlanos<P extends { ordem: number; modulo?: string | null }>(planos: P[], sessoes: { modulos?: unknown }[]): (P | null)[] {
   const ordenados = [...planos].sort((a, b) => a.ordem - b.ordem);
@@ -33,8 +33,10 @@ export function atribuirPlanos<P extends { ordem: number; modulo?: string | null
     }
   });
   sessoes.forEach((s, i) => {
-    const temModulo = Array.isArray(s.modulos) && s.modulos.some(m => String(m ?? "").trim());
-    if (temModulo || out[i]) return;
+    // Sessão de um módulo que tem planos na ficha fica só com os desse módulo; as outras (sem módulo, ou de um módulo
+    // sem planos ligados, como quando os planos não têm módulo) vão pelo número da sessão.
+    const modulos = Array.isArray(s.modulos) ? s.modulos.map(m => chaveModuloPlano(String(m ?? ""))).filter(Boolean) : [];
+    if (out[i] || modulos.some(k => porModulo.has(k))) return;
     const p = ordenados.find(x => x.ordem === i + 1 && !usados.has(x));
     if (p) { usados.add(p); out[i] = p; }
   });

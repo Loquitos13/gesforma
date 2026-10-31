@@ -228,4 +228,19 @@ describe("planos de sessão do curso nas turmas", () => {
       "SELECT sessao_n, plano FROM turma_sessoes WHERE regime = 'gold' AND turma_id = $1 AND sessao_n IS NOT NULL ORDER BY sessao_n", [dId])).rows;
     expect(d.map(r => r.plano?.objetivosGerais ?? null)).toEqual(["A1", "Plano do M2"]);
   });
+
+  it("a ficha com muitos planos grava (antes passava o limite de 32 KB com 4 ou 5 planos)", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Muitos Planos");
+    await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "Presencial", horas: 90 });
+    const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1", [curso])).rows[0]!.id;
+    const texto = "Conteúdo da sessão com bastante texto. ".repeat(40);
+    const planos = Array.from({ length: 30 }, (_, i) => {
+      const p = plano(i + 1, `Objetivos ${i + 1} ${texto}`);
+      p.momentos.desenvolvimento.conteudo = texto;
+      return p;
+    });
+    const r = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, { payload: { planosSessao: planos } });
+    expect(r.statusCode, r.body.slice(0, 200)).toBe(200);
+  });
 });

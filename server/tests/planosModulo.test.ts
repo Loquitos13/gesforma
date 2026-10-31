@@ -13,7 +13,9 @@ describe("planos do curso por módulo", () => {
       { modulos: [] }, { modulos: ["M1 · Aprendizagem e pedagogia · 20h"] }, { modulos: ["M1 · Aprendizagem e pedagogia · 20h"] },
     ];
     expect(atribuirPlanos(planos, sessoes).map(p => p?.ordem ?? null)).toEqual([1, 3, null, 2, null]);
-    // Sem módulos nos planos: como antes, o plano n para a sessão n.
+    // Sem módulos nos planos: como antes, o plano n para a sessão n, mesmo que as sessões tenham módulo (grelha gerada).
     expect(atribuirPlanos([{ ordem: 1 }, { ordem: 2 }], [{}, {}, {}]).map(p => p?.ordem ?? null)).toEqual([1, 2, null]);
+    const geradas = [{ modulos: ["M1 · A"] }, { modulos: ["M1 · A"] }, { modulos: ["M2 · B"] }, { modulos: [] }];
+    expect(atribuirPlanos([1, 2, 3, 4, 5].map(ordem => ({ ordem })), geradas).map(p => p?.ordem ?? null)).toEqual([1, 2, 3, 4]);
   });
 });

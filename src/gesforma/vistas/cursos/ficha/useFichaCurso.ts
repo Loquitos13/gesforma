@@ -39,6 +39,8 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
   const [erro, setErro] = useState("");
   const [gravando, setGravando] = useState(false);
   const [alterado, setAlterado] = useState(false);
+  // Conta as alterações: uma gravação só limpa o «alterado» se nada mudou entretanto (gravação automática).
+  const versao = useRef(0);
   const [tab, setTab] = useState<TabId>("identidade");
   const [imagemAGravar, setImagemAGravar] = useState<"" | "banner" | "capa" | "miniatura">("");
   const inicializado = useRef(false);
@@ -78,6 +80,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
 
   function patch(p: Partial<CursoSite>) {
     setData(prev => ({ ...prev, ...p }));
+    versao.current += 1;
     setAlterado(true);
     setErro("");
     setFalhas(prev => {
@@ -93,6 +96,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
 
   function mudarCriterios(next: CriterioAvaliacao[]) {
     setCriterios(next);
+    versao.current += 1;
     setAlterado(true);
   }
 
@@ -138,6 +142,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
     setGravando(true);
     setErro("");
     let criado: number | undefined;
+    const versaoGravada = versao.current;
     try {
       const novo = idRef.current == null;
       const id = await gravarCurso();
@@ -157,7 +162,7 @@ export function useFichaCurso(regime: Regime, cursoIdParam: number | "new" | und
         } as unknown as Record<string, unknown>,
         criterios: cursoTemFolhaSimulacao(data, regime) ? criterios.filter(c => c.label.trim()) : [],
       });
-      setAlterado(false);
+      if (versao.current === versaoGravada) setAlterado(false);
       invalidar("cursos:");
       invalidar("opcoes:cursos");
       if (!opts.rascunho) toastOk("Curso gravado.");

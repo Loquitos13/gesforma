@@ -95,8 +95,43 @@ describe("planos de sessão do curso nas turmas", () => {
     expect(t2.statusCode, t2.body).toBe(200);
     expect((await planosDaTurma(ctx, t2.json().turma.id as number)).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1 v2"]);
 
+    // Turma nova (com a grelha que a criação gerar) a que depois se muda o cronograma no cockpit: as sessões recebem os planos.
+    const t3 = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-06-01", nome: unico("TPL3"), curso });
+    expect(t3.statusCode, t3.body).toBe(200);
+    const t3Id = t3.json().turma.id as number;
+    const cron = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${t3Id}`, {
+      cronograma: [
+        { id: "a", data: "2099-06-01", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
+        { id: "b", data: "2099-06-02", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
+      ],
+    });
+    expect(cron.statusCode, cron.body).toBe(200);
+    // (As sessões que saíram da grelha gerada ficam sem número.)
+    expect((await planosDaTurma(ctx, t3Id)).filter(l => l.sessao_n != null).map(l => l.plano?.objetivosGerais)).toEqual(["Gerais 1 v2", "Gerais 2 v2"]);
+
     // Turma fechada: não se importa.
     await ctx.db.query("UPDATE turmas_gold SET fechada_em = now() WHERE id = $1", [turmaId]);
     expect((await pedido(ctx, "secretaria", "POST", `/v1/turmas/gold/${turmaId}/planos/importar`, {})).statusCode).toBe(409);
+  });
+
+  it("Financiada: uma turma nova do curso recebe os planos gravados na ficha do curso", async () => {
+    const ctx = await arrancar();
+    const nome = unico("UFCD Planos");
+    const c = await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", { ufcdCod: "9998", ufcd: nome, nomeComercial: nome, regime: "Presencial", horas: 25 });
+    expect(c.statusCode, c.body).toBe(200);
+    const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_fin WHERE nome_comercial = $1", [nome])).rows[0]!.id;
+    const ficha = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/fin/${cursoId}/ficha`, { payload: { planosSessao: [plano(1, "Fin 1"), plano(2, "Fin 2")] } });
+    expect(ficha.statusCode, ficha.body).toBe(200);
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+      dataInicio: "2099-07-01", nome: unico("TFP"), curso: nome, horas: 25,
+      cronograma: [
+        { id: "1", data: "2099-07-01", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
+        { id: "2", data: "2099-07-02", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },
+      ],
+    });
+    expect(t.statusCode, t.body).toBe(200);
+    const r = await ctx.db.query<{ plano: { objetivosGerais: string } | null }>(
+      "SELECT plano FROM turma_sessoes WHERE regime = 'fin' AND turma_id = $1 ORDER BY sessao_n", [t.json().turma.id]);
+    expect(r.rows.map(x => x.plano?.objetivosGerais)).toEqual(["Fin 1", "Fin 2"]);
   });
 });

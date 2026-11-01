@@ -3,10 +3,10 @@ export type Vista =
   | "gold-crm-clientes" | "gold-crm-parceiros" | "gold-crm-contratos" | "fin-crm-clientes" | "fin-crm-parceiros" | "fin-crm-contratos"
   | "formador-turmas" | "formador-calendario" | "formador-perfil"
   | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
-  | "gold-campanhas" | "gold-cursos" | "gold-datas" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
+  | "gold-campanhas" | "gold-cursos" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
   | "gold-modulos" | "gold-conteudos" | "gold-turmas" | "gold-cronogramas" | "gold-formadores" | "gold-cockpit-turma" | "gold-curso-ficha" | "gold-dtp" | "gold-inqueritos"
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
-  | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-programas" | "fin-areas-tematicas"
+  | "fin-modulos" | "fin-conteudos" | "fin-locais" | "fin-programas" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
   | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
 
@@ -56,7 +56,6 @@ const CAMINHOS: Record<Vista, string> = {
   "gold-campanhas": "/gesforma/gold/campanhas",
   "gold-cursos": "/gesforma/gold/cursos",
   "gold-curso-ficha": "/gesforma/gold/cursos/novo",
-  "gold-datas": "/gesforma/gold/datas",
   "gold-horarios": "/gesforma/gold/horarios",
   "gold-locais": "/gesforma/gold/locais",
   "gold-areas-tematicas": "/gesforma/gold/areas-tematicas",
@@ -79,7 +78,6 @@ const CAMINHOS: Record<Vista, string> = {
   "fin-formadores": "/gesforma/financiada/formadores",
   "fin-modulos": "/gesforma/financiada/modulos",
   "fin-conteudos": "/gesforma/financiada/conteudos",
-  "fin-datas": "/gesforma/financiada/datas",
   "fin-locais": "/gesforma/financiada/locais",
   "fin-programas": "/gesforma/financiada/programas",
   "fin-areas-tematicas": "/gesforma/financiada/areas-tematicas",

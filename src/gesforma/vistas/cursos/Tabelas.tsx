@@ -1,4 +1,4 @@
-// Datas, locais, programas (Financiada), horários e áreas temáticas: um ecrã com separadores; cada separador é uma rota do menu.
+// Locais, programas (Financiada), horários e áreas temáticas: um ecrã com separadores; cada separador é uma rota do menu.
 import { useMemo, useState } from "react";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { Botao, Modal, PageHeader, Separadores, data, eur } from "../../../partilhado/ui";
@@ -9,19 +9,18 @@ import type { VistaProps } from "../../shell/tipos";
 import { CatalogoTabela, type ConfigCatalogo } from "./CatalogoTabela";
 import { CAMPOS_CANDIDATURA_FIN, CANDIDATURA_FIN_OMISSAO } from "../../../partilhado/candidaturaFin";
 
-type Tabela = "datas" | "locais" | "programas" | "horarios" | "areas";
+type Tabela = "locais" | "programas" | "horarios" | "areas";
 
 const VISTAS: Record<"gold" | "fin", Partial<Record<Tabela, Vista>>> = {
-  gold: { datas: "gold-datas", locais: "gold-locais", horarios: "gold-horarios", areas: "gold-areas-tematicas" },
-  fin: { datas: "fin-datas", locais: "fin-locais", programas: "fin-programas", areas: "fin-areas-tematicas" },
+  gold: { locais: "gold-locais", horarios: "gold-horarios", areas: "gold-areas-tematicas" },
+  fin: { locais: "fin-locais", programas: "fin-programas", areas: "fin-areas-tematicas" },
 };
 
 function tabelaDaVista(view: Vista): Tabela {
-  if (view.endsWith("locais")) return "locais";
   if (view.endsWith("programas")) return "programas";
   if (view.endsWith("horarios")) return "horarios";
   if (view.endsWith("areas-tematicas")) return "areas";
-  return "datas";
+  return "locais";
 }
 
 const txt = (v: unknown) => String(v ?? "");
@@ -103,7 +102,7 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         nota: <p className="m-0 text-[13px] text-tinta-suave">A pré-inscrição só mostra os horários que estão numa turma Gold activa daquele curso e local.</p>,
       };
     }
-    if (tabela === "areas") {
+    {
       return {
         kind: "areas", regime, singular: "área", plural: "áreas temáticas", campoEstado: "estado",
         rotulo: i => txt(i.nome), pesquisa: i => txt(i.nome),
@@ -113,48 +112,17 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         nota: <p className="m-0 text-[13px] text-tinta-suave">{regime === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."}</p>,
       };
     }
-    return {
-      kind: "datas", regime, singular: "data", plural: "datas", campoEstado: "status",
-      rotulo: i => `${txt(i.curso)} · ${data(txt(i.inicio))}`,
-      pesquisa: i => `${txt(i.curso)} ${txt(i.local)} ${txt(i.horario)}`,
-      filtros: [
-        { chave: "curso", rotulo: "Curso", vazio: "Todos os cursos", opcoes: cursos.selecao },
-        { chave: "local", rotulo: "Local", vazio: "Todos os locais", opcoes: locais.selecao },
-      ],
-      campos: [
-        { chave: "curso", rotulo: regime === "gold" ? "Curso" : "Curso / UFCD", tipo: "opcoes", opcoes: cursos.selecao, obrigatorio: true },
-        { chave: "inicio", rotulo: "Início", tipo: "data", obrigatorio: true, metade: true },
-        { chave: "fim", rotulo: "Fim", tipo: "data", metade: true },
-        { chave: "horario", rotulo: "Horário", tipo: "opcoes", opcoes: horarios.selecao, metade: true },
-        { chave: "local", rotulo: "Local", tipo: "opcoes", opcoes: locais.selecao, metade: true },
-        ...(regime === "gold" ? [{ chave: "preco", rotulo: "Preço (€)", tipo: "numero" as const, metade: true }] : []),
-        { chave: "link", rotulo: "Ligação de inscrição", ajuda: "Opcional. Endereço público desta edição." },
-      ],
-      colunas: [
-        { id: "inicio", titulo: "Início", celula: i => data(txt(i.inicio)) },
-        { id: "fim", titulo: "Fim", esconderMovel: true, celula: i => data(txt(i.fim)) },
-        { id: "curso", titulo: "Curso", principal: true, celula: i => <span className="font-semibold">{txt(i.curso)}</span> },
-        { id: "local", titulo: "Local · horário", celula: i => [txt(i.local), txt(i.horario)].filter(Boolean).join(" · ") || "—" },
-        ...(regime === "gold" ? [{ id: "preco", titulo: "Preço", alinhar: "dir" as const, celula: (i: Record<string, unknown>) => eur(Number(i.preco ?? 0)) }] : []),
-      ],
-      validar: v => (v.fim && txt(v.fim) < txt(v.inicio) ? "O fim não pode ser antes do início." : null),
-      nota: <p className="m-0 text-[13px] text-tinta-suave">
-        {regime === "gold"
-          ? "Calendário comercial de referência. A pré-inscrição só mostra turmas libertadas (curso, local, horário e data)."
-          : "Calendário das UFCD: início, fim, horário e local. Sem preço: a edição é financiada."}
-      </p>,
-    };
   }, [tabela, regime, cursos.selecao, locais.selecao, horarios.selecao]);
 
   const separadores = (Object.keys(VISTAS[regime]) as Tabela[]).map(id => ({
-    id, rotulo: { datas: "Datas", locais: "Locais", programas: "Programas", horarios: "Horários", areas: "Áreas temáticas" }[id],
+    id, rotulo: { locais: "Locais", programas: "Programas", horarios: "Horários", areas: "Áreas temáticas" }[id],
   }));
 
   return (
     <div className="space-y-5">
       <PageHeader
         trilho={[{ rotulo: regime === "gold" ? "Gold" : "Financiada" }, { rotulo: "Edição de cursos" }, { rotulo: separadores.find(s => s.id === tabela)?.rotulo ?? "" }]}
-        titulo={regime === "fin" ? "Datas, locais, programas e áreas" : "Datas, locais e áreas"}
+        titulo={regime === "fin" ? "Locais, programas e áreas" : "Locais, horários e áreas"}
         subtitulo="Tabelas de apoio dos cursos e das turmas. O uso de cada registo é contado nos dados reais."
       />
       <Separadores

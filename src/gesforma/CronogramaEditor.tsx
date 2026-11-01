@@ -159,7 +159,8 @@ export function CronogramaEditor({
 
   return (
     <div className={page ? "space-y-4" : "space-y-3"}>
-      <div className={`flex flex-col sm:flex-row sm:items-start justify-between gap-3 ${page ? "bg-white rounded-xl border border-slate-200 px-4 py-4" : ""}`}>
+      {/* No separador Cronograma da turma, o cartão do cabeçalho não aparece (a grelha tem as suas ações). */}
+      {!page && <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="min-w-0">
           <p className={page ? "text-base font-bold text-slate-800" : "text-xs font-bold text-slate-500 uppercase tracking-wider"}>
             {page ? "Cronograma da turma" : "Cronograma"}
@@ -183,7 +184,7 @@ export function CronogramaEditor({
           )}
         </div>
         {actions}
-      </div>
+      </div>}
 
       {confirmRegen && (
         <div className="rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 flex flex-col sm:flex-row sm:items-center gap-3">

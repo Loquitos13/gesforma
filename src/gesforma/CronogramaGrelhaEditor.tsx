@@ -108,6 +108,8 @@ export function CronogramaGrelha({
     [todosOsDias, saltosSempre],
   );
   const saltoApos = useMemo(() => new Map(saltos.map(x => [x.apos, x])), [saltos]);
+  // Intervalos abertos: o cabeçalho deles tem o «recolher» (os dias ficam na linha de baixo, com o dia da semana).
+  const abertoEm = (d: string) => (verSalto ? saltosSempre.find(x => d >= x.de && d <= x.ate) : undefined);
   const dates = useMemo(
     () => (saltos.length ? todosOsDias.filter(d => !saltos.some(x => d >= x.de && d <= x.ate)) : todosOsDias),
     [todosOsDias, saltos],
@@ -258,7 +260,19 @@ export function CronogramaGrelha({
               ))}
             </tr>
             <tr>
-              {dates.map((d, di) => (
+              {dates.map((d, di) => {
+                const aberto = abertoEm(d);
+                if (aberto && d !== aberto.de) return null;
+                if (aberto) return (
+                  <th key={`n-${d}`} colSpan={aberto.n} className="border-b border-x border-slate-200 bg-slate-50 px-0 py-0 text-center">
+                    <button type="button" onClick={() => setVerSalto(false)}
+                      title={`${aberto.n} dias sem eventos (${formatDiaMes(aberto.de)} a ${formatDiaMes(aberto.ate)}). Clique para os recolher numa coluna «…».`}
+                      className="block w-full py-1 text-[11px] font-semibold text-slate-500 hover:bg-slate-100 hover:text-slate-800">
+                      ‹ Recolher {aberto.n} dias sem eventos ›
+                    </button>
+                  </th>
+                );
+                return (
                 <Fragment key={`n-${d}`}>
                 <th style={{ minWidth: `${Math.max(2.1, (larguras[di] ?? 2) * 0.62)}rem` }} className={`border-b border-slate-100 px-0 py-0 text-center font-bold ${d === matricula ? "bg-[#15803d]/30" : d === inicio ? "bg-emerald-50" : ""}`}>
                   <button
@@ -275,7 +289,8 @@ export function CronogramaGrelha({
                     className="block w-full py-1 text-slate-500 hover:bg-slate-100">…</button>
                 ), 2)}
                 </Fragment>
-              ))}
+                );
+              })}
             </tr>
             <tr>
               {dates.map(d => (
@@ -286,7 +301,7 @@ export function CronogramaGrelha({
                     title={`Adicionar evento em ${formatDiaMes(d)}`}
                     className="block w-full py-0.5 hover:bg-slate-100"
                   >
-                    {weekdayCode(d)}
+                    {abertoEm(d) ? <><span className="block font-bold text-slate-700">{dayNum(d)}</span>{weekdayCode(d)}</> : weekdayCode(d)}
                   </button>
                 </th>
               ))}
@@ -477,13 +492,6 @@ export function CronogramaGrelha({
         >
           {sessoesSemFim(sessoes).length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
         </button>
-        {verSalto && saltosSempre.length > 0 && (
-          <button type="button" onClick={() => setVerSalto(false)}
-            title="Volta a juntar os dias seguidos sem eventos numa coluna «…»."
-            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
-            Recolher dias sem eventos
-          </button>
-        )}
         {!linhas.some(l => l.modalidade === "auto") && (
           <button type="button" onClick={() => setLinhas(xs => mergeLinhas(xs, [buildLinha("auto", "", "")]))}
             title="As aulas presenciais e síncronas marcam-se na grelha de tempos; o e-learning ocupa o dia numa linha própria."

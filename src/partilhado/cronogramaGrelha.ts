@@ -455,7 +455,7 @@ export function saltoMatricula(dates: string[], sessoes: SessaoCronograma[], mat
  * Cortes da grelha: os dias seguidos sem nenhum evento ficam numa só coluna («…») depois do último dia com evento,
  * para o cronograma não ficar comprido demais (a partir de `minimo` dias seguidos, como entre a matrícula e o início).
  */
-export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string, minimo = 3) {
+export function saltosVazios(dates: string[], sessoes: SessaoCronograma[], matricula: string, inicio: string, minimo = 7) {
   const comEvento = new Set(sessoesSemFim(sessoes).map(s => s.data));
   if (matricula) comEvento.add(matricula);
   if (inicio) comEvento.add(inicio);

@@ -24,6 +24,11 @@ describe("atalhos do cronograma", () => {
     ]);
     // Um dia vazio entre aulas (16) e os dias depois da última sessão ficam como estão.
     expect(saltosVazios(dias, sessoes, "", "2026-11-23").some(x => x.de === "2026-12-16" || x.de === "2026-12-18")).toBe(false);
+    // Só se cortam 7 ou mais dias seguidos: 6 ficam à vista.
+    const seis = [s("a", "2026-11-02"), s("b", "2026-11-09"), s("c", "2026-11-17"), s("d", "2026-11-18")];
+    expect(saltosVazios(datesFromRange("2026-11-02", "2026-11-18"), seis, "", "")).toEqual([
+      { apos: "2026-11-09", de: "2026-11-10", ate: "2026-11-16", n: 7 },
+    ]);
   });
 
   it("o e-learning preenche um intervalo de dias (com ou sem fins de semana)", () => {

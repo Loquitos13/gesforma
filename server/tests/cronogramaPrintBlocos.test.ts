@@ -32,7 +32,7 @@ describe("cronograma comprido no PDF", () => {
     if (process.env.CRONOGRAMA_HTML) writeFileSync(process.env.CRONOGRAMA_HTML, html);
   });
 
-  it("um mês de aulas (como o modelo da ENA) cabe numa folha: só as horas com aulas e colunas estreitas", () => {
+  it("um mês de aulas (como o modelo da ENA) cabe numa folha: das 8:00 às 19:00, linhas baixas e colunas estreitas", () => {
     (globalThis as { window?: unknown }).window ??= { location: { origin: "http://localhost" } };
     const aula = (id: string, data: string, hi: string, hf: string, modulos: string[], modalidade: SessaoCronograma["modalidade"] = "presencial") =>
       ({ id, data, horaInicio: hi, horaFim: hf, modalidade, modulos, formadores: [] }) as SessaoCronograma;
@@ -52,8 +52,8 @@ describe("cronograma comprido no PDF", () => {
       linhas: linhasFromSessoes(sessoes, "Laboral manhã"), sessoes: [...sessoes, { id: "matricula", data: "2026-08-03", horaInicio: "", horaFim: "", modalidade: "matricula", modulos: [], formadores: [] } as SessaoCronograma], cores: "gold", embutido: true,
     });
     expect(html.split('class="bloco-grelha"').length - 1).toBe(1);
-    // Das 9:00 às 13:30: 5 linhas de hora em hora, não das 8:00 às 19:00.
-    expect(html.split('<tr class="tempo">').length - 1).toBe(5);
+    // Das 8:00 às 19:00, de hora em hora (mais horas só se houver aulas fora disso).
+    expect(html.split('<tr class="tempo">').length - 1).toBe(11);
     if (process.env.CRONOGRAMA_HTML2) writeFileSync(process.env.CRONOGRAMA_HTML2, html);
   });
 });

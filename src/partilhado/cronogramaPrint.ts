@@ -146,7 +146,7 @@ function rotuloAula(s: SessaoCronograma) {
  * desenhada à proporção da sua duração (uma sessão de 3h30 ocupa quatro tempos e dois terços do quinto).
  */
 function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: string, matricula?: string) {
-  const t = grelhaTempos(sessoes, dates, horario, GRELHA_PASSO, true);
+  const t = grelhaTempos(sessoes, dates, horario, GRELHA_PASSO);
   if (!t.blocos.length && !matricula) return "";
   const porDia = new Map<string, BlocoTempos[]>();
   for (const b of t.blocos) porDia.set(b.date, [...(porDia.get(b.date) ?? []), b]);
@@ -289,7 +289,7 @@ export function linhasComSessoes(linhas: GrelhaLinha[], dates: string[], sessoes
 export function medidasFolha(input: Pick<CronogramaPrintInput, "dates" | "linhas" | "sessoes" | "horario" | "matricula">) {
   const linhas = linhasComSessoes(input.linhas, input.dates, input.sessoes, input.matricula);
   const larguras = largurasColunaMm(input.dates, linhas, input.sessoes);
-  const t = grelhaTempos(input.sessoes, input.dates, input.horario, GRELHA_PASSO, true);
+  const t = grelhaTempos(input.sessoes, input.dates, input.horario, GRELHA_PASSO);
   const tempos = t.blocos.length || input.matricula ? t.n : 0;
   const outras = linhas.filter(l => l.modalidade === "auto" || l.modalidade === "avaliacao").length;
   const blocos = blocosDaFolha(input.dates, larguras);

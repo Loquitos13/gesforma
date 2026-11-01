@@ -74,6 +74,9 @@ export type CursoPublico = {
   contactosLocais: ContactoLocal[];
   /** Locais atribuídos na ficha do curso (ex.: «Sala Virtual» no e-learning), com a morada de Locais: aparecem mesmo sem turmas nem contactos. */
   locais: { nome: string; morada: string }[];
+  /** Gold: o preço do curso e as regras «Preço por local e horário» da ficha (o site mostra o preço de cada local). */
+  precoBase: number | null;
+  regrasPreco: { local: string; horario: string; preco: number }[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Regime da oferta (ficha › Oferta): síncrono, assíncrono, misto ou vazio. */
@@ -391,6 +394,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       locais: [...new Map((Array.isArray(payload.locais) ? payload.locais.map(String) : [])
         .filter(l => l.trim())
         .map(l => [chave(l), { nome: l.trim(), morada: moradas.get(`${curso.regime}:${chave(l)}`) ?? "" }])).values()],
+      precoBase: curso.regime === "gold" && curso.preco > 0 ? curso.preco : null,
+      regrasPreco: curso.regime === "gold" ? regrasDoPayload(payload) : [],
       organizacao: programa.organizacao,
       programa: programa.programa,
       sessoes: curso.chaves

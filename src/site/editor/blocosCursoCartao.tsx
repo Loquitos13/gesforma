@@ -46,6 +46,11 @@ const contactoDo = (curso: Course, local: string) => {
   return temContacto(c) ? c! : null;
 };
 
+/** «Desde A partir de 115 €» (o texto do cartão já diz «Desde» e o preço varia) → «Desde 115 €». */
+function semPrefixoRepetido(t: string) {
+  return t.replace(/\b(desde|a partir de)\s+(desde|a partir de)\s+/gi, "$1 ");
+}
+
 /** wa.me só aceita algarismos com o indicativo; um número português de 9 algarismos ganha o 351. */
 function ligacaoWhatsapp(numero: string) {
   const d = numero.replace(/\D/g, "");
@@ -202,7 +207,7 @@ function EscolhaLocal(p: Omit<LocalProps, "entreTitulo"> & { entreTitulo?: unkno
                     {texto && <span className={juntar("whitespace-pre-line text-sm leading-6 opacity-75", tTexto.className)} style={tTexto.style}>{texto}</span>}
                     {semDatas
                       ? <span className="mt-auto text-sm font-bold opacity-60">Próximas datas em breve</span>
-                      : verPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{preencherVariaveis(p.textoPreco || "{{preco}}", vars)}</span>}
+                      : verPreco && <span className={juntar("mt-auto text-sm font-bold text-[var(--c-destaque)]", tPreco.className)} style={tPreco.style}>{semPrefixoRepetido(preencherVariaveis(p.textoPreco || "{{preco}}", vars))}</span>}
                     {/* Não pode haver um botão dentro de outro: o cartão inteiro faz a ação, isto é só o aspeto. */}
                     {(b.mostrar || rotuloFixo) && !semDatas && (
                       <span className={juntar("mt-2 inline-flex items-center gap-3 px-4 py-3 text-xs font-extrabold uppercase tracking-[0.08em]", POSICAO_BOTAO[b.posicao] ?? POSICAO_BOTAO.largura, !verPreco && "mt-auto", tBotao.className)}

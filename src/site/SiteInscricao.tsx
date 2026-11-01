@@ -1,3 +1,4 @@
+import { precoDoLocal } from "../partilhado/precoLocal";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
@@ -157,10 +158,13 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   // Sem turma escolhida, o preço do cabeçalho é o das datas do local (o mais baixo, se variam).
   const precosLocal = datas.map(t => t.preco).filter((n): n is number => n != null);
   const minLocal = precosLocal.length ? Math.min(...precosLocal) : null;
+  // Local sem datas: o preço da ficha para esse local (Preço por local e horário).
+  const daFicha = local && curso?.precoBase != null ? precoDoLocal(curso.precoBase, local, curso.regrasPreco ?? []) : null;
   const precoLabel = turma?.preco != null
     ? eur(turma.preco, true)
     : minLocal != null
       ? `${precosLocal.every(p => p === minLocal) ? "" : "A partir de "}${eur(minLocal, true)}`
+      : daFicha ? `${daFicha.varia ? "A partir de " : ""}${eur(daFicha.min, true)}`
       : precoNumero != null ? eur(precoNumero, true) : curso?.price || "Sob consulta";
 
   function escolherLocal(valor: string) {

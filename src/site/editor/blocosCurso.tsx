@@ -1,5 +1,6 @@
 // Página do curso em blocos soltos: banner, síntese, dados, objetivos, programa, turmas e cartão de inscrição.
 // Cada bloco lê o curso da página (CursoAtualCtx), por isso pode ir para qualquer secção ou coluna.
+import { precoDoLocal } from "../../partilhado/precoLocal";
 import { createContext, useContext, useEffect, useState, type ComponentType, type CSSProperties, type ReactNode } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
@@ -77,6 +78,11 @@ const euros = (n: number) => eur(n, true);
  */
 export function precoNoLocal(c: Course, local: string) {
   const precos = c.sessoes.filter(s => !local || s.local === local).map(s => s.preco).filter((n): n is number => n != null);
+  if (!precos.length && local && c.precoBase != null) {
+    // Local sem datas: o preço da ficha para esse local (Preço por local e horário), não o do curso inteiro.
+    const p = precoDoLocal(c.precoBase, local, c.regrasPreco ?? []);
+    if (p) return p.varia ? `A partir de ${euros(p.min)}` : euros(p.min);
+  }
   if (!precos.length) return c.price;
   const min = Math.min(...precos);
   return precos.every(p => p === min) ? euros(min) : `A partir de ${euros(min)}`;

@@ -33,6 +33,9 @@ export type Course = {
   contactosLocais: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
   /** Locais atribuídos na ficha do curso (aparecem mesmo sem turmas, ex.: «Sala Virtual»). */
   locais: { nome: string; morada: string }[];
+  /** Gold: preço do curso e regras «Preço por local e horário» da ficha. */
+  precoBase?: number | null;
+  regrasPreco?: { local: string; horario: string; preco: number }[];
   organizacao: "modular" | "livre";
   programa: { titulo: string; horas: string }[];
   /** Regime da oferta (ficha › Oferta): síncrono, assíncrono, misto ou vazio. */
@@ -67,6 +70,8 @@ type CatalogoApi = {
     video?: string;
     contactosLocais?: { local: string; telemovel: string; telefone: string; email: string; whatsapp: string }[];
     locais?: { nome: string; morada: string }[];
+    precoBase?: number | null;
+    regrasPreco?: { local: string; horario: string; preco: number }[];
     organizacao?: "modular" | "livre";
     programa?: { titulo: string; horas: string }[];
     sessoes?: { data: string; local: string; horario: string; preco?: number | null; morada?: string }[];
@@ -102,6 +107,8 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     topicos: curso.topicos ?? { metodologias: curso.funcionamento ?? "", certificacao: "", destinatarios: "", requisitos: "" },
     contactosLocais: curso.contactosLocais ?? [],
     locais: curso.locais ?? [],
+    precoBase: curso.precoBase ?? null,
+    regrasPreco: curso.regrasPreco ?? [],
     organizacao: curso.organizacao === "livre" ? "livre" : "modular",
     programa: curso.programa ?? [],
     sessoes: curso.sessoes ?? [],

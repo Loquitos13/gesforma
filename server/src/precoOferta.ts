@@ -1,31 +1,10 @@
 import type { Db } from "./db/pool.js";
 import { cursosGoldComFicha } from "./repos/oferta.js";
+import { escolherPreco, normPreco, type RegraPreco } from "../../src/partilhado/precoLocal.js";
 
-export type RegraPreco = { local: string; horario: string; preco: number };
+export { escolherPreco, normPreco, type RegraPreco };
 
 type CursoPreco = { nome: string; base: number; regras: RegraPreco[] };
-
-export function normPreco(s: string) {
-  return s
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, " ")
-    .trim();
-}
-
-export function escolherPreco(base: number, local: string, horario: string, regras: RegraPreco[]) {
-  const L = normPreco(local);
-  const H = normPreco(horario);
-  const lista = regras.filter(r => Number.isFinite(r.preco) && r.preco >= 0 && (normPreco(r.local) || normPreco(r.horario)));
-  const ambos = lista.find(r => normPreco(r.local) === L && L !== "" && normPreco(r.horario) === H && H !== "");
-  if (ambos) return ambos.preco;
-  const soLocal = lista.find(r => normPreco(r.local) === L && L !== "" && normPreco(r.horario) === "");
-  if (soLocal) return soLocal.preco;
-  const soHorario = lista.find(r => normPreco(r.local) === "" && normPreco(r.horario) === H && H !== "");
-  if (soHorario) return soHorario.preco;
-  return base;
-}
 
 export function regrasDoPayload(raw: unknown): RegraPreco[] {
   const payload = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;

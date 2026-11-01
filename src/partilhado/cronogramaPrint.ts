@@ -1,4 +1,4 @@
-import { type GrelhaLinha, type BlocoTempos, cellLabelPrint, cellTone, charsDaCelula, formatHoraFaixa, grelhaTempos, grupoLinha, horaOficial, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
+import { type GrelhaLinha, type BlocoTempos, GRELHA_PASSO, cellLabelPrint, cellTone, formatHoraFaixa, grelhaTempos, grupoLinha, horaOficial, larguraDiasEmChars, monthSpans, weekdayCode } from "./cronogramaGrelha";
 import type { LocalMapeado } from "./cronogramaLocal";
 import { fmtDataCalendario } from "./horaLisboa";
 import { urlLogoEntidade } from "./logoEntidade";
@@ -35,6 +35,13 @@ function cabecalhoEntidade(e: CronogramaPrintInput["entidade"]) {
   ].filter(Boolean).join(" :: ");
   return { nome: v("nome") || "ENA", contactos };
 }
+
+/** Rótulo de uma célula em linhas curtas, para a coluna ficar estreita: «M3/M4» → M3 por cima de M4. */
+function rotuloEmLinhas(t: string) {
+  return t.split(/[\s/]+/).filter(Boolean).map(esc).join("<br>");
+}
+/** Palavras do rótulo (cada uma numa linha): a mais comprida define a largura do dia. */
+const palavras = (t: string) => t.split(/[\s/]+/).filter(Boolean);
 
 function esc(value: string) {
   return value
@@ -118,14 +125,14 @@ function groupRowsHtml(
         ? "matricula"
         : cellTone(sessoes, d, linha);
       const label = cellLabelPrint(sessoes, d, linha);
-      return `<td class="cell ${toneClass(tone, matCol)}">${esc(label)}</td>`;
+      return `<td class="cell ${toneClass(tone, matCol)}">${rotuloEmLinhas(label)}</td>`;
     }).join("");
     return `<tr>${groupCell}${timeCell}${cells}</tr>`;
   }).join("");
 }
 
 /** Altura de cada tempo de 45 minutos na folha. */
-const TEMPO_MM = 5.2;
+const TEMPO_MM = 4.2;
 
 /** Rótulo da aula no bloco: os códigos dos módulos (M3/M4); sem módulos, o tipo de sessão. */
 function rotuloAula(s: SessaoCronograma) {
@@ -139,7 +146,7 @@ function rotuloAula(s: SessaoCronograma) {
  * desenhada à proporção da sua duração (uma sessão de 3h30 ocupa quatro tempos e dois terços do quinto).
  */
 function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: string, matricula?: string) {
-  const t = grelhaTempos(sessoes, dates, horario);
+  const t = grelhaTempos(sessoes, dates, horario, GRELHA_PASSO, true);
   if (!t.blocos.length && !matricula) return "";
   const porDia = new Map<string, BlocoTempos[]>();
   for (const b of t.blocos) porDia.set(b.date, [...(porDia.get(b.date) ?? []), b]);
@@ -157,7 +164,7 @@ function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: strin
       const aulas = bloco.sessoes.map(({ s: ses, topo, altura, coluna, colunas }) => {
         const cls = sessaoModalidade(ses) === "sincrona" ? "sinc" : "pres";
         const estilo = `top:${topo.toFixed(2)}%;height:${altura.toFixed(2)}%;left:${((coluna / colunas) * 100).toFixed(2)}%;width:${(100 / colunas).toFixed(2)}%`;
-        return `<div class="aula ${cls}" style="${estilo}" title="${esc(formatHoraFaixa(ses.horaInicio, ses.horaFim))}">${esc(rotuloAula(ses))}</div>`;
+        return `<div class="aula ${cls}" style="${estilo}" title="${esc(formatHoraFaixa(ses.horaInicio, ses.horaFim))}"><span>${rotuloEmLinhas(rotuloAula(ses))}</span></div>`;
       }).join("");
       return `<td class="cell bloco" rowspan="${bloco.linhas}"><div class="blocos" style="height:${(bloco.linhas * TEMPO_MM).toFixed(2)}mm">${aulas}</div></td>`;
     }).join("");
@@ -165,21 +172,17 @@ function temposHtml(dates: string[], sessoes: SessaoCronograma[], horario: strin
   }).join("");
 }
 
-const GRUPO_MM = 26;
-const HORA_MM = 22;
+const GRUPO_MM = 22;
+const HORA_MM = 18;
 const MARGEM_MM = 7;
 const A4_LARGURA_MM = 297;
 
-/** Milímetros da coluna: o texto mais comprido (M7/M8, Aval., nome do mês) define a largura toda. */
+/** Milímetros da coluna: estreita (o texto parte-se em linhas curtas); a palavra mais comprida e o mês definem-na. */
 export function largurasColunaMm(dates: string[], linhas: GrelhaLinha[], sessoes: SessaoCronograma[]) {
   const aulas = (d: string) => sessoes.filter(s => s.data === d && ["presencial", "sincrona"].includes(sessaoModalidade(s))).map(rotuloAula);
-  const rotulos = dates.map(d => [...linhas.map(l => cellLabelPrint(sessoes, d, l)), ...aulas(d)].filter(Boolean));
+  const rotulos = dates.map(d => [...linhas.map(l => cellLabelPrint(sessoes, d, l)), ...aulas(d)].flatMap(palavras));
   const chars = larguraDiasEmChars(dates, rotulos);
-  return chars.map((n, i) => {
-    const cheio = rotulos[i]?.reduce((m, t) => Math.max(m, charsDaCelula(t)), 0) ?? 0;
-    const mm = Math.max(7, n * 1.8 + (cheio > 4 ? 2.2 : 1.4));
-    return Math.round(mm * 10) / 10;
-  });
+  return chars.map(n => Math.round(Math.min(14, Math.max(6.2, n * 1.35 + 1.4)) * 10) / 10);
 }
 
 /** Largura útil para os dias numa folha A4 apaisada (tira as margens e as colunas do horário). */
@@ -286,7 +289,7 @@ export function linhasComSessoes(linhas: GrelhaLinha[], dates: string[], sessoes
 export function medidasFolha(input: Pick<CronogramaPrintInput, "dates" | "linhas" | "sessoes" | "horario" | "matricula">) {
   const linhas = linhasComSessoes(input.linhas, input.dates, input.sessoes, input.matricula);
   const larguras = largurasColunaMm(input.dates, linhas, input.sessoes);
-  const t = grelhaTempos(input.sessoes, input.dates, input.horario);
+  const t = grelhaTempos(input.sessoes, input.dates, input.horario, GRELHA_PASSO, true);
   const tempos = t.blocos.length || input.matricula ? t.n : 0;
   const outras = linhas.filter(l => l.modalidade === "auto" || l.modalidade === "avaliacao").length;
   const blocos = blocosDaFolha(input.dates, larguras);
@@ -351,11 +354,11 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     col.c-time { width: ${HORA_MM}mm; }
     .corner { background: #fff; }
     .month { background: #eee; font-size: 9px; font-weight: 700; white-space: nowrap; }
-    .day { font-size: 9px; font-weight: 700; height: 18px; }
-    .wd { font-size: 8px; font-weight: 600; text-transform: lowercase; color: #222; white-space: nowrap; }
+    .day { font-size: 8px; font-weight: 700; height: 13px; }
+    .wd { font-size: 7px; font-weight: 600; text-transform: lowercase; color: #222; white-space: nowrap; }
     .group { text-align: left; font-size: 8px; font-weight: 700; padding: 3px 4px; line-height: 1.25; background: #fff; white-space: normal; }
     .time { text-align: left; font-size: 8px; font-weight: 600; padding: 2px 4px; white-space: nowrap; background: #fff; }
-    .cell { font-size: 8px; font-weight: 700; min-height: 22px; height: auto; line-height: 1.15; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; padding: 2px 1px; }
+    .cell { font-size: 7px; font-weight: 700; height: auto; line-height: 1.1; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; padding: 1px; }
     .pres { background: ${input.cores === "gold" ? "#ffc000; color: #111" : "#a60000; color: #fff"}; }
     .sinc { background: #1d4ed8; color: #fff; }
     .auto { background: #d4d4d4; color: #111; }
@@ -367,7 +370,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .cell.vazio { padding: 0; }
     .cell.bloco { padding: 0; vertical-align: top; }
     .blocos { position: relative; width: 100%; }
-    .aula { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 8px; font-weight: 700; line-height: 1.1; text-align: center; border: 0.5px solid #fff; }
+    .aula { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 7px; font-weight: 700; line-height: 1.1; text-align: center; border: 0.5px solid #fff; }
     .legend { margin-top: 12px; max-width: 260mm; }
     .legend h3 { margin: 0 0 6px; font-size: 11px; }
     .swatch { display: flex; align-items: flex-start; gap: 8px; margin: 3px 0; font-size: 9px; }

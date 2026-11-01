@@ -556,14 +556,16 @@ export type BlocoTempos = {
   sessoes: { s: SessaoCronograma; topo: number; altura: number; coluna: number; colunas: number }[];
 };
 
-export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], _horario: string, tempo = GRELHA_PASSO) {
+/** `ajustado`: só as horas com aulas (para o PDF); senão, pelo menos das 8:00 às 19:00 (o editor). */
+export function grelhaTempos(sessoes: SessaoCronograma[], dates: string[], _horario: string, tempo = GRELHA_PASSO, ajustado = false) {
   const lectivas = sessoesSemFim(sessoes).filter(s => {
     const m = sessaoModalidade(s);
     return (m === "presencial" || m === "sincrona") && minutosDaHora(s.horaInicio) != null && minutosDaHora(s.horaFim) != null
       && minutosDaHora(s.horaFim)! > minutosDaHora(s.horaInicio)!;
   });
-  const inicios = [...lectivas.map(s => minutosDaHora(s.horaInicio)!), GRELHA_INICIO];
-  const fins = [...lectivas.map(s => minutosDaHora(s.horaFim)!), GRELHA_FIM];
+  const limites = ajustado && lectivas.length ? [] : [0];
+  const inicios = [...lectivas.map(s => minutosDaHora(s.horaInicio)!), ...limites.map(() => GRELHA_INICIO)];
+  const fins = [...lectivas.map(s => minutosDaHora(s.horaFim)!), ...limites.map(() => GRELHA_FIM)];
   const base = Math.floor(Math.min(...inicios) / tempo) * tempo;
   const n = Math.max(1, Math.ceil((Math.max(...fins) - base) / tempo));
   const dias = new Set(dates);

@@ -191,7 +191,7 @@ function HorasMinutos({ minutos, onMudar, rotulo }: { minutos: number; onMudar: 
   );
 }
 
-/** Duração da sessão e o tempo de cada momento (tem de somar a duração). */
+/** Duração da sessão e o que falta distribuir pelo tempo dos momentos (que tem de somar a duração). */
 function TempoDoPlano({ linha, onMudar }: { linha: PlanoLinha; onMudar: (p: Partial<PlanoLinha>) => void }) {
   const tempos = Object.fromEntries(MOMENTOS.map(m => [m.id, minutosDeTempo(linha.momentos[m.id].tempo)])) as Record<MomentoKey, number>;
   const soma = MOMENTOS.reduce((a, m) => a + tempos[m.id], 0);
@@ -207,15 +207,7 @@ function TempoDoPlano({ linha, onMudar }: { linha: PlanoLinha; onMudar: (p: Part
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
         <span className="text-[13px] font-semibold">Duração da sessão</span>
         <HorasMinutos rotulo={`Sessão ${linha.ordem}: duração`} minutos={linha.duracaoMin} onMudar={mudarDuracao} />
-        <span className="text-xs text-tinta-suave">A sessão marcada no cronograma da turma dura este tempo.</span>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-        {MOMENTOS.map(m => (
-          <label key={m.id} className="flex items-center gap-1.5 text-xs font-semibold text-tinta-suave">
-            {m.rotulo}
-            <HorasMinutos rotulo={`Sessão ${linha.ordem}, ${m.rotulo}: tempo`} minutos={tempos[m.id]} onMudar={v => onMudar({ momentos: comTempos({ ...tempos, [m.id]: v }) })} />
-          </label>
-        ))}
+        <span className="text-xs text-tinta-suave">A sessão marcada no cronograma da turma dura este tempo; reparte-se pelo tempo de cada momento (abaixo).</span>
       </div>
       {linha.duracaoMin > 0 && (
         <p className={`m-0 flex flex-wrap items-center gap-2 text-xs ${falta === 0 ? "text-tinta-suave" : "text-red-700"}`}>
@@ -308,11 +300,17 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
               <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos específicos`} rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => mudar(i, { objetivosEspecificos: e.target.value })} />
             </div>
             {MOMENTOS.map(m => (
-              <Recolhivel key={m.id} titulo={m.rotulo} resumo={`${preenchidos(linha.momentos[m.id])} de ${CAMPOS_MOMENTO.length} campos`}>
+              <Recolhivel key={m.id} titulo={m.rotulo}
+                resumo={[textoDeMinutos(minutosDeTempo(linha.momentos[m.id].tempo)), `${preenchidos(linha.momentos[m.id])} de ${CAMPOS_MOMENTO.length} campos`].filter(Boolean).join(" · ")}>
                 {CAMPOS_MOMENTO.map(c => (
                   <AreaTexto key={c.id} aria-label={`Sessão ${linha.ordem}, ${m.rotulo}: ${c.rotulo}`} rows={2} placeholder={c.rotulo}
                     value={linha.momentos[m.id][c.id]} onChange={e => mudarMomento(i, m.id, c.id, e.target.value)} />
                 ))}
+                <label className="flex flex-wrap items-center gap-2 text-xs font-semibold text-tinta-suave">
+                  Tempo
+                  <HorasMinutos rotulo={`Sessão ${linha.ordem}, ${m.rotulo}: tempo`} minutos={minutosDeTempo(linha.momentos[m.id].tempo)}
+                    onMudar={v => mudarMomento(i, m.id, "tempo", textoDeMinutos(v))} />
+                </label>
               </Recolhivel>
             ))}
             <Recolhivel titulo="Sumário padrão" resumo={linha.sumario.conteudos.trim() || linha.sumario.atividades.trim() ? "Preenchido" : "Opcional"}>

@@ -5,9 +5,9 @@
 export function minutosDeTempo(raw: unknown): number {
   const s = String(raw ?? "").trim().toLowerCase().replace(/\s+/g, "");
   if (!s) return 0;
-  const hm = /^(\d+)(?:h|:)(\d{1,2})?(?:min|m)?$/.exec(s);
+  const hm = /^(\d+)(?:h(?:oras?)?|:)(\d{1,2})?(?:min(?:utos?)?|m)?$/.exec(s);
   if (hm) return Number(hm[1]) * 60 + Number(hm[2] ?? 0);
-  const m = /^(\d+)(?:min|m)?$/.exec(s);
+  const m = /^(\d+)(?:min(?:utos?)?|m)?$/.exec(s);
   return m ? Number(m[1]) : 0;
 }
 

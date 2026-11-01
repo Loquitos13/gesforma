@@ -48,7 +48,7 @@ describe("sessões marcadas a partir de um plano (planoOrdem)", () => {
 
 describe("tempo dos planos", () => {
   it("lê e escreve durações e reparte pelos momentos", () => {
-    expect(["15 min", "3 h", "2h30", "1:45", "90", "", "x"].map(minutosDeTempo)).toEqual([15, 180, 150, 105, 90, 0, 0]);
+    expect(["15 min", "3 h", "2h30", "1:45", "90", "", "x", "20 minutos", "2 horas", "1 hora 30"].map(minutosDeTempo)).toEqual([15, 180, 150, 105, 90, 0, 0, 20, 120, 90]);
     expect([0, 15, 60, 150].map(textoDeMinutos)).toEqual(["", "15 min", "1h", "2h30"]);
     expect(distribuirTempo(180)).toEqual({ introducao: 20, desenvolvimento: 140, conclusao: 20 });
     expect(distribuirTempo(10)).toEqual({ introducao: 3, desenvolvimento: 4, conclusao: 3 });

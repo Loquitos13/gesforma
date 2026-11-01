@@ -11,6 +11,7 @@ import { renumerarSessoes } from "../../repos/pedagogiaSessoes.js";
 import { gravarCronograma, marcarCronogramaPublicado, turmaParaCronograma } from "../../repos/pedagogiaTurma.js";
 import { lerEntidadePublica } from "../../regrasConfig.js";
 import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
+import { importarAgendados } from "../../planosCurso.js";
 import { comIdsUnicos, erroGravarCronograma, versaoCronograma } from "../../sessaoAcesso.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
@@ -38,6 +39,7 @@ export function registarCronograma(app: FastifyInstance, { db, requireAuth, audi
         return null;
       });
       if (recusa) return reply.code(409).send({ error: recusa });
+      await importarAgendados(db, regime, id, novas);
     }
     const turma = await turmaParaCronograma(db, regime, id);
     if (!turma) return reply.code(404).send({ error: "turma não encontrada" });

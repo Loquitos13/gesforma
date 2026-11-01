@@ -5,6 +5,9 @@ import { SearchSelect } from "../partilhado/FormKit";
 
 import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, diasDaRepeticao, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia, type Repeticao } from "../partilhado/cronogramaGrelha";
 
+import { somarMinutos, textoDeMinutos } from "../partilhado/duracaoSessao";
+import { planoDaSessao } from "../partilhado/planosModulo";
+import type { PlanoCurso } from "./planosCurso";
 import { type SessaoModalidade, casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 
 export function HoraField({
@@ -59,6 +62,8 @@ export const TONE_GOLD: Record<string, string> = {
 type EventoMod = Exclude<SessaoModalidade, "matricula">;
 
 type EventoForm = {
+  /** Plano da ficha do curso com que a sessão é marcada (null = personalizada). */
+  planoOrdem: number | null;
   mod: EventoMod;
   horaInicio: string;
   horaFim: string;
@@ -81,6 +86,7 @@ function modulosDoAlvo(alvo: EventoDia | null, catalogo: string[]) {
 function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, horario: string, catalogo: string[]): EventoForm {
   if (alvo) {
     return {
+      planoOrdem: alvo.sessoes.map(planoDaSessao).find(n => n != null) ?? null,
       mod: alvo.linha.modalidade,
       horaInicio: alvo.linha.horaInicio,
       horaFim: alvo.linha.horaFim,
@@ -94,7 +100,25 @@ function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, hor
     : linha
       ? { horaInicio: linha.horaInicio, horaFim: linha.horaFim }
       : defaultSlot(horario, mod);
-  return { mod, horaInicio: slot.horaInicio, horaFim: slot.horaFim, modulos: [], formadores: [] };
+  return { planoOrdem: null, mod, horaInicio: slot.horaInicio, horaFim: slot.horaFim, modulos: [], formadores: [] };
+}
+
+/** Planos da ficha do curso ainda sem sessão no cronograma (o `atual` conta como livre: é o do evento aberto). */
+export function planosPorAgendar(planos: PlanoCurso[], sessoes: SessaoCronograma[], atual: number | null = null) {
+  const usados = new Set(sessoes.map(planoDaSessao).filter((n): n is number => n != null && n !== atual));
+  return [...planos].sort((a, b) => a.ordem - b.ordem).filter(p => !usados.has(p.ordem));
+}
+
+export function rotuloPlano(p: PlanoCurso) {
+  return [`Sessão ${p.ordem}`, p.modulos.map(codigoModulo).join(" + "), p.duracaoMin ? textoDeMinutos(p.duracaoMin) : ""].filter(Boolean).join(" · ");
+}
+
+/** O formulário com a sessão do plano: presencial (ou síncrona), os módulos do plano e o fim pela duração. */
+function comPlano(f: EventoForm, p: PlanoCurso, horario: string, catalogo: string[]): EventoForm {
+  const mod = f.mod === "sincrona" ? "sincrona" : "presencial";
+  const horaInicio = normHora(f.horaInicio) || defaultSlot(horario, mod).horaInicio;
+  const horaFim = p.duracaoMin ? somarMinutos(horaInicio, p.duracaoMin) : normHora(f.horaFim) || defaultSlot(horario, mod).horaFim;
+  return { ...f, planoOrdem: p.ordem, mod, horaInicio, horaFim, modulos: ordenarModulos(p.modulos.map(m => casarModulo(m, catalogo) ?? m)) };
 }
 
 /** A que opção da lista corresponde um módulo já guardado na sessão. */
@@ -140,6 +164,7 @@ export function EventoModal({
   moduloOpts,
   unidade = "módulo",
   formador,
+  planos = [],
   onClose,
   onApply,
 }: {
@@ -150,6 +175,8 @@ export function EventoModal({
   moduloOpts: { value: string; sub?: string }[];
   unidade?: string;
   formador?: string;
+  /** Planos de sessão da ficha do curso: os que ainda não têm dia aparecem para escolher. */
+  planos?: PlanoCurso[];
   onClose: () => void;
   onApply: (next: SessaoCronograma[], extra: GrelhaLinha) => void;
 }) {
@@ -159,7 +186,12 @@ export function EventoModal({
     : eventos.length === 1 ? eventos[0]! : null;
   const [alvo, setAlvo] = useState<EventoDia | null>(inicial);
   const catalogoInicial = moduloOpts.map(o => o.value);
-  const [form, setForm] = useState<EventoForm>(() => formInicial(inicial, linha, horario, catalogoInicial));
+  // Evento novo num dia: já com a próxima sessão por agendar (se o curso tiver planos).
+  const [form, setForm] = useState<EventoForm>(() => {
+    const f = formInicial(inicial, linha, horario, catalogoInicial);
+    const proxima = !inicial && !semHoras(f.mod) ? planosPorAgendar(planos, sessoes)[0] : undefined;
+    return proxima ? comPlano(f, proxima, horario, catalogoInicial) : f;
+  });
   const [erro, setErro] = useState("");
   const [aRemover, setARemover] = useState(false);
   // O mesmo evento até outra data, sem ter de marcar os dias um a um: o e-learning todos os dias, uma sessão
@@ -170,9 +202,24 @@ export function EventoModal({
   const catalogo = useMemo(() => moduloOpts.map(o => o.value), [moduloOpts]);
   const opcoes = catalogo;
 
+  const livres = planosPorAgendar(planos, sessoes, form.planoOrdem);
+  const planoEscolhido = planos.find(p => p.ordem === form.planoOrdem) ?? null;
+
+  function escolherPlano(p: PlanoCurso | null) {
+    setForm(f => (p ? comPlano(f, p, horario, catalogo) : { ...f, planoOrdem: null }));
+    setErro("");
+  }
+
+  function mudarInicio(v: string) {
+    // Com um plano, o fim acompanha o início (a sessão dura o tempo do plano).
+    setForm(f => ({ ...f, horaInicio: v, horaFim: planoEscolhido?.duracaoMin ? somarMinutos(normHora(v), planoEscolhido.duracaoMin) : f.horaFim }));
+  }
+
   function abrir(ev: EventoDia | null) {
     setAlvo(ev);
-    const f = formInicial(ev, ev ? undefined : linha, horario, catalogo);
+    let f = formInicial(ev, ev ? undefined : linha, horario, catalogo);
+    const proxima = !ev && !semHoras(f.mod) ? planosPorAgendar(planos, sessoes)[0] : undefined;
+    if (proxima) f = comPlano(f, proxima, horario, catalogo);
     setForm(f);
     if (!ate) setRepeticao(f.mod === "auto" ? "dias" : "semanal");
     setErro("");
@@ -188,7 +235,7 @@ export function EventoModal({
   function escolherMod(next: EventoMod) {
     if (!ate) setRepeticao(next === "auto" ? "dias" : "semanal");
     setForm(f => {
-      if (semHoras(next)) return { ...f, mod: next, horaInicio: "", horaFim: "" };
+      if (semHoras(next)) return { ...f, planoOrdem: null, mod: next, horaInicio: "", horaFim: "" };
       if (!semHoras(f.mod)) return { ...f, mod: next };
       const d = defaultSlot(horario, next);
       return { ...f, mod: next, horaInicio: d.horaInicio, horaFim: d.horaFim };
@@ -220,13 +267,24 @@ export function EventoModal({
         ? (form.formadores.length ? form.formadores : formador && formador !== "A definir" ? [formador] : [])
         : [],
       modalidade: form.mod,
+      planoOrdem: form.planoOrdem,
     };
     if (ate && ate <= date) {
       setErro("A data «Repetir até» tem de ser depois deste dia.");
       return;
     }
     let next = aplicarEvento(sessoes, date, nextLinha, dados, alvo?.linha ?? null);
-    if (ate) next = preencherIntervalo(next, date, ate, nextLinha, dados, repeticao);
+    if (ate && form.planoOrdem != null) {
+      // Com sessões do curso: cada dia seguinte recebe a próxima sessão por agendar, à mesma hora de início.
+      for (const d of diasDaRepeticao(date, ate, repeticao).filter(d => d > date)) {
+        const p = planosPorAgendar(planos, next)[0];
+        if (!p) break;
+        const f = comPlano({ ...form, horaInicio: hi, horaFim: hf }, p, horario, catalogo);
+        const l = buildLinha(f.mod, f.horaInicio, f.horaFim);
+        if (next.some(s => s.data === d && s.horaInicio && normHora(s.horaInicio) < f.horaFim && normHora(s.horaFim) > f.horaInicio)) continue;
+        next = aplicarEvento(next, d, l, { ...dados, modulos: f.modulos, planoOrdem: p.ordem });
+      }
+    } else if (ate) next = preencherIntervalo(next, date, ate, nextLinha, { ...dados, planoOrdem: null }, repeticao);
     onApply(next, nextLinha);
     onClose();
   }
@@ -272,6 +330,33 @@ export function EventoModal({
             </div>
           </div>
         )}
+        {planos.length > 0 && (
+          <div>
+            <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">
+              Sessão do curso <span className="font-medium normal-case tracking-normal text-slate-400">({planosPorAgendar(planos, sessoes).length} por agendar)</span>
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {livres.map(p => {
+                const on = form.planoOrdem === p.ordem;
+                return (
+                  <button key={p.ordem} type="button" onClick={() => escolherPlano(p)} title={p.objetivosGerais || undefined}
+                    className={`px-2 py-1 text-[11px] font-semibold rounded-lg border ${on ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                    {rotuloPlano(p)}
+                  </button>
+                );
+              })}
+              <button type="button" onClick={() => escolherPlano(null)}
+                className={`px-2 py-1 text-[11px] font-semibold rounded-lg border ${form.planoOrdem == null ? "border-slate-800 bg-slate-800 text-white" : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50"}`}>
+                Personalizado
+              </button>
+            </div>
+            <p className="mt-1 text-[11px] text-slate-500">
+              {planoEscolhido
+                ? `Leva o plano da sessão ${planoEscolhido.ordem}${planoEscolhido.duracaoMin ? `, dura ${textoDeMinutos(planoEscolhido.duracaoMin)}` : ""} e fica com os ${unidade === "capítulo" ? "capítulos" : "módulos"} do plano.`
+                : "Personalizado: e-learning / auto-aprendizagem, avaliações ou outra sessão, sem plano do curso."}
+            </p>
+          </div>
+        )}
         <div>
           <p className="text-[11px] font-bold uppercase tracking-wide text-slate-500 mb-1.5">Metodologia</p>
           <div className="grid gap-1 sm:grid-cols-2">
@@ -285,7 +370,7 @@ export function EventoModal({
         </div>
         {!semHoras(form.mod) && (
           <div className="grid grid-cols-2 gap-3 sm:max-w-md">
-            <HoraField label="Início" value={form.horaInicio} onChange={v => setForm(f => ({ ...f, horaInicio: v }))} />
+            <HoraField label="Início" value={form.horaInicio} onChange={mudarInicio} />
             <HoraField label="Fim" value={form.horaFim} onChange={v => setForm(f => ({ ...f, horaFim: v }))} />
           </div>
         )}
@@ -322,8 +407,12 @@ export function EventoModal({
           </div>
           <p className="m-0 text-[11px] text-slate-500">
             {ate && ate > date
-              ? `${diasDaRepeticao(date, ate, repeticao).length} dias com este evento, até ${ate.split("-").reverse().join("-")}. Os dias que já o têm ficam como estão.`
-              : "Opcional: o mesmo evento, com a mesma hora e os mesmos módulos, até ao dia escolhido."}
+              ? form.planoOrdem != null
+                ? `As sessões por agendar, uma por dia (${diasDaRepeticao(date, ate, repeticao).length} dias), até ${ate.split("-").reverse().join("-")}. Os dias com uma aula à mesma hora são saltados.`
+                : `${diasDaRepeticao(date, ate, repeticao).length} dias com este evento, até ${ate.split("-").reverse().join("-")}. Os dias que já o têm ficam como estão.`
+              : form.planoOrdem != null
+                ? "Opcional: as sessões seguintes por agendar, uma por dia, à mesma hora de início, até ao dia escolhido."
+                : "Opcional: o mesmo evento, com a mesma hora e os mesmos módulos, até ao dia escolhido."}
           </p>
         </div>
         {form.mod === "avaliacao" && (

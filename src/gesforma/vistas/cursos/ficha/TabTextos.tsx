@@ -6,6 +6,7 @@ import { codigoTopico, juntarHoras, novoTopicoId, opcoesDoPrograma, partirHoras,
 import { useState, type ReactNode } from "react";
 import type { MomentoField, MomentoKey } from "../../../../partilhado/TurmaExtras";
 import { novoPlanoCurso } from "../../../planosCurso";
+import { distribuirTempo, minutosDeTempo, textoDeMinutos } from "../../../../partilhado/duracaoSessao";
 import { RESUMO_IDEAL, RESUMO_MAX, textosCurso } from "../../../../partilhado/textosCurso";
 import { textoSimples } from "../../../../partilhado/textoFormatado";
 import { TextoComFormatacao } from "./TextoComFormatacao";
@@ -170,10 +171,69 @@ const CAMPOS_MOMENTO: { id: keyof MomentoField; rotulo: string }[] = [
   { id: "avaliacao", rotulo: "Avaliação" },
   { id: "recursos", rotulo: "Recursos didáticos" },
   { id: "materiais", rotulo: "Materiais e equipamentos" },
-  { id: "tempo", rotulo: "Tempo (ex.: 30 min)" },
 ];
 
-const preenchidos = (o: Record<string, string>) => Object.values(o).filter(v => v.trim()).length;
+const preenchidos = (o: Record<string, string>) => CAMPOS_MOMENTO.filter(c => String(o[c.id] ?? "").trim()).length;
+
+/** Horas e minutos em dois campos numéricos; devolve minutos. */
+function HorasMinutos({ minutos, onMudar, rotulo }: { minutos: number; onMudar: (min: number) => void; rotulo: string }) {
+  const h = Math.floor(minutos / 60), m = minutos % 60;
+  const num = (v: string) => Math.max(0, Math.floor(Number(v.replace(/\D/g, "")) || 0));
+  return (
+    <span className="inline-flex items-center gap-1">
+      <Entrada aria-label={`${rotulo}: horas`} type="number" min={0} max={23} inputMode="numeric" className="w-16" value={minutos ? String(h) : ""} placeholder="0"
+        onChange={e => onMudar(Math.min(23, num(e.target.value)) * 60 + m)} />
+      <span className="text-xs font-semibold text-tinta-suave">h</span>
+      <Entrada aria-label={`${rotulo}: minutos`} type="number" min={0} max={59} step={5} inputMode="numeric" className="w-16" value={minutos ? String(m).padStart(2, "0") : ""} placeholder="00"
+        onChange={e => onMudar(h * 60 + Math.min(59, num(e.target.value)))} />
+      <span className="text-xs font-semibold text-tinta-suave">min</span>
+    </span>
+  );
+}
+
+/** Duração da sessão e o tempo de cada momento (tem de somar a duração). */
+function TempoDoPlano({ linha, onMudar }: { linha: PlanoLinha; onMudar: (p: Partial<PlanoLinha>) => void }) {
+  const tempos = Object.fromEntries(MOMENTOS.map(m => [m.id, minutosDeTempo(linha.momentos[m.id].tempo)])) as Record<MomentoKey, number>;
+  const soma = MOMENTOS.reduce((a, m) => a + tempos[m.id], 0);
+  const comTempos = (t: Record<MomentoKey, number>) => Object.fromEntries(MOMENTOS.map(m => [m.id, { ...linha.momentos[m.id], tempo: textoDeMinutos(t[m.id]) }])) as PlanoLinha["momentos"];
+  const mudarDuracao = (duracaoMin: number) => {
+    // Momentos ainda vazios, ou repartidos pela duração anterior: repartem-se de novo pela nova.
+    const auto = !soma || soma === linha.duracaoMin;
+    onMudar(auto ? { duracaoMin, momentos: comTempos(distribuirTempo(duracaoMin)) } : { duracaoMin });
+  };
+  const falta = linha.duracaoMin - soma;
+  return (
+    <div className="space-y-2 rounded-controlo border border-linha-suave bg-fundo/40 p-3">
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+        <span className="text-[13px] font-semibold">Duração da sessão</span>
+        <HorasMinutos rotulo={`Sessão ${linha.ordem}: duração`} minutos={linha.duracaoMin} onMudar={mudarDuracao} />
+        <span className="text-xs text-tinta-suave">A sessão marcada no cronograma da turma dura este tempo.</span>
+      </div>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {MOMENTOS.map(m => (
+          <label key={m.id} className="flex items-center gap-1.5 text-xs font-semibold text-tinta-suave">
+            {m.rotulo}
+            <HorasMinutos rotulo={`Sessão ${linha.ordem}, ${m.rotulo}: tempo`} minutos={tempos[m.id]} onMudar={v => onMudar({ momentos: comTempos({ ...tempos, [m.id]: v }) })} />
+          </label>
+        ))}
+      </div>
+      {linha.duracaoMin > 0 && (
+        <p className={`m-0 flex flex-wrap items-center gap-2 text-xs ${falta === 0 ? "text-tinta-suave" : "text-red-700"}`}>
+          {falta === 0
+            ? `Os momentos somam ${textoDeMinutos(soma)}: o tempo da sessão está todo distribuído.`
+            : falta > 0
+              ? `Faltam distribuir ${textoDeMinutos(falta)} pelos momentos (somam ${textoDeMinutos(soma) || "0 min"} de ${textoDeMinutos(linha.duracaoMin)}).`
+              : `Os momentos passam ${textoDeMinutos(-falta)} da duração da sessão (${textoDeMinutos(soma)} de ${textoDeMinutos(linha.duracaoMin)}).`}
+          {falta !== 0 && (
+            <button type="button" className="font-semibold text-ligacao hover:underline" onClick={() => onMudar({ momentos: comTempos(distribuirTempo(linha.duracaoMin)) })}>
+              Distribuir automaticamente
+            </button>
+          )}
+        </p>
+      )}
+    </div>
+  );
+}
 
 function Recolhivel({ titulo, resumo, children }: { titulo: string; resumo: string; children: ReactNode }) {
   return (
@@ -202,13 +262,8 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
   const modulos = opcoesDoPrograma(data.organizacaoPrograma, data.topicosPrograma);
   const unidade = data.organizacaoPrograma === "livre" ? "tema" : "módulo";
   const codigos = (lista: string[]) => lista.map(m => m.split("·")[0]!.trim()).join(" + ");
-  // N.º do plano entre os que têm os mesmos módulos (1.º, 2.º…): é a sessão desses módulos que o recebe.
-  const posNoModulo = (i: number) => {
-    const k = codigos(data.planosSessao[i]!.modulos);
-    return data.planosSessao.slice(0, i + 1).filter(x => codigos(x.modulos) === k).length;
-  };
   return (
-    <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano (e o seu sumário) entra, já aprovado, nas turmas do curso criadas daqui em diante: ligado a módulos / temas, nas sessões desses módulos, pela ordem; sem módulo, na sessão com o mesmo número (só sessões presenciais e síncronas). As turmas que já existem não mudam; nelas usa-se o botão «Importar planos do curso».">
+    <Cartao titulo="Plano de cada sessão" subtitulo="Cada plano é uma sessão. Nas turmas criadas daqui em diante, os planos ficam «por agendar» no cronograma: ao clicar num dia escolhe-se a sessão, que leva a duração, os módulos e o plano (e o sumário), já aprovado. E-learning, avaliações e outras sessões marcam-se como personalizadas. As turmas que já existem não mudam.">
       <div className="space-y-3">
         {data.planosSessao.length === 0 && <Vazio compacto titulo="Ainda sem planos." descricao="Acrescente a primeira sessão." />}
         {data.planosSessao.length > 1 && (
@@ -226,7 +281,8 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
                 <span aria-hidden="true" className="mr-1.5 inline-block text-tinta-suave transition-transform group-open/plano:rotate-90">›</span>
                 Plano {linha.ordem}
                 <span className="font-normal text-tinta-suave">
-                  {linha.modulos.length ? ` · ${posNoModulo(i)}.ª sessão de ${codigos(linha.modulos)}` : ` · sessão ${linha.ordem} da turma`}
+                  {linha.modulos.length ? ` · ${codigos(linha.modulos)}` : ""}
+                  {linha.duracaoMin ? ` · ${textoDeMinutos(linha.duracaoMin)}` : " · duração por definir"}
                 </span>
                 {!abertos.has(linha.ordem) && linha.objetivosGerais.trim() && (
                   <span className="mt-0.5 block truncate text-xs font-normal text-tinta-suave">{linha.objetivosGerais.trim()}</span>
@@ -239,13 +295,14 @@ export function TabPlanos({ f }: { f: FichaCurso }) {
             </summary>
             <div className="space-y-2 border-t border-linha-suave p-3">
             {modulos.length > 0 && (
-              <Campo rotulo={unidade === "tema" ? "Temas" : "Módulos"} ajuda={`Com ${unidade}s, o plano vai para as sessões desses ${unidade}s na turma (o 1.º plano do M1 para a 1.ª sessão do M1; um plano do M3 e M4 para as sessões do M3 e M4). Sem ${unidade}, vai para a sessão com este número.`}>
+              <Campo rotulo={unidade === "tema" ? "Temas" : "Módulos"} ajuda={`A sessão marcada com este plano fica com estes ${unidade}s no cronograma.`}>
                 {() => (
                   <MultiSearchSelect values={linha.modulos} onChange={v => mudar(i, { modulos: v })} options={modulos}
-                    placeholder={`Pesquisar ${unidade}…`} noneLabel={`Sem ${unidade} (pelo número da sessão)`} unitSingular={unidade} unitPlural={`${unidade}s`} />
+                    placeholder={`Pesquisar ${unidade}…`} noneLabel={`Sem ${unidade}`} unitSingular={unidade} unitPlural={`${unidade}s`} />
                 )}
               </Campo>
             )}
+            <TempoDoPlano linha={linha} onMudar={p => mudar(i, p)} />
             <div className="grid gap-2 sm:grid-cols-2">
               <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos gerais`} rows={2} placeholder="Objetivos gerais" value={linha.objetivosGerais} onChange={e => mudar(i, { objetivosGerais: e.target.value })} />
               <AreaTexto aria-label={`Sessão ${linha.ordem}: objetivos específicos`} rows={2} placeholder="Objetivos específicos" value={linha.objetivosEspecificos} onChange={e => mudar(i, { objetivosEspecificos: e.target.value })} />

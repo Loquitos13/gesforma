@@ -17,6 +17,12 @@ export function modulosDoPlano(p: { modulos?: unknown; modulo?: unknown }): stri
   return [...new Set(lista.map(m => String(m ?? "").trim()).filter(Boolean))];
 }
 
+/** Plano da ficha do curso com que a sessão foi marcada no cronograma (`planoOrdem`), ou null. */
+export function planoDaSessao(s: { planoOrdem?: unknown } | null | undefined): number | null {
+  const n = Number(s?.planoOrdem);
+  return Number.isInteger(n) && n >= 1 ? n : null;
+}
+
 type PlanoComModulos = { ordem: number; modulos?: unknown; modulo?: unknown };
 
 const chaves = (modulos: unknown) =>
@@ -27,8 +33,19 @@ const chaves = (modulos: unknown) =>
  * o próximo plano com exatamente os mesmos módulos e, não havendo, o próximo que tenha algum deles. As outras: o plano
  * com o mesmo número, se ainda não foi usado (a sessão sem módulo passa a ter os módulos desse plano: `modulosEmFalta`).
  */
-export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: { modulos?: unknown }[]): (P | null)[] {
+export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: { modulos?: unknown; planoOrdem?: unknown }[]): (P | null)[] {
   const ordenados = [...planos].sort((a, b) => a.ordem - b.ordem);
+  // Cronograma marcado a partir dos planos («sessões por agendar»): cada sessão leva o plano que lhe foi dado e só esse;
+  // as sessões personalizadas ficam sem plano do curso.
+  if (sessoes.some(s => planoDaSessao(s) != null)) {
+    const usados = new Set<number>();
+    return sessoes.map(s => {
+      const n = planoDaSessao(s);
+      if (n == null || usados.has(n)) return null;
+      usados.add(n);
+      return ordenados.find(p => p.ordem === n) ?? null;
+    });
+  }
   const comModulos = ordenados.map(p => ({ p, k: chaves(modulosDoPlano(p)) })).filter(x => x.k.length);
   const ligados = new Set(comModulos.flatMap(x => x.k));
   const usados = new Set<P>();

@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { generateCronograma } from "../cronograma.js";
-import { comModulosDosPlanos, importarPlanosCurso, sessoesDosPlanos } from "../planosCurso.js";
+import { comModulosDosPlanos, cursoTemPlanos, importarAgendados, importarPlanosCurso } from "../planosCurso.js";
 import { erroSobreposicao } from "../conflitos.js";
 import { docsBase } from "../docsCurso.js";
 import { largarDespesasFormadorDaTurma, sincronizarDespesasDaTurma, sincronizarDespesasFormador } from "../despesasFormador.js";
@@ -236,10 +236,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     d.horas ??= (await repo.dadosDoCurso(db, "gold", d.curso))?.horas || 90;
     const modulos = await modulosDaFicha(db, "gold", d.curso);
     // As sessões sem módulo que recebem um plano do curso ligado a um módulo ficam já com esse módulo.
+    // Curso com planos de sessão: a turma começa sem sessões, com os planos por agendar na grelha.
     const cronograma = await comModulosDosPlanos(db, "gold", d.curso, comIdsUnicos(d.cronograma?.length
       ? d.cronograma
-      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos,
-        sessoes: await sessoesDosPlanos(db, "gold", d.curso) ?? undefined })));
+      : await cursoTemPlanos(db, "gold", d.curso) ? [] : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos })));
     const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     if (await repo.existeNome(db, "gold", d.nome, null)) {
@@ -314,6 +314,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return null;
     });
     if (recusa) return reply.code(409).send({ error: recusa });
+    if (d.cronograma) await importarAgendados(db, "gold", id, d.cronograma);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "gold", id, d.vagasAnunciadas);
     if (d.nome && d.nome !== String(antes.nome ?? "")) await propagarNomeTurma(db, "gold", id, String(antes.nome ?? ""), d.nome);
     if (d.curso && d.curso !== String(antes.curso ?? "")) {
@@ -341,10 +342,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const modulos = await modulosDaFicha(db, "fin", d.curso);
     const cronograma = await comModulosDosPlanos(db, "fin", d.curso, comIdsUnicos(d.cronograma?.length
       ? d.cronograma
-      : generateCronograma({
+      : await cursoTemPlanos(db, "fin", d.curso) ? [] : generateCronograma({
         inicio: d.dataInicio, horario: d.horario === "Online" ? "Pós Laboral" : d.horario, horas: d.horas,
         formador: d.formador, curso: d.curso, hoursPerSession: 3, modulos,
-        sessoes: await sessoesDosPlanos(db, "fin", d.curso) ?? undefined,
       })));
     const cruzamento = await erroSobreposicao(db, "fin", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
@@ -423,6 +423,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return { despesasMudaram: await sincronizarDespesasFormador(q, id) };
     });
     if ("erro" in gravou) return reply.code(409).send({ error: gravou.erro });
+    if (d.cronograma) await importarAgendados(db, "fin", id, d.cronograma);
     if (d.vagasAnunciadas !== undefined) await repo.gravarVagasAnunciadas(db, "fin", id, d.vagasAnunciadas);
     if (d.numeroAcao !== undefined) await repo.gravarNumeroAcao(db, id, d.numeroAcao);
     if (d.programa !== undefined) await repo.gravarProgramaTurma(db, id, d.programa);

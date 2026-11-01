@@ -12,6 +12,8 @@ export type SessaoCronograma = {
   modulos: string[];
   formadores: string[];
   modalidade?: SessaoModalidade;
+  /** Marcada a partir do plano de sessão n da ficha do curso (recebe esse plano). */
+  planoOrdem?: number;
   iniciadaEm?: string;
   fechadaEm?: string;
 };

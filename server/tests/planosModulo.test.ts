@@ -1,3 +1,4 @@
+import { distribuirTempo, minutosDeTempo, somarMinutos, textoDeMinutos } from "../../src/partilhado/duracaoSessao.js";
 import { describe, expect, it } from "vitest";
 import { atribuirPlanos, chaveModuloPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
 
@@ -34,5 +35,23 @@ describe("planos do curso por módulo", () => {
     expect(atribuirPlanos(planos, sessoes).map(p => p?.ordem ?? null)).toEqual([2, 1, 4, 3, null]);
     // Sessões sem módulo que recebem um plano com módulos ficam com todos os módulos desse plano.
     expect([...modulosEmFalta([{ ordem: 1, modulos: ["M3 · C", "M4 · D"] }], [{ modulos: [] }])]).toEqual([[0, ["M3 · C", "M4 · D"]]]);
+  });
+});
+
+describe("sessões marcadas a partir de um plano (planoOrdem)", () => {
+  it("cada sessão leva o plano marcado; as personalizadas ficam sem plano", () => {
+    const planos = [{ ordem: 1, modulos: ["M1"] }, { ordem: 2, modulos: [] }, { ordem: 3, modulos: [] }];
+    const r = atribuirPlanos(planos, [{ planoOrdem: 3 }, { modulos: ["M1"] }, { planoOrdem: 1 }, { planoOrdem: 3 }]);
+    expect(r.map(p => p?.ordem ?? null)).toEqual([3, null, 1, null]);
+  });
+});
+
+describe("tempo dos planos", () => {
+  it("lê e escreve durações e reparte pelos momentos", () => {
+    expect(["15 min", "3 h", "2h30", "1:45", "90", "", "x"].map(minutosDeTempo)).toEqual([15, 180, 150, 105, 90, 0, 0]);
+    expect([0, 15, 60, 150].map(textoDeMinutos)).toEqual(["", "15 min", "1h", "2h30"]);
+    expect(distribuirTempo(180)).toEqual({ introducao: 20, desenvolvimento: 140, conclusao: 20 });
+    expect(distribuirTempo(10)).toEqual({ introducao: 3, desenvolvimento: 4, conclusao: 3 });
+    expect(somarMinutos("19:00", 210)).toEqual("22:30");
   });
 });

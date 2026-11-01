@@ -71,19 +71,14 @@ export function generateCronograma(opts: {
   curso?: string;
   hoursPerSession?: number;
   modulos?: string[];
-  /** Uma sessão por entrada (os planos da ficha do curso), com esses módulos; manda sobre as horas. */
-  sessoes?: string[][];
 }): SessaoCronograma[] {
   const slot = horarioSlots(opts.horario);
   const hours = opts.hoursPerSession && opts.hoursPerSession > 0 ? opts.hoursPerSession : slot.hours;
   const end = opts.hoursPerSession && opts.hoursPerSession > 0 ? addHours(slot.start, hours) : slot.end;
   // Tantas sessões quantas as horas do curso pedem; a última encurta para fechar as horas certas.
   const totalHoras = opts.horas || 25;
-  const porPlano = opts.sessoes?.length ? opts.sessoes : null;
-  const n = porPlano ? Math.min(400, porPlano.length) : Math.min(400, Math.max(1, Math.ceil(totalHoras / hours)));
-  const ultimaHoras = porPlano ? hours : totalHoras - hours * (n - 1);
-  // Planos sem nenhum módulo ligado: os módulos da ficha repartem-se pelas sessões, como sem planos.
-  const comModulos = porPlano?.some(m => m.length);
+  const n = Math.min(400, Math.max(1, Math.ceil(totalHoras / hours)));
+  const ultimaHoras = totalHoras - hours * (n - 1);
   const cursor = parseIso(opts.inicio || "2026-09-07");
   const weekdays = slot.weekdays.length ? slot.weekdays : [cursor.getDay() || 3];
   for (let i = 0; i < 21; i++) {
@@ -97,7 +92,7 @@ export function generateCronograma(opts: {
       data: toIso(cursor),
       horaInicio: slot.start,
       horaFim: i === n - 1 && ultimaHoras > 0 && ultimaHoras < hours ? addHours(slot.start, ultimaHoras) : end,
-      modulos: comModulos ? [...porPlano![i]!] : moduloGerado(i, n, opts.modulos),
+      modulos: moduloGerado(i, n, opts.modulos),
       formadores: opts.formador && opts.formador !== "A definir" ? [opts.formador] : [],
       modalidade: "presencial",
     });

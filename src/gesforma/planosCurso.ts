@@ -18,6 +18,8 @@ export type PlanoCurso = {
   sumario: { conteudos: string; atividades: string };
   /** Módulos / temas do programa: o plano vai para as sessões desses módulos (vazio: para a sessão com este número). */
   modulos: string[];
+  /** Duração da sessão em minutos (0 = por definir): a sessão marcada no cronograma dura isto. */
+  duracaoMin: number;
 };
 
 export type ValorFormadorCurso = { nome: string; valorHora: string };
@@ -43,11 +45,12 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
     momentos,
     sumario: { conteudos: String(s.conteudos ?? ""), atividades: String(s.atividades ?? "") },
     modulos: modulosDoPlano(row),
+    duracaoMin: Math.max(0, Math.min(24 * 60, Math.round(Number(row.duracaoMin) || 0))),
   };
 }
 
 export function novoPlanoCurso(ordem: number): PlanoCurso {
-  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulos: [] };
+  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulos: [], duracaoMin: 0 };
 }
 
 function lerPlanos(raw: unknown): PlanoCurso[] {

@@ -144,21 +144,31 @@ describe("planos de sessão do curso nas turmas", () => {
     expect(linhas.filter(l => l.sessao_n != null).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "M2 a"], [2, "M1 a"], [4, "M1 b"]]);
   });
 
-  it("turma nova sem cronograma: uma sessão por plano da ficha, com os módulos do plano (não pelas horas do curso)", async () => {
+  it("curso com planos: a turma nova começa sem sessões; cada sessão marcada com um plano recebe-o (as personalizadas não)", async () => {
     const ctx = await arrancar();
     const curso = unico("Curso Blearning");
     const c = await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "B-learning", horas: 90 });
     expect(c.statusCode, c.body).toBe(200);
     const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1", [curso])).rows[0]!.id;
     await pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, {
-      payload: { planosSessao: [{ ...plano(1, "P1"), modulos: ["M1 · X"] }, { ...plano(2, "P2"), modulos: ["M1 · X", "M2 · Y"] }, { ...plano(3, "P3"), modulos: ["M2 · Y"] }] },
+      payload: { planosSessao: [{ ...plano(1, "P1"), modulos: ["M1 · X"], duracaoMin: 180 }, { ...plano(2, "P2"), modulos: ["M2 · Y"], duracaoMin: 240 }, plano(3, "P3")] },
     });
     const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-09-07", nome: unico("TBL"), curso, horario: "Pós Laboral" });
     expect(t.statusCode, t.body).toBe(200);
-    const cron = t.json().turma.cronograma as { modulos: string[] }[];
-    expect(cron.map(x => x.modulos)).toEqual([["M1 · X"], ["M1 · X", "M2 · Y"], ["M2 · Y"]]);
-    const linhas = await planosDaTurma(ctx, t.json().turma.id as number);
-    expect(linhas.filter(l => l.sessao_n != null).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "P1"], [2, "P2"], [3, "P3"]]);
+    const id = t.json().turma.id as number;
+    expect(t.json().turma.cronograma).toEqual([]);
+    const s = (sid: string, data: string, extra: Record<string, unknown> = {}) => ({ id: sid, data, horaInicio: "19:00", horaFim: "22:00", modalidade: "presencial", modulos: [], formadores: [], ...extra });
+    const r = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, {
+      cronograma: [
+        s("a", "2099-09-07", { planoOrdem: 2, modulos: ["M2 · Y"] }),
+        s("b", "2099-09-08"),
+        s("c", "2099-09-09", { planoOrdem: 1, modulos: ["M1 · X"] }),
+        { id: "e", data: "2099-09-10", horaInicio: "", horaFim: "", modalidade: "auto", modulos: [], formadores: [] },
+      ],
+    });
+    expect(r.statusCode, r.body).toBe(200);
+    const linhas = await planosDaTurma(ctx, id);
+    expect(linhas.filter(l => l.sessao_n != null && l.plano).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "P2"], [3, "P1"]]);
   });
 
   it("turma nova com sessões sem módulo: cada sessão fica com o plano e o módulo do plano", async () => {

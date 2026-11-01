@@ -155,7 +155,7 @@ export function aplicarEvento(
   sessoes: SessaoCronograma[],
   date: string,
   linha: GrelhaLinha,
-  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade } | null,
+  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade; planoOrdem?: number | null } | null,
   previous?: GrelhaLinha | null,
 ): SessaoCronograma[] {
   if (!previous || previous.id === linha.id) return upsertCell(sessoes, date, linha, next);
@@ -396,14 +396,17 @@ export function upsertCell(
   sessoes: SessaoCronograma[],
   date: string,
   linha: GrelhaLinha,
-  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade } | null,
+  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade; planoOrdem?: number | null } | null,
 ): SessaoCronograma[] {
   const naCelula = (s: SessaoCronograma) => s.data === date && matchLinha(s, linha);
   const i = sessoes.findIndex(naCelula);
   const kept = sessoes.filter(s => !naCelula(s));
   if (!next) return kept;
   const atual = i >= 0 ? sessoes[i]! : { ...emptySessao(), id: sid("c") };
-  const nova = { ...naLinha(atual, date, linha, next.modalidade ?? linha.modalidade), modulos: next.modulos, formadores: next.formadores ?? [] };
+  const nova: SessaoCronograma = { ...naLinha(atual, date, linha, next.modalidade ?? linha.modalidade), modulos: next.modulos, formadores: next.formadores ?? [] };
+  // planoOrdem: número = marcada com esse plano do curso; null = personalizada (sem plano); omisso = fica como estava.
+  if (next.planoOrdem === null) delete nova.planoOrdem;
+  else if (next.planoOrdem !== undefined) nova.planoOrdem = next.planoOrdem;
   return i < 0 ? [...kept, nova] : [...kept.slice(0, i), nova, ...kept.slice(i)];
 }
 
@@ -494,7 +497,7 @@ export function preencherIntervalo(
   de: string,
   ate: string,
   linha: GrelhaLinha,
-  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade },
+  next: { modulos: string[]; formadores?: string[]; modalidade?: SessaoModalidade; planoOrdem?: number | null },
   repeticao: Repeticao = "dias",
 ) {
   let out = sessoes;

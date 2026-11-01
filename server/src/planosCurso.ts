@@ -13,7 +13,7 @@ import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from ".
 import { turmaParaPlanos } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
-import { atribuirPlanos, modulosDoPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
+import { atribuirPlanos, modulosDoPlano, modulosEmFalta, planoDaSessao } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -75,14 +75,18 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
 }
 
 /**
- * Turma nova sem cronograma: uma sessão por plano da ficha do curso (pela ordem), com os módulos de cada plano.
- * Sem planos, null (o cronograma sai das horas do curso).
+ * O curso tem planos de sessão na ficha? Então a turma nova começa sem cronograma: os planos ficam «por agendar» e
+ * marcam-se dia a dia na grelha (cada sessão marcada leva o seu plano).
  */
-export async function sessoesDosPlanos(db: Db, regime: Regime, curso: string): Promise<string[][] | null> {
+export async function cursoTemPlanos(db: Db, regime: Regime, curso: string) {
   const cursoId = (await cursoPorNome(db, regime, curso))?.id;
-  if (!cursoId) return null;
-  const modelos = (await modelosDoCurso(db, regime, Number(cursoId))).sort((a, b) => a.ordem - b.ordem);
-  return modelos.length ? modelos.map(m => m.modulos) : null;
+  return Boolean(cursoId && (await modelosDoCurso(db, regime, Number(cursoId))).length);
+}
+
+/** Depois de gravar o cronograma: as sessões marcadas a partir de um plano do curso recebem-no (as outras ficam). */
+export async function importarAgendados(db: Db, regime: Regime, turmaId: number, cronograma: unknown) {
+  if (!Array.isArray(cronograma) || !cronograma.some(s => planoDaSessao(asObj(s)) != null)) return;
+  await importarPlanosCurso(db, regime, turmaId).catch(() => undefined);
 }
 
 /**

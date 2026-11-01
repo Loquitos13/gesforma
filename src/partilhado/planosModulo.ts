@@ -17,7 +17,7 @@ export function modulosDoPlano(p: { modulos?: unknown; modulo?: unknown }): stri
   return [...new Set(lista.map(m => String(m ?? "").trim()).filter(Boolean))];
 }
 
-/** Plano da ficha do curso com que a sessão foi marcada no cronograma (`planoOrdem`), ou null. */
+/** Plano da ficha do curso com que a sessão foi marcada no cronograma (`planoOrdem`), ou null (0 = «Personalizado»). */
 export function planoDaSessao(s: { planoOrdem?: unknown } | null | undefined): number | null {
   const n = Number(s?.planoOrdem);
   return Number.isInteger(n) && n >= 1 ? n : null;
@@ -35,22 +35,21 @@ const chaves = (modulos: unknown) =>
  */
 export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: { modulos?: unknown; planoOrdem?: unknown }[]): (P | null)[] {
   const ordenados = [...planos].sort((a, b) => a.ordem - b.ordem);
-  // Cronograma marcado a partir dos planos («sessões por agendar»): cada sessão leva o plano que lhe foi dado e só esse;
-  // as sessões personalizadas ficam sem plano do curso.
-  if (sessoes.some(s => planoDaSessao(s) != null)) {
-    const usados = new Set<number>();
-    return sessoes.map(s => {
-      const n = planoDaSessao(s);
-      if (n == null || usados.has(n)) return null;
-      usados.add(n);
-      return ordenados.find(p => p.ordem === n) ?? null;
-    });
-  }
-  const comModulos = ordenados.map(p => ({ p, k: chaves(modulosDoPlano(p)) })).filter(x => x.k.length);
-  const ligados = new Set(comModulos.flatMap(x => x.k));
   const usados = new Set<P>();
   const out: (P | null)[] = sessoes.map(() => null);
+  // 1.º As sessões marcadas no cronograma com um plano («Sessão do curso») levam esse plano.
   sessoes.forEach((s, i) => {
+    const n = planoDaSessao(s);
+    const p = n == null ? undefined : ordenados.find(x => x.ordem === n && !usados.has(x));
+    if (p) { usados.add(p); out[i] = p; }
+  });
+  // As marcadas «Personalizado» (planoOrdem 0) ou com um plano ficam fora; as outras recebem os planos livres.
+  const livre = (s: { planoOrdem?: unknown }) => s.planoOrdem == null || s.planoOrdem === "";
+  const restantes = ordenados.filter(p => !usados.has(p));
+  const comModulos = restantes.map(p => ({ p, k: chaves(modulosDoPlano(p)) })).filter(x => x.k.length);
+  const ligados = new Set(comModulos.flatMap(x => x.k));
+  sessoes.forEach((s, i) => {
+    if (!livre(s)) return;
     const k = chaves(s.modulos);
     if (!k.length) return;
     const mesmos = comModulos.find(x => !usados.has(x.p) && x.k.join("+") === k.join("+"));
@@ -59,8 +58,8 @@ export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: 
   });
   sessoes.forEach((s, i) => {
     // Sessão de módulos com planos ligados fica só com esses; as outras vão pelo número da sessão.
-    if (out[i] || chaves(s.modulos).some(m => ligados.has(m))) return;
-    const p = ordenados.find(x => x.ordem === i + 1 && !usados.has(x));
+    if (!livre(s) || out[i] || chaves(s.modulos).some(m => ligados.has(m))) return;
+    const p = restantes.find(x => x.ordem === i + 1 && !usados.has(x));
     if (p) { usados.add(p); out[i] = p; }
   });
   return out;

@@ -182,10 +182,44 @@ export function largurasColunaMm(dates: string[], linhas: GrelhaLinha[], sessoes
   });
 }
 
+/** Largura útil para os dias numa folha A4 apaisada (tira as margens e as colunas do horário). */
+const DIAS_A4_MM = A4_LARGURA_MM - MARGEM_MM * 2 - GRUPO_MM - HORA_MM - 6;
+
 /**
- * O cronograma oficial é uma tabela única: o mesmo horário fica sempre na mesma
- * linha, com os meses lado a lado. Cada dia tem a largura do seu conteúdo.
- * Quando o período não cabe em A4 apaisado, é a folha que cresce.
+ * Cronograma comprido: em vez de uma tabela cada vez mais larga, a grelha parte-se em blocos, um por baixo do outro,
+ * cada um com meses inteiros que caibam em A4 apaisado (um mês que não caiba sozinho parte-se pelos dias).
+ * Devolve as posições (início e fim) de cada bloco em `dates`.
+ */
+export function blocosDaFolha(dates: string[], larguras: number[], maxMm = DIAS_A4_MM): [number, number][] {
+  const meses: [number, number][] = [];
+  dates.forEach((d, i) => {
+    const ultimo = meses[meses.length - 1];
+    if (ultimo && dates[ultimo[0]]!.slice(0, 7) === d.slice(0, 7)) ultimo[1] = i + 1;
+    else meses.push([i, i + 1]);
+  });
+  const soma = (a: number, b: number) => larguras.slice(a, b).reduce((x, y) => x + y, 0);
+  const out: [number, number][] = [];
+  let atual: [number, number] | null = null;
+  for (const [a, b] of meses) {
+    if (atual && soma(atual[0], b) <= maxMm) { atual[1] = b; continue; }
+    if (atual) out.push(atual);
+    atual = [a, b];
+    // Um mês sozinho mais largo do que a folha: parte-se pelos dias.
+    while (soma(atual[0], atual[1]) > maxMm && atual[1] - atual[0] > 1) {
+      const de: number = atual[0], ate: number = atual[1];
+      let corte = de + 1;
+      while (corte < ate && soma(de, corte + 1) <= maxMm) corte += 1;
+      out.push([de, corte]);
+      atual = [corte, ate];
+    }
+  }
+  if (atual) out.push(atual);
+  return out.length ? out : [[0, dates.length]];
+}
+
+/**
+ * O mesmo horário fica sempre na mesma linha. Cada dia tem a largura do seu conteúdo. Quando o período não cabe em
+ * A4 apaisado, a grelha parte-se em blocos de meses, uns por baixo dos outros (ver `blocosDaFolha`).
  */
 export function printPageSize(largurasDia: number[], linhas: number) {
   const soma = largurasDia.reduce((a, b) => a + b, 0);
@@ -213,7 +247,8 @@ function gridHtml(
   const grupos = temposHtml(dates, sessoes, horario, matricula) + (["auto", "avaliacao"] as const)
     .map(g => groupRowsHtml(g, linhas.filter(l => l.modalidade === g), dates, sessoes, matricula))
     .join("");
-  return `<table class="grid">
+  const largura = GRUPO_MM + HORA_MM + larguras.reduce((a, b) => a + b, 0);
+  return `<table class="grid" style="width:${largura.toFixed(1)}mm">
       <colgroup>${cols}</colgroup>
       <thead>
         <tr>
@@ -254,12 +289,21 @@ export function medidasFolha(input: Pick<CronogramaPrintInput, "dates" | "linhas
   const t = grelhaTempos(input.sessoes, input.dates, input.horario);
   const tempos = t.blocos.length || input.matricula ? t.n : 0;
   const outras = linhas.filter(l => l.modalidade === "auto" || l.modalidade === "avaliacao").length;
-  return { linhas, larguras, page: printPageSize(larguras, outras + Math.ceil(tempos * TEMPO_MM / 10)) };
+  const blocos = blocosDaFolha(input.dates, larguras);
+  const maisLargo = blocos.map(([a, b]) => larguras.slice(a, b)).reduce((m, x) => (x.reduce((p, q) => p + q, 0) > m.reduce((p, q) => p + q, 0) ? x : m), [] as number[]);
+  // Cada bloco repete o cabeçalho dos dias (3 linhas, ~2 «linhas» da folha) e o horário.
+  const alturaLinhas = blocos.length * (outras + Math.ceil(tempos * TEMPO_MM / 10) + 2);
+  return { linhas, larguras, blocos, page: printPageSize(maisLargo, alturaLinhas) };
 }
 
 export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
-  const { linhas, larguras, page } = medidasFolha(input);
-  const grid = gridHtml(input.dates, linhas, input.sessoes, larguras, input.horario, input.matricula);
+  const { linhas, larguras, blocos, page } = medidasFolha(input);
+  const grid = blocos.map(([a, b]) => {
+    const dias = input.dates.slice(a, b);
+    const doBloco = linhasComSessoes(linhas, dias, input.sessoes, input.matricula && dias.includes(input.matricula) ? input.matricula : undefined)
+      .filter(l => l.modalidade !== "presencial" && l.modalidade !== "sincrona" ? dias.some(d => cellTone(input.sessoes, d, l) !== "empty") : true);
+    return `<div class="bloco-grelha">${gridHtml(dias, doBloco, input.sessoes, larguras.slice(a, b), input.horario, input.matricula)}</div>`;
+  }).join("");
 
   const mods = legendModulos(input.sessoes);
   const mid = Math.ceil(mods.length / 2);
@@ -285,7 +329,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
   <meta charset="utf-8" />
   <title>${esc(tituloCronograma(input.horario))}</title>
   <style>
-    @page { size: ${page.largura}mm ${page.altura}mm; margin: 8mm ${MARGEM_MM}mm; }
+    @page { size: ${page.largura}mm ${blocos.length > 1 ? 210 : page.altura}mm; margin: 8mm ${MARGEM_MM}mm; }
     * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     html, body { margin: 0; padding: 0; background: #fff; color: #111; }
     body { font-family: Arial, Helvetica, sans-serif; font-size: 10px; padding: 8px 10px 14px; }
@@ -300,7 +344,8 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .meta { width: 100%; border-collapse: collapse; margin: 0 0 8px; font-size: 11px; }
     .meta td { border: none; padding: 2px 4px 2px 0; text-align: left; vertical-align: top; }
     .meta b { font-weight: 700; }
-    table.grid { width: ${page.tabelaMm}mm; border-collapse: collapse; table-layout: fixed; }
+    table.grid { border-collapse: collapse; table-layout: fixed; }
+    .bloco-grelha { margin: 0 0 6mm; break-inside: avoid; page-break-inside: avoid; }
     table.grid th, table.grid td { border: 1px solid #222; padding: 1px; vertical-align: middle; }
     col.c-group { width: ${GRUPO_MM}mm; }
     col.c-time { width: ${HORA_MM}mm; }

@@ -107,10 +107,11 @@ export function useTurmaCockpit<R extends Regime>(regime: R, id: number | undefi
 
   const patch = useCallback((p: Partial<DadosTurma>) => { void gravar(p, p as Partial<TurmaGold & TurmaFin>); }, [gravar]);
   /** O servidor recusa cronogramas que cruzam sessões do mesmo formador noutra turma. */
-  const setCronograma = useCallback((novo: SessaoCronograma[]) => {
+  /** Grava o cronograma; `depois` corre quando o servidor o gravou (ex.: voltar a ler os planos das sessões). */
+  const setCronograma = useCallback((novo: SessaoCronograma[], depois?: () => void) => {
     // Por data e hora, como o servidor grava: os números das sessões no ecrã batem logo com os gravados.
     const cronograma = ordenarCronograma(novo);
-    void gravar({ cronograma }, { cronograma });
+    void gravar({ cronograma }, { cronograma }).then(ok => { if (ok) depois?.(); });
     return true;
   }, [gravar]);
   /** Publica no sítio e no dossiê (grava o cronograma com a mesma versão e na mesma fila das outras gravações). */

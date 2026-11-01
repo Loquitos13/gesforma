@@ -97,6 +97,7 @@ export function useTurmaPedagogia(regime: Regime, turmaId: number | undefined, c
     void recarregar();
   }, [recarregar]);
 
+
   const sessoesActuais = useMemo(
     () => (cronograma ? naPosicaoActual(snap.sessoes, cronograma) : snap.sessoes),
     [snap.sessoes, cronograma],

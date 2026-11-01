@@ -3,12 +3,12 @@ import { createPortal } from "react-dom";
 
 import { SearchSelect } from "../partilhado/FormKit";
 
-import { type GrelhaLinha, aplicarEvento, buildLinha, defaultSlot, diasDaRepeticao, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia, type Repeticao } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, sessoesSemFim, aplicarEvento, buildLinha, defaultSlot, diasDaRepeticao, eventosDoDia, EVENTO_OPTS, linhaLabel, normHora, preencherIntervalo, type EventoDia, type Repeticao } from "../partilhado/cronogramaGrelha";
 
 import { somarMinutos, textoDeMinutos } from "../partilhado/duracaoSessao";
-import { planoDaSessao } from "../partilhado/planosModulo";
+import { atribuirPlanos, planoDaSessao } from "../partilhado/planosModulo";
 import type { PlanoCurso } from "./planosCurso";
-import { type SessaoModalidade, casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
+import { type SessaoModalidade, isSessaoLectiva, casarModulo, codigoModulo, formatDiaMes, ordenarCodigos, ordenarModulos, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 
 export function HoraField({
   label,
@@ -105,7 +105,10 @@ function formInicial(alvo: EventoDia | null, linha: GrelhaLinha | undefined, hor
 
 /** Planos da ficha do curso ainda sem sessão no cronograma (o `atual` conta como livre: é o do evento aberto). */
 export function planosPorAgendar(planos: PlanoCurso[], sessoes: SessaoCronograma[], atual: number | null = null) {
-  const usados = new Set(sessoes.map(planoDaSessao).filter((n): n is number => n != null && n !== atual));
+  // A mesma regra do servidor: os planos que as aulas já levam (marcados ou livres pelo módulo / número).
+  const lectivas = sessoesSemFim(sessoes).filter(isSessaoLectiva);
+  const usados = new Set(atribuirPlanos(planos, lectivas).filter((p): p is PlanoCurso => p != null).map(p => p.ordem));
+  if (atual != null) usados.delete(atual);
   return [...planos].sort((a, b) => a.ordem - b.ordem).filter(p => !usados.has(p.ordem));
 }
 
@@ -267,7 +270,8 @@ export function EventoModal({
         ? (form.formadores.length ? form.formadores : formador && formador !== "A definir" ? [formador] : [])
         : [],
       modalidade: form.mod,
-      planoOrdem: form.planoOrdem,
+      // Com planos no curso, a aula «Personalizado» fica marcada (0) para não receber um plano livre ao gravar.
+      planoOrdem: form.planoOrdem ?? (planos.length && lectiva ? 0 : null),
     };
     if (ate && ate <= date) {
       setErro("A data «Repetir até» tem de ser depois deste dia.");

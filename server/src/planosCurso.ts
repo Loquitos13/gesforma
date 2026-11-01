@@ -13,7 +13,7 @@ import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from ".
 import { turmaParaPlanos } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
-import { atribuirPlanos, modulosDoPlano, modulosEmFalta, planoDaSessao } from "../../src/partilhado/planosModulo.js";
+import { atribuirPlanos, modulosDoPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -83,9 +83,12 @@ export async function cursoTemPlanos(db: Db, regime: Regime, curso: string) {
   return Boolean(cursoId && (await modelosDoCurso(db, regime, Number(cursoId))).length);
 }
 
-/** Depois de gravar o cronograma: as sessões marcadas a partir de um plano do curso recebem-no (as outras ficam). */
+/**
+ * Depois de gravar o cronograma da turma: cada aula recebe o seu plano do curso (a marcada com um plano, esse; as
+ * outras, os planos ainda livres pelo módulo ou pelo número; as «Personalizado», nenhum).
+ */
 export async function importarAgendados(db: Db, regime: Regime, turmaId: number, cronograma: unknown) {
-  if (!Array.isArray(cronograma) || !cronograma.some(s => planoDaSessao(asObj(s)) != null)) return;
+  if (!Array.isArray(cronograma) || !cronograma.length) return;
   await importarPlanosCurso(db, regime, turmaId).catch(() => undefined);
 }
 

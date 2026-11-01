@@ -1,4 +1,4 @@
-// Separador "Visão geral" do cockpit Gold: números da turma, programa, formandos, formadores e custos.
+// Separador "Visão geral" do cockpit Gold: números da turma, formandos, formadores e custos.
 import { EmptyHint, MobileCard, RowActions } from "../../../../partilhado/SecretaryUX";
 import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
 import { hojeIso, type TurmaGold } from "../../../../partilhado/turmaModel";
@@ -8,17 +8,15 @@ import { BotaoListagem, I, Th, Td, formatSessaoLine } from "./base";
 import { FormadoresAtribuidosCard } from "../../../CronogramaEditor";
 import { diaDeCarimbo } from "../../../../partilhado/horaLisboa";
 
-export function GoldVisaoGeral({ turma, membros, souFormador, verCustos, activa, programa, onFicha, onTransferir, onEliminar, onAdicionar, onEditarPrograma, onFormadores, onFormador, onSala, onValoresHora }: {
+export function GoldVisaoGeral({ turma, membros, souFormador, verCustos, activa, onFicha, onTransferir, onEliminar, onAdicionar, onFormadores, onFormador, onSala, onValoresHora }: {
   turma: TurmaGold;
   membros: FormandoTurma[];
   souFormador: boolean;
   activa: boolean;
-  programa: string[];
   onFicha?: (f: FormandoTurma) => void;
   onTransferir: (f: FormandoTurma) => void;
   onEliminar: (f: FormandoTurma) => void;
   onAdicionar: () => void;
-  onEditarPrograma: () => void;
   onFormadores: (nomes: string[]) => void;
   onFormador: (nome: string) => void;
   onSala: (valor: number) => void;
@@ -59,15 +57,6 @@ export function GoldVisaoGeral({ turma, membros, souFormador, verCustos, activa,
           </Cartao>
         ))}
       </div>
-      <Cartao titulo="Programa de formação" acoes={!souFormador ? <Botao variante="ligacao" tamanho="sm" onClick={onEditarPrograma}>Editar programa</Botao> : undefined}>
-        <ul className="m-0 p-0 list-none space-y-2">
-          {(programa.length ? programa : ["Ainda sem módulos na ficha deste curso. Edite o programa na ficha do curso."]).map((linha, i) => (
-            <li key={i} className="flex items-start gap-2 text-sm text-tinta">
-              <span className="w-1.5 h-1.5 rounded-full bg-acao mt-1.5 flex-shrink-0" aria-hidden="true" />{linha}
-            </li>
-          ))}
-        </ul>
-      </Cartao>
       <Cartao
         titulo="Formandos"
         semPadding

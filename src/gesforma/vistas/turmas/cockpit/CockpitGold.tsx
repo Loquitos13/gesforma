@@ -14,7 +14,6 @@ import type { FormandoTurma } from "../../../../partilhado/tiposFormando";
 import { persist, toastError, toastOk } from "../../../../partilhado/toastBus";
 import { Botao, ConfirmarPerigo } from "../../../../partilhado/ui";
 import { CertificadoVerModal, ExportTurmaModal, type CertificadoPreview, type ExportTurmaInfo } from "../../../ActionSurfaces";
-import { useProgramaDoCurso } from "../../../cursoPrograma";
 import { DtpPanel } from "../../../DtpView";
 import { I, TABS_FORMADOR, estadoBadge, tabDoFormador } from "./base";
 import { CertificadosTurmaTab, DocumentosTurmaTab, SessoesTurmaTab, TurmaTabBar, exportPayload } from "./Separadores";
@@ -42,8 +41,9 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
   const [tab, setTab] = useState<Separador>(initialTab);
   useEffect(() => { setTab(souFormador ? tabDoFormador(initialTab) : initialTab); }, [initialTab, turmaId, souFormador]);
   const ped = useTurmaPedagogia("gold", turma?.id ?? 0, turma?.cronograma);
+  // Ao gravar o cronograma o servidor dá a cada aula o seu plano do curso: volta-se a ler os planos.
+  const recarregarPlanos = () => void ped.recarregar();
   const criterios = useCriteriosAvaliacao("gold", turma?.curso);
-  const programa = useProgramaDoCurso("gold", turma?.curso ?? "");
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
   const [sumarioSessao, setSumarioSessao] = useState<SessaoMeta | null>(null);
   const [presencasSessao, setPresencasSessao] = useState<SessaoMeta | null>(null);
@@ -163,7 +163,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
 
               {tab === "cronograma" && !souFormador && (
                 <CronogramaEditor layout="page" turmaId={t.id} identidade={`gold-${t.id}`} nome={t.nome} sessoes={t.cronograma}
-                  onChange={setCronograma} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local}
+                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local}
                   onLocal={local => patch({ local })} />
               )}
               {tab === "dtp" && staffPodeDossie(user.role) && (
@@ -177,7 +177,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   formadorOpcoes={souFormador ? undefined : opcoesFormador}
                   onFormador={souFormador ? undefined : (s, nome) => {
                     if (!s.id) return;
-                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
+                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x), recarregarPlanos);
                   }} />
               )}
               {tab === "avaliacao" && (
@@ -196,10 +196,10 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   curso={t.curso} turma={t.nome} regime="gold" turmaId={t.id} />
               )}
               {tab === "overview" && (
-                <GoldVisaoGeral turma={t} membros={membros} souFormador={souFormador} activa={activa} programa={programa.labels}
+                <GoldVisaoGeral turma={t} membros={membros} souFormador={souFormador} activa={activa}
                   onFicha={souFormador ? undefined : f => navigate({ view: "gold-formando-ficha", formandoId: f.id })}
                   onTransferir={setTransferir} onEliminar={setEliminar} onAdicionar={() => setInscrever(true)}
-                  onEditarPrograma={() => navigate("gold-cursos")} onFormadores={nomes => patch({ formadores: nomes })}
+                  onFormadores={nomes => patch({ formadores: nomes })}
                   onFormador={setFormadorAberto} onSala={valor => patch({ custoHoraSala: valor })}
                   verCustos={!souFormador && user.role !== "comercial"} onValoresHora={valores => patch({ valoresHoraFormador: valores })} />
               )}
@@ -242,7 +242,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
             <FormadorProfileSlideOver open={!!formadorAberto} onClose={() => setFormadorAberto(null)} nome={formadorAberto ?? ""} accent="gold" turma={t.nome}
               horas={formadorAberto ? horasDoFormador(t.cronograma, formadorAberto) : undefined} />
             <NovaSessaoPainel key={`sessao-${novaSessao}`} aberto={novaSessao} onFechar={() => setNovaSessao(false)} regime="gold" turma={t} horaPadrao="09:00" duracao={4}
-              onCriar={s => { setCronograma([...t.cronograma, s]); setNovaSessao(false); }} />
+              onCriar={s => { setCronograma([...t.cronograma, s], recarregarPlanos); setNovaSessao(false); }} />
             <InscreverGold aberto={inscrever} onFechar={() => setInscrever(false)} turma={t} activa={activa} membros={membros} onActivar={() => toggle(true)} />
             <EditarTurmaGold aberto={editar} onFechar={() => setEditar(false)} turma={t} onGravar={patch} />
             <TransferirEEliminarGold turma={t} transferir={transferir} eliminar={eliminar} onFechar={() => { setTransferir(null); setEliminar(null); }} />

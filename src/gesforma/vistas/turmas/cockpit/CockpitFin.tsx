@@ -65,6 +65,8 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
   const [diaNovo, setDiaNovo] = useState("");
   const [apagarSessao, setApagarSessao] = useState<SessaoCronograma | null>(null);
   const ped = useTurmaPedagogia("fin", turma?.id ?? 0, turma?.cronograma);
+  // Ao gravar o cronograma o servidor dá a cada aula o seu plano do curso: volta-se a ler os planos.
+  const recarregarPlanos = () => void ped.recarregar();
   const criterios = useCriteriosAvaliacao("fin", turma?.curso);
   const programa = useProgramaDoCurso("fin", turma?.curso ?? "");
   const [planoSessao, setPlanoSessao] = useState<SessaoMeta | null>(null);
@@ -123,7 +125,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                   formadorOpcoes={souFormador ? undefined : opcoesFormador}
                   onFormador={souFormador ? undefined : (s, nome) => {
                     if (!s.id) return;
-                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x));
+                    setCronograma(t.cronograma.map(x => x.id === s.id ? { ...x, formadores: nome ? [nome] : [] } : x), recarregarPlanos);
                   }} />
         );
         const ocupacao = t.alunosTotal > 0 ? Math.min(100, (t.alunos / t.alunosTotal) * 100) : 0;
@@ -258,7 +260,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
               )}
               {tab === "sessoes" && vistaCrono === "grelha" && !souFormador && (
                 <CronogramaEditor layout="page" accent="fin" turmaId={t.id} identidade={`fin-${t.id}`} nome={t.nome} sessoes={t.cronograma}
-                  onChange={setCronograma} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
+                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
               {tab === "dtp" && staffPodeDossie(user.role) && (
                 <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
@@ -326,14 +328,14 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
             <FormadorProfileSlideOver open={!!formadorAberto} onClose={() => setFormadorAberto(null)} nome={formadorAberto ?? t.formador} accent="fin" turma={t.nome}
               horas={formadorAberto ? horasDoFormador(t.cronograma, formadorAberto) : undefined} />
             <NovaSessaoPainel key={`sessao-${novaSessao}-${diaNovo}`} aberto={novaSessao} onFechar={() => setNovaSessao(false)} regime="fin" turma={t} horaPadrao="19:00" duracao={3}
-              dataInicial={diaNovo} onCriar={s => { setCronograma([...t.cronograma, s]); setNovaSessao(false); }} />
+              dataInicial={diaNovo} onCriar={s => { setCronograma([...t.cronograma, s], recarregarPlanos); setNovaSessao(false); }} />
             <NovaSessaoPainel key={`editar-${editarSessao?.id ?? ""}`} aberto={Boolean(editarSessao)} onFechar={() => setEditarSessao(null)} regime="fin" turma={t} horaPadrao="19:00" duracao={3}
               sessao={editarSessao}
-              onCriar={s => { setCronograma(t.cronograma.map(x => x.id === s.id ? s : x)); setEditarSessao(null); }}
+              onCriar={s => { setCronograma(t.cronograma.map(x => x.id === s.id ? s : x), recarregarPlanos); setEditarSessao(null); }}
               onEliminar={() => { setApagarSessao(editarSessao); setEditarSessao(null); }} />
             <ConfirmarPerigo aberto={Boolean(apagarSessao)} onFechar={() => setApagarSessao(null)} titulo="Eliminar sessão" acao="Eliminar sessão"
               descricao={apagarSessao ? `A sessão de ${fmtDataUi(apagarSessao.data)} sai do cronograma.` : ""}
-              onConfirmar={async () => { if (apagarSessao) setCronograma(t.cronograma.filter(x => x.id !== apagarSessao.id)); setApagarSessao(null); }} />
+              onConfirmar={async () => { if (apagarSessao) setCronograma(t.cronograma.filter(x => x.id !== apagarSessao.id), recarregarPlanos); setApagarSessao(null); }} />
             <InscreverFin aberto={inscrever} onFechar={() => setInscrever(false)} turma={t} activa={activa} membros={membros} onActivar={() => toggle(true)} />
             <EditarTurmaFin aberto={editar} onFechar={() => setEditar(false)} turma={t} onGravar={patch} />
             <TransferirEEliminarFin turma={t} transferir={transferir} eliminar={eliminar} onFechar={() => { setTransferir(null); setEliminar(null); }} />

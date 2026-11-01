@@ -39,10 +39,14 @@ describe("planos do curso por módulo", () => {
 });
 
 describe("sessões marcadas a partir de um plano (planoOrdem)", () => {
-  it("cada sessão leva o plano marcado; as personalizadas ficam sem plano", () => {
-    const planos = [{ ordem: 1, modulos: ["M1"] }, { ordem: 2, modulos: [] }, { ordem: 3, modulos: [] }];
-    const r = atribuirPlanos(planos, [{ planoOrdem: 3 }, { modulos: ["M1"] }, { planoOrdem: 1 }, { planoOrdem: 3 }]);
-    expect(r.map(p => p?.ordem ?? null)).toEqual([3, null, 1, null]);
+  it("cada sessão leva o plano marcado; as «Personalizado» (0) ficam sem plano; as outras recebem os planos livres", () => {
+    const planos = [{ ordem: 1, modulos: ["M1"] }, { ordem: 2, modulos: [] }, { ordem: 3, modulos: [] }, { ordem: 4, modulos: [] }];
+    // A 2.ª (M1, livre): o plano do M1 já foi marcado na 3.ª, leva o plano 2 pelo número. A 4.ª repete o plano 3 (fica
+    // sem); a 5.ª é «Personalizado»; a 6.ª, livre, não tem plano com o n.º 6.
+    const r = atribuirPlanos(planos, [{ planoOrdem: 3 }, { modulos: ["M1"] }, { planoOrdem: 1 }, { planoOrdem: 3 }, { planoOrdem: 0 }, {}]);
+    expect(r.map(p => p?.ordem ?? null)).toEqual([3, 2, 1, null, null, null]);
+    // Sem nenhuma marcada: a regra de sempre (módulo, depois o número).
+    expect(atribuirPlanos(planos, [{ modulos: ["M1"] }, {}, { planoOrdem: 0 }, {}]).map(p => p?.ordem ?? null)).toEqual([1, 2, null, 4]);
   });
 });
 

@@ -152,17 +152,18 @@ function inicioAreaFormando(cursos: CursoMoodle[]) {
 }
 
 /** Caixa a pulsar e a lista dos cursos no Moodle, cada um com «Entrar». */
-function EntradaMoodle({ cursos, escuro }: { cursos: CursoMoodle[]; escuro: boolean }) {
+function EntradaMoodle({ cursos, escuro, ocupar = false }: { cursos: CursoMoodle[]; escuro: boolean; ocupar?: boolean }) {
   if (!cursos.length) return null;
   return (
-    <div className="relative">
+    // `ocupar`: no painel da esquerda, a caixa a pulsar fica no topo e os cursos espalham-se pela altura que sobra.
+    <div className={ocupar ? "relative flex h-full flex-col" : "relative"}>
       <p className="ena-anim-pulsar rounded-xl border-2 border-[#FFA900] bg-[#FFA900] px-6 py-7 text-center text-xl font-extrabold leading-snug text-[#14263D] shadow-[0_0_0_8px_rgba(255,169,0,.25)] sm:text-2xl">
         Entra no Moodle para cursos iniciados até {dataLimiteMoodle(cursos)}
       </p>
-      <ul className="mt-5 space-y-3">
+      <ul className={ocupar ? "mt-12 flex flex-1 flex-col justify-evenly gap-6" : "mt-5 space-y-3"}>
         {cursos.map(c => (
           <li key={c.id} className={`flex items-center gap-4 overflow-hidden rounded-lg ${escuro ? "bg-white/10" : "border border-[#1C3350]/15 bg-white"}`}>
-            {c.imagem && <img src={c.imagem} alt="" className="h-20 w-28 shrink-0 object-cover" />}
+            {c.imagem && <img src={c.imagem} alt="" className={`${ocupar ? "h-28 w-40" : "h-20 w-28"} shrink-0 object-cover`} />}
             <div className="min-w-0 flex-1 py-3">
               <p className={`text-sm font-bold ${escuro ? "text-white" : "text-[#1C3350]"}`}>{c.titulo}</p>
               {c.area && <p className={`mt-0.5 text-xs ${escuro ? "text-white/60" : "text-[#1C3350]/60"}`}>{c.area}</p>}
@@ -268,12 +269,12 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
         <section className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between" style={{ background: painel.fundo || "#1C3350" }}>
           {painel.imagem && <img src={painel.imagem} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />}
           {/* Enquanto há cursos no Moodle atual, o painel mostra só a entrada no Moodle (logótipo e título escondidos). */}
-          {cursosMoodle.length ? <span /> : <img src="/imagens/ena_logo.svg" alt="ENA" className="relative w-36 brightness-0 invert" />}
-          <div className="relative mx-auto w-full max-w-lg">
+          {!cursosMoodle.length && <img src="/imagens/ena_logo.svg" alt="ENA" className="relative w-36 brightness-0 invert" />}
+          <div className={`relative mx-auto w-full max-w-lg ${cursosMoodle.length ? "flex flex-1 flex-col pb-10" : ""}`}>
             {!cursosMoodle.length && painel.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">{painel.kicker}</p>}
             {!cursosMoodle.length && painel.titulo && <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">{painel.titulo}</h1>}
             {cursosMoodle.length ? (
-              <EntradaMoodle cursos={cursosMoodle} escuro />
+              <EntradaMoodle cursos={cursosMoodle} escuro ocupar />
             ) : (
               <ul className="mt-8 space-y-4 text-white/70">
                 {painel.itens.filter(Boolean).map(item => (

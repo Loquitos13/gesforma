@@ -107,8 +107,8 @@ export function TabIdentidade({ f }: { f: FichaCurso }) {
           </Campo>
           <Campo rotulo="Vídeo de apresentação"
             ajuda={data.video && !videoDoCurso(data.video)
-              ? "Não reconhecido: use o endereço do YouTube ou do Vimeo (ou o ID do YouTube), ou um ficheiro .mp4 com https."
-              : "Endereço do YouTube ou do Vimeo (ou o ID do YouTube). Aparece na página do curso; a posição e o tamanho mudam-se no editor do site (bloco «Curso · Vídeo de apresentação»)."}>
+              ? "Não reconhecido: use o endereço do YouTube ou do Vimeo (ou só o ID de um deles), ou um ficheiro .mp4 com https."
+              : "Endereço do YouTube ou do Vimeo (ou só o ID: no Vimeo, os algarismos; num vídeo não listado, cole o endereço completo). Aparece na página do curso; a posição e o tamanho mudam-se no editor do site (bloco «Curso · Vídeo de apresentação»)."}>
             {p => <Entrada {...p} value={data.video} placeholder="https://www.youtube.com/watch?v=…" onChange={e => patch({ video: e.target.value.trim() })} />}
           </Campo>
         </div>

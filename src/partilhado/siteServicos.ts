@@ -79,20 +79,28 @@ const slugify =(s: string) => s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLower
 
 export const slugServico = (s: Pick<ServicoSite, "slug" | "titulo">) => slugify(s.slug?.trim() || s.titulo || "");
 
-/** Vídeo de apresentação do curso: o mesmo que o dos serviços, e também só o ID do YouTube (11 caracteres). */
+/** Vídeo de apresentação do curso: o mesmo que o dos serviços, e também só o ID do YouTube (11 caracteres) ou do Vimeo (só algarismos). */
 export function videoDoCurso(v: string | undefined) {
   const u = (v ?? "").trim();
+  if (/^\d{5,12}$/.test(u)) return videoServico(`https://vimeo.com/${u}`);
   return /^[\w-]{11}$/.test(u) ? videoServico(`https://www.youtube.com/watch?v=${u}`) : videoServico(u);
 }
 
 /** Vídeo para incorporar: YouTube e Vimeo (sem cookies de rastreio) ou um ficheiro https. */
 export function videoServico(url: string | undefined): { tipo: "iframe" | "video"; src: string } | null {
-  const u = (url ?? "").trim();
+  let u = (url ?? "").trim();
+  // «vimeo.com/…» ou «www.youtube.com/…» sem https: aceita-se.
+  if (/^(?:www\.|m\.|player\.)?(?:vimeo\.com|youtube\.com|youtu\.be)\//i.test(u)) u = `https://${u}`;
   if (!/^https:\/\//i.test(u)) return null;
   const yt = /(?:youtube\.com\/(?:watch\?(?:.*&)?v=|embed\/|shorts\/)|youtu\.be\/)([\w-]{6,20})/i.exec(u);
   if (yt) return { tipo: "iframe", src: `https://www.youtube-nocookie.com/embed/${yt[1]}` };
-  const vimeo = /vimeo\.com\/(?:video\/)?(\d{5,12})/i.exec(u);
-  if (vimeo) return { tipo: "iframe", src: `https://player.vimeo.com/video/${vimeo[1]}?dnt=1` };
+  // Vimeo: vimeo.com/123, /video/123, /channels/…/123, /groups/…/videos/123; os não listados levam a chave
+  // (vimeo.com/123/abc ou ?h=abc), sem a qual o leitor não abre.
+  const vimeo = /vimeo\.com\/(?:.*\/)?(?:video\/)?(\d{5,12})(?:\/([0-9a-f]{6,20}))?(?=[/?#]|$)/i.exec(u);
+  if (vimeo) {
+    const chave = vimeo[2] ?? /[?&]h=([0-9a-f]{6,20})/i.exec(u)?.[1];
+    return { tipo: "iframe", src: `https://player.vimeo.com/video/${vimeo[1]}?dnt=1${chave ? `&h=${chave}` : ""}` };
+  }
   if (/\.(mp4|webm|ogg)(\?|$)/i.test(u)) return { tipo: "video", src: u };
   return null;
 }

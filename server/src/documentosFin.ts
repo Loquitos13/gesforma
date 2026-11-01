@@ -978,6 +978,39 @@ export async function documentosSessoesGold(db: Db, turmaId: number, opts: { n?:
   return { planos, folhas, sessoes: sessoes.length };
 }
 
+/**
+ * Folha de presenças e sumário com o plano de sessão no verso, sessão a sessão (para imprimir frente e verso): cada
+ * sessão começa numa folha nova e o plano fica sempre atrás (páginas em branco onde for preciso).
+ */
+export async function folhasComPlanosNoVerso(db: Db, regime: "gold" | "fin", turmaId: number, n?: number) {
+  const docs = (m?: number) => (regime === "fin" ? documentosSessoesDaTurma(db, turmaId, { n: m }) : documentosSessoesGold(db, turmaId, { n: m }));
+  const turma = regime === "fin"
+    ? await one<{ cronograma: unknown }>(db, "SELECT cronograma FROM turmas_fin WHERE id = $1", [turmaId])
+    : await one<{ cronograma: unknown }>(db, "SELECT cronograma FROM turmas_gold WHERE id = $1", [turmaId]);
+  if (!turma) return null;
+  const numeros: number[] = [];
+  if (n != null) numeros.push(n);
+  else for (let i = 1; sessaoLectivaN(turma.cronograma, i); i++) numeros.push(i);
+  const out = await PDFDocument.create();
+  let algum = false;
+  for (const m of numeros) {
+    const d = await docs(m);
+    if (!d) continue;
+    algum = true;
+    const folha = await PDFDocument.load(d.folhas);
+    const plano = await PDFDocument.load(d.planos);
+    const tamanho = folha.getPage(0).getSize();
+    for (const pg of await out.copyPages(folha, folha.getPageIndices())) out.addPage(pg);
+    // O plano vai para o verso da última página da folha: se a folha ocupa um número par de páginas, uma em branco.
+    if (folha.getPageCount() % 2 === 0) out.addPage([tamanho.width, tamanho.height]);
+    for (const pg of await out.copyPages(plano, plano.getPageIndices())) out.addPage(pg);
+    // A sessão seguinte começa numa folha nova.
+    if (out.getPageCount() % 2 === 1) out.addPage([tamanho.width, tamanho.height]);
+  }
+  if (!algum) return null;
+  return Buffer.from(await out.save());
+}
+
 /** Qualquer PDF de texto da turma (relatórios, pauta, programa…) com o cabeçalho e o rodapé da Financiada. */
 export async function pdfTextoDaTurmaFin(db: Db, turmaId: number, titulo: string, linhas: string[], subtitulo = "") {
   const turma = await turmaReembolso(db, turmaId);

@@ -3,7 +3,7 @@ import { data as fmtDataUi } from "../../../../partilhado/ui/formatos";
 import { estadoPlano, sumarioPreenchido, type EstadoPlano, type PlanoSessaoData, type SessaoMeta, type SumarioSessaoData } from "../../../../partilhado/TurmaExtras";
 import { SearchSelect } from "../../../../partilhado/FormKit";
 import { imprimirFolhasPresencas } from "../../../../partilhado/presencasPrint";
-import { apiFolhasPresencaFin } from "../../../../partilhado/api";
+import { apiFolhasComPlanos } from "../../../../partilhado/api";
 import { toastError } from "../../../../partilhado/toastBus";
 import { sessaoFormadores, sessaoModulos } from "../../../../partilhado/turmaModel";
 import { type PresencaRow } from "../../../PedagogiaContext";
@@ -103,7 +103,8 @@ export function SessoesTurmaTab({
   function imprimirFolha(s?: SessaoMeta) {
     // PDF do servidor: na Financiada o modelo da candidatura; na Gold o mesmo desenho, com o logótipo da entidade.
     if (regime && turmaId != null) {
-      apiFolhasPresencaFin(turmaId, s?.n, regime).catch(err => toastError(err, "Não foi possível gerar a folha de presenças."));
+      // Frente: folha de presenças e sumário; verso: o plano de sessão (imprimir frente e verso).
+      apiFolhasComPlanos(turmaId, s?.n, regime).catch(err => toastError(err, "Não foi possível gerar a folha de presenças."));
       return;
     }
     imprimirFolhasPresencas({
@@ -123,7 +124,7 @@ export function SessoesTurmaTab({
           <button
             type="button"
             disabled={formandos.length === 0 && turmaId == null}
-            title={formandos.length ? "Folha gerada com todos os inscritos, mesmo antes da sessão" : "Sem inscritos: a folha sai com linhas em branco"}
+            title="Folha de presenças e sumário de cada sessão, com o plano de sessão no verso (imprimir frente e verso)"
             onClick={() => imprimirFolha()}
             className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40"
           >
@@ -190,7 +191,7 @@ export function SessoesTurmaTab({
                       <button
                         type="button"
                         disabled={formandos.length === 0 && turmaId == null}
-                        title="Folha gerada pela plataforma, disponível antes da sessão"
+                        title="Folha de presenças e sumário, com o plano de sessão no verso (imprimir frente e verso)"
                         onClick={() => imprimirFolha(s)}
                         className="text-xs font-semibold px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50 disabled:opacity-40 whitespace-nowrap"
                       >

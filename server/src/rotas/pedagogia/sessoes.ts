@@ -19,7 +19,7 @@ import { ERRO_TURMA_FECHADA, turmaFechada } from "../../resultados.js";
 import { nomesDoFormador, podeGravarSessao, sessaoLectivaN, sessaoLectivaPorId } from "../../sessaoAcesso.js";
 import { planoComRegras, podeValidarPresencas, sumarioComRegras } from "../../sessaoRegras.js";
 import { avisarPlanoRevisto } from "../../planoAviso.js";
-import { documentosSessoesDaTurma, documentosSessoesGold, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
+import { documentosSessoesDaTurma, documentosSessoesGold, folhasComPlanosNoVerso, NOMES_DOCUMENTOS_FIN } from "../../documentosFin.js";
 import { regimeIdParam, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { enviarPdf, formadorPodeVer, turmaOu404 } from "./comum.js";
@@ -113,6 +113,20 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       return enviarPdf(reply, nome, bytes);
     });
   }
+
+  /** Folha de presenças e sumário com o plano de sessão no verso (frente e verso), de uma sessão ou de todas. */
+  app.get("/v1/turmas/:regime/:id/folhas-planos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: regimeIdParam, query: sessaoQuery }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    if (!(await formadorPodeVer(db, req, reply, regime, id, "Só consulta as turmas em que está atribuído."))) return;
+    const bytes = await folhasComPlanosNoVerso(db, regime, id, v.query.sessao);
+    if (!bytes) return reply.code(404).send({ error: v.query.sessao ? "sessão não encontrada" : "turma sem sessões" });
+    const nome = v.query.sessao ? `Folha de presencas e plano - sessao ${v.query.sessao}.pdf` : "Folhas de presencas e planos de sessao.pdf";
+    await audit(db, req.actor!.id, "turma.documento_pdf", "turma", String(id), req.ip, { doc: "folhas-planos", sessao: v.query.sessao ?? null });
+    return enviarPdf(reply, nome, bytes);
+  });
 
   app.put("/v1/turmas/:regime/:id/sessoes/:n", async (req, reply) => {
     if (!requireAuth(req, reply)) return;

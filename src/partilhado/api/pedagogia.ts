@@ -257,6 +257,12 @@ export function apiFolhasPresencaFin(turmaId: number, sessao?: number, regime: "
     sessao ? `Folhas de presenca e sumarios - sessao ${sessao}.pdf` : "Folhas de presenca e sumarios.pdf", "application/pdf");
 }
 
+/** Folha de presenças e sumário com o plano de sessão no verso (para imprimir frente e verso). */
+export function apiFolhasComPlanos(turmaId: number, sessao?: number, regime: "fin" | "gold" = "fin") {
+  return descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/folhas-planos${sessao ? `?sessao=${sessao}` : ""}`,
+    sessao ? `Folha de presencas e plano - sessao ${sessao}.pdf` : "Folhas de presencas e planos de sessao.pdf", "application/pdf");
+}
+
 // ── Assinatura qualificada (Cartão de Cidadão / Chave Móvel Digital, na app Autenticação.gov) ──
 
 export type AssinaturaQualificada = { papel: "formador" | "coordenacao"; titular: string; emissor: string; serie: string; em: string };

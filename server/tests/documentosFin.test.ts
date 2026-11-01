@@ -385,6 +385,21 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(p2).not.toContain("15 min");
   });
 
+  it("folha de presenças com o plano de sessão no verso: frente e verso, sessão a sessão", async () => {
+    const ctx = await arrancar();
+    const t = await turmaFin(ctx);
+    const uma = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=1`);
+    expect(uma.statusCode, uma.body.slice(0, 200)).toBe(200);
+    const p1 = await paginas(uma.rawPayload);
+    // Frente: a folha de presenças e sumário; verso: o plano da sessão.
+    expect(p1).toHaveLength(2);
+    expect(p1[1]).toContain("Introdução");
+    const todas = await paginas((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos`)).rawPayload);
+    expect(todas).toHaveLength(4);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=9`)).statusCode).toBe(404);
+    expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=1`)).statusCode).toBe(403);
+  });
+
   it("sessão a sessão no cockpit: folha e plano da sessão n; o formador fora da turma não os tira", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);

@@ -4,7 +4,7 @@ import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { apiPublicEntidade } from "../partilhado/api/publico";
 import { useRecurso } from "../partilhado/dados/useRecurso";
 import { useProgramaDoCurso } from "./cursoPrograma";
-import { type GrelhaLinha, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltosVazios, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha, temasDaSessao } from "../partilhado/cronogramaGrelha";
+import { type GrelhaLinha, cellSessoes, addDays, cellLabel, cellTone, comFimCronograma, datesFromRange, defaultSlot, dayNum, fimEstavel, grelhaPeriodo, grupoLinha, larguraDiasEmChars, linhaLabel, linhasFromSessoes, mergeLinhas, monthSpans, moverEvento, saltosVazios, setMatricula, sessoesSemFim, weekdayCode, grelhaTempos, type BlocoTempos, TEMPO_MIN, minutosDaHora, horaDosMinutos, horaOficial, formatHoraFaixa, linhaDaSessao, buildLinha, temasDaSessao } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { mapLocalTurma, type LocalCatalogo } from "../partilhado/cronogramaLocal";
 import { imprimirCronogramaEna } from "../partilhado/cronogramaPrint";
@@ -64,6 +64,19 @@ export function CronogramaGrelha({
   const [arrasto, setArrasto] = useState<{ date: string; linha: GrelhaLinha } | null>(null);
   const [sobre, setSobre] = useState<string | null>(null);
   const arrastou = useRef(false);
+  // Seleção de vários eventos para os apagar de uma vez (ids das sessões). No modo de seleção, clicar marca e não se
+  // arrasta; fora dele, Ctrl/⌘ + clique também marca.
+  const [selecionar, setSelecionar] = useState(false);
+  const [selecionados, setSelecionados] = useState<Set<string>>(() => new Set());
+  const [apagarSel, setApagarSel] = useState(false);
+  const alternarSel = (ids: string[]) => setSelecionados(prev => {
+    const n = new Set(prev);
+    const todos = ids.every(id => n.has(id));
+    for (const id of ids) { if (todos) n.delete(id); else n.add(id); }
+    return n;
+  });
+  const marca = (e: { ctrlKey: boolean; metaKey: boolean }) => selecionar || e.ctrlKey || e.metaKey;
+  const sairSelecao = () => { setSelecionar(false); setSelecionados(new Set()); };
   const { opcoes: locaisOpcoes } = useOpcoes("locais", { todos: true });
   const { dados: entidade } = useRecurso("publico:entidade", signal => apiPublicEntidade(signal));
   const locaisCatalogo = useMemo<LocalCatalogo[]>(
@@ -336,20 +349,23 @@ export function CronogramaGrelha({
                               <button
                                 key={ses.id ?? `${ses.horaInicio}-${coluna}`}
                                 type="button"
-                                draggable
+                                draggable={!selecionar}
                                 onDragStart={e => {
+                                  if (selecionar) { e.preventDefault(); return; }
                                   arrastou.current = false;
                                   setArrasto({ date: d, linha: linhaSes });
                                   e.dataTransfer.effectAllowed = "move";
                                   e.dataTransfer.setData("text/plain", chave);
                                 }}
                                 onDragEnd={() => { setArrasto(null); setSobre(null); }}
-                                onClick={() => {
+                                onClick={e => {
                                   if (arrastou.current) { arrastou.current = false; return; }
+                                  if (marca(e)) { if (ses.id) alternarSel([ses.id]); return; }
                                   setEvento({ date: d, linha: linhaSes });
                                 }}
+                                aria-pressed={selecionar ? selecionados.has(ses.id) : undefined}
                                 style={{ top: `${topo}%`, height: `${altura}%`, left: `${(coluna / colunas) * 100}%`, width: `${100 / colunas}%` }}
-                                className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight cursor-grab active:cursor-grabbing ${tons[sessaoModalidade(ses)] ?? tons.presencial}`}
+                                className={`absolute flex flex-col items-center justify-center overflow-hidden border border-white/50 px-0.5 text-[9px] font-bold leading-tight ${selecionar ? "cursor-pointer" : "cursor-grab active:cursor-grabbing"} ${selecionados.has(ses.id) ? "ring-4 ring-inset ring-slate-900" : ""} ${tons[sessaoModalidade(ses)] ?? tons.presencial}`}
                                 title={`${formatDiaMes(d)} · ${formatHoraFaixa(ses.horaInicio, ses.horaFim)} · arraste para mudar de dia ou hora; clique para editar`}
                               >
                                 {temasDaSessao(ses).length
@@ -390,7 +406,7 @@ export function CronogramaGrelha({
                         }}
                       >
                         <button type="button" aria-label={`${formatDiaMes(d)} às ${horaOficial(tempos.inicioDaLinha(r))}: adicionar aula`}
-                          onClick={() => setEvento({ date: d, linha: buildLinha("presencial", horaDosMinutos(ini), horaDosMinutos(ini + duracaoPadrao)) })}
+                          onClick={() => { if (!selecionar) setEvento({ date: d, linha: buildLinha("presencial", horaDosMinutos(ini), horaDosMinutos(ini + duracaoPadrao)) }); }}
                           className={`block h-full min-h-[2.3rem] w-full ${tons.empty}`} />
                       </td>,
                     );
@@ -449,23 +465,24 @@ export function CronogramaGrelha({
                       >
                         <button
                           type="button"
-                          draggable={preenchida}
+                          draggable={preenchida && !selecionar}
                           onDragStart={e => {
-                            if (!preenchida) return;
+                            if (!preenchida || selecionar) { e.preventDefault(); return; }
                             arrastou.current = false;
                             setArrasto({ date: d, linha });
                             e.dataTransfer.effectAllowed = "move";
                             e.dataTransfer.setData("text/plain", chave);
                           }}
                           onDragEnd={() => { setArrasto(null); setSobre(null); }}
-                          onClick={() => {
+                          onClick={e => {
                             if (arrastou.current) {
                               arrastou.current = false;
                               return;
                             }
+                            if (marca(e)) { if (preenchida) alternarSel(cellSessoes(sessoes, d, linha).map(x => x.id)); return; }
                             setEvento({ date: d, linha });
                           }}
-                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${tons[tone] ?? tons.empty} ${preenchida ? "cursor-grab active:cursor-grabbing" : ""}`}
+                          className={`block w-full min-h-10 px-0.5 py-1 text-[9px] font-bold leading-tight whitespace-normal ${tons[tone] ?? tons.empty} ${preenchida ? (selecionar ? "cursor-pointer" : "cursor-grab active:cursor-grabbing") : ""} ${preenchida && cellSessoes(sessoes, d, linha).some(x => selecionados.has(x.id)) ? "ring-4 ring-inset ring-slate-900" : ""}`}
                           title={preenchida
                             ? `${formatDiaMes(d)} · ${linhaLabel(linha)} · arraste para mudar dia, hora ou metodologia; clique para editar os ${unidade === "capítulo" ? "capítulos" : "módulos"}`
                             : `${formatDiaMes(d)} · ${linhaLabel(linha)}`}
@@ -484,7 +501,27 @@ export function CronogramaGrelha({
         </table>
       </div>
 
+      {(selecionar || selecionados.size > 0) && (
+        <div className="sticky bottom-2 z-30 flex flex-wrap items-center gap-2 rounded-xl border border-slate-300 bg-white px-4 py-2.5 shadow-lg">
+          <p className="mr-auto text-xs font-semibold text-slate-700">
+            {selecionados.size
+              ? `${selecionados.size} ${selecionados.size === 1 ? "evento selecionado" : "eventos selecionados"}`
+              : "Clique nos eventos a apagar (aulas, e-learning, avaliações)."}
+          </p>
+          <button type="button" disabled={!selecionados.size} onClick={() => setApagarSel(true)}
+            className="rounded-lg bg-red-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-700 disabled:opacity-40">Apagar selecionados</button>
+          <button type="button" onClick={sairSelecao}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 hover:bg-slate-50">Cancelar</button>
+        </div>
+      )}
+
       <div className="flex flex-wrap items-center gap-2">
+        {!selecionar && sessoesSemFim(sessoes).some(x => sessaoModalidade(x) !== "matricula") && (
+          <button type="button" onClick={() => setSelecionar(true)} title="Marcar vários eventos e apagá-los de uma vez (também com Ctrl/⌘ + clique)."
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            Selecionar eventos
+          </button>
+        )}
         <button
           type="button"
           onClick={aplicarGerado}
@@ -524,6 +561,14 @@ export function CronogramaGrelha({
           Imprimir / PDF
         </button>
       </div>
+
+      <ConfirmarPerigo aberto={apagarSel} onFechar={() => setApagarSel(false)} titulo={`Apagar ${selecionados.size} ${selecionados.size === 1 ? "evento" : "eventos"}?`} acao="Apagar"
+        descricao="Os eventos selecionados saem do cronograma. Sessões com sumário, presenças ou plano assinado são recusadas ao gravar."
+        onConfirmar={() => {
+          setApagarSel(false);
+          gravar(sessoesSemFim(sessoes).filter(x => !selecionados.has(x.id)));
+          sairSelecao();
+        }} />
 
       <ConfirmarPerigo aberto={repor} onFechar={() => setRepor(false)} titulo="Repor o cronograma?" acao="Repor"
         descricao={`As ${sessoesSemFim(sessoes).length} entradas do cronograma (aulas, e-learning, avaliações e matrícula) são apagadas e a grelha fica em branco. Sessões com sumário, presenças ou plano assinado são recusadas ao gravar.`}

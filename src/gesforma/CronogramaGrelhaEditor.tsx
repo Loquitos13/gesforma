@@ -100,7 +100,13 @@ export function CronogramaGrelha({
   // coluna («…»); um clique mostra-os. A impressão também os salta.
   const [verSalto, setVerSalto] = useState(false);
   const [repor, setRepor] = useState(false);
-  const saltos = useMemo(() => (verSalto ? [] : saltosVazios(todosOsDias, sessoes, matricula, inicio)), [verSalto, todosOsDias, sessoes, matricula, inicio]);
+  const saltosSempre = useMemo(() => saltosVazios(todosOsDias, sessoes, matricula, inicio), [todosOsDias, sessoes, matricula, inicio]);
+  const saltos = verSalto ? [] : saltosSempre;
+  // O PDF sai sempre encurtado, esteja a grelha aberta ou não.
+  const diasImpressao = useMemo(
+    () => todosOsDias.filter(d => !saltosSempre.some(x => d >= x.de && d <= x.ate)),
+    [todosOsDias, saltosSempre],
+  );
   const saltoApos = useMemo(() => new Map(saltos.map(x => [x.apos, x])), [saltos]);
   const dates = useMemo(
     () => (saltos.length ? todosOsDias.filter(d => !saltos.some(x => d >= x.de && d <= x.ate)) : todosOsDias),
@@ -471,6 +477,13 @@ export function CronogramaGrelha({
         >
           {sessoesSemFim(sessoes).length ? "Gerar grelha ENA" : "Gerar cronograma ENA"}
         </button>
+        {verSalto && saltosSempre.length > 0 && (
+          <button type="button" onClick={() => setVerSalto(false)}
+            title="Volta a juntar os dias seguidos sem eventos numa coluna «…»."
+            className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">
+            Recolher dias sem eventos
+          </button>
+        )}
         {!linhas.some(l => l.modalidade === "auto") && (
           <button type="button" onClick={() => setLinhas(xs => mergeLinhas(xs, [buildLinha("auto", "", "")]))}
             title="As aulas presenciais e síncronas marcam-se na grelha de tempos; o e-learning ocupa o dia numa linha própria."
@@ -488,9 +501,9 @@ export function CronogramaGrelha({
               codigo,
               matricula,
               inicio,
-              fim: fim || dates[dates.length - 1],
+              fim: fim || todosOsDias[todosOsDias.length - 1],
               local: localMapeado,
-              dates,
+              dates: diasImpressao,
               linhas,
               sessoes: sessoesSemFim(sessoes),
               entidade: entidade?.entidade,

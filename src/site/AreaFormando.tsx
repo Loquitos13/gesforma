@@ -142,12 +142,21 @@ function dataLimiteMoodle(cursos: CursoMoodle[]) {
   return datas[datas.length - 1] ?? "30/10/2026";
 }
 
+const MESES = ["janeiro", "fevereiro", "março", "abril", "maio", "junho", "julho", "agosto", "setembro", "outubro", "novembro", "dezembro"];
+
+/** O dia a seguir ao limite do Moodle atual, por extenso («1 de novembro»): a partir daí, inscrições na área do formando. */
+function inicioAreaFormando(cursos: CursoMoodle[]) {
+  const [d, m, a] = dataLimiteMoodle(cursos).split("/").map(Number);
+  const dia = new Date(a || 2026, (m || 10) - 1, (d || 30) + 1);
+  return `${dia.getDate()} de ${MESES[dia.getMonth()]}`;
+}
+
 /** Caixa a pulsar e a lista dos cursos no Moodle, cada um com «Entrar». */
 function EntradaMoodle({ cursos, escuro }: { cursos: CursoMoodle[]; escuro: boolean }) {
   if (!cursos.length) return null;
   return (
     <div className="relative">
-      <p className="ena-anim-pulsar rounded-lg border-2 border-[#FFA900] bg-[#FFA900] px-5 py-4 text-center text-base font-extrabold text-[#14263D] shadow-[0_0_0_6px_rgba(255,169,0,.25)]">
+      <p className="ena-anim-pulsar rounded-xl border-2 border-[#FFA900] bg-[#FFA900] px-6 py-7 text-center text-xl font-extrabold leading-snug text-[#14263D] shadow-[0_0_0_8px_rgba(255,169,0,.25)] sm:text-2xl">
         Entra no Moodle para cursos iniciados até {dataLimiteMoodle(cursos)}
       </p>
       <ul className="mt-5 space-y-3">
@@ -258,12 +267,13 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
       {painel.mostrar && (
         <section className="relative hidden overflow-hidden p-12 text-white lg:flex lg:flex-col lg:justify-between" style={{ background: painel.fundo || "#1C3350" }}>
           {painel.imagem && <img src={painel.imagem} alt="" className="absolute inset-0 h-full w-full object-cover opacity-25" />}
-          <img src="/imagens/ena_logo.svg" alt="ENA" className="relative w-36 brightness-0 invert" />
-          <div className="relative mx-auto max-w-lg">
-            {painel.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">{painel.kicker}</p>}
-            {painel.titulo && <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">{painel.titulo}</h1>}
+          {/* Enquanto há cursos no Moodle atual, o painel mostra só a entrada no Moodle (logótipo e título escondidos). */}
+          {cursosMoodle.length ? <span /> : <img src="/imagens/ena_logo.svg" alt="ENA" className="relative w-36 brightness-0 invert" />}
+          <div className="relative mx-auto w-full max-w-lg">
+            {!cursosMoodle.length && painel.kicker && <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#FFA900]">{painel.kicker}</p>}
+            {!cursosMoodle.length && painel.titulo && <h1 className="mt-5 font-serif text-5xl font-bold leading-tight">{painel.titulo}</h1>}
             {cursosMoodle.length ? (
-              <div className="mt-8"><EntradaMoodle cursos={cursosMoodle} escuro /></div>
+              <EntradaMoodle cursos={cursosMoodle} escuro />
             ) : (
               <ul className="mt-8 space-y-4 text-white/70">
                 {painel.itens.filter(Boolean).map(item => (
@@ -296,8 +306,10 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
           ) : (
             <>
               <p className="text-xs font-bold uppercase tracking-[0.18em] text-[#A60000]">{recuperar ? "Recuperar acesso" : "Bem-vindo de volta"}</p>
-              <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{recuperar ? "Redefina a sua palavra-passe." : "Entrar na ENA."}</h1>
-              <p className="mt-4 leading-7 text-[#1C3350]/60">{recuperar ? "Indique o email associado à sua conta." : "Formandos acedem à área reservada. Colaboradores da escola entram no GesForma consoante o perfil."}</p>
+              <h1 className="mt-3 font-serif text-4xl font-bold text-[#1C3350]">{recuperar
+                ? "Redefina a sua palavra-passe."
+                : cursosMoodle.length ? `Entrar na área do formando para inscrições a partir de ${inicioAreaFormando(cursosMoodle)}` : "Entrar na ENA."}</h1>
+              <p className="mt-4 leading-7 text-[#1C3350]/60">{recuperar ? "Indique o email associado à sua conta." : "Entre com o email e a palavra-passe que recebeu da ENA."}</p>
               {!recuperar && !enviado && (
                 <p className="mt-2 text-xs text-[#1C3350]/45">Ligação encriptada. Após várias tentativas falhadas, o acesso pausa alguns minutos para proteger a sua conta.</p>
               )}
@@ -334,7 +346,6 @@ export function LoginFormando({ onEntrou, trocaInicial = null, painel = PAINEL_E
                 <div className="mt-8 space-y-3 border-t border-[#1C3350]/10 pt-6">
                   <a href={google ? googleLoginStartUrl() : undefined} aria-disabled={!google} onClick={e => { if (!google) { e.preventDefault(); setErro("O Google ainda não está configurado. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${google ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Google</a>
                   <a href={microsoft ? microsoftLoginStartUrl() : undefined} aria-disabled={!microsoft} onClick={e => { if (!microsoft) { e.preventDefault(); setErro("A Microsoft ainda não está configurada. Entre com email."); } }} className={`flex w-full items-center justify-center border px-4 py-3 text-sm font-bold ${microsoft ? "border-[#1C3350] text-[#1C3350] hover:bg-white" : "cursor-not-allowed border-[#1C3350]/20 text-[#1C3350]/40"}`}>Continuar com Microsoft</a>
-                  <p className="text-sm text-[#1C3350]/55">Formandos: o acesso é criado na ficha no GesForma. Equipa: use o email registado na escola.</p>
                 </div>
               )}
             </>
@@ -376,7 +387,7 @@ export function Sala({ curso, sessoes, onVoltar }: { curso: AreaFormandoDados["c
           <h2 className="mt-2 font-serif text-3xl font-bold text-[#1C3350]">{modulos[activo]}</h2>
           {curso.moodle
             ? <a href={curso.moodle} target="_blank" rel="noreferrer" className="mt-4 inline-flex items-center gap-2 bg-[#FFA900] px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.12em] text-[#14263D] hover:brightness-95">Entrar no Moodle</a>
-            : <p className="mt-4 leading-7 text-[#1C3350]/60">O Moodle ainda não está ligado. As sessões são as do cronograma da turma no GesForma.</p>}
+            : <p className="mt-4 leading-7 text-[#1C3350]/60">O Moodle ainda não está ligado. As sessões são as do cronograma da turma.</p>}
           <ul className="mt-6 space-y-3">
             {sessoes.length === 0 && <li className="text-sm text-[#1C3350]/50">Esta turma ainda não tem sessões datadas.</li>}
             {sessoes.map(sessao => (

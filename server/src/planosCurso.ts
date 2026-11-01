@@ -89,7 +89,7 @@ export async function cursoTemPlanos(db: Db, regime: Regime, curso: string) {
  */
 export async function importarAgendados(db: Db, regime: Regime, turmaId: number, cronograma: unknown) {
   if (!Array.isArray(cronograma) || !cronograma.length) return;
-  await importarPlanosCurso(db, regime, turmaId).catch(() => undefined);
+  await importarPlanosCurso(db, regime, turmaId).catch(err => console.error(`[planos] importar planos do curso na turma ${regime} #${turmaId} falhou:`, err));
 }
 
 /**

@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { apiCursoFicha } from "../partilhado/api";
 import { useOpcoes } from "../partilhado/dados/useOpcoes";
 import { emptyPlano, type MomentoKey, type PlanoSessaoData } from "../partilhado/TurmaExtras";
-import { modulosDoPlano } from "../partilhado/planosModulo";
+import { chavePlano, modulosDoPlano } from "../partilhado/planosModulo";
 
 /**
  * Plano de sessão da ficha do curso: o plano completo (os três momentos) e um sumário padrão.
@@ -10,6 +10,8 @@ import { modulosDoPlano } from "../partilhado/planosModulo";
  * o servidor grava-o nas sessões sem plano.
  */
 export type PlanoCurso = {
+  /** Identificador fixo (as sessões do cronograma ligam-se a ele; não muda ao reordenar). */
+  id: string;
   ordem: number;
   objetivosGerais: string;
   objetivosEspecificos: string;
@@ -38,8 +40,11 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
   })) as PlanoSessaoData["momentos"];
   if (!momentos.desenvolvimento.conteudo.trim() && String(row.conteudo ?? "").trim()) momentos.desenvolvimento.conteudo = String(row.conteudo);
   const s = (row.sumario && typeof row.sumario === "object" ? row.sumario : {}) as Record<string, unknown>;
+  const n = Number.isFinite(ordem) && ordem >= 1 ? ordem : ordemOmissao;
   return {
-    ordem: Number.isFinite(ordem) && ordem >= 1 ? ordem : ordemOmissao,
+    // Sem `id` gravado: «plano-<ordem gravada>», o mesmo que as sessões já marcadas com esse número usam.
+    id: chavePlano({ id: row.id, ordem: n }),
+    ordem: n,
     objetivosGerais: String(row.objetivosGerais ?? ""),
     objetivosEspecificos: String(row.objetivosEspecificos ?? ""),
     momentos,
@@ -49,8 +54,13 @@ export function normalizarPlanoCurso(item: unknown, ordemOmissao = 1): PlanoCurs
   };
 }
 
-export function novoPlanoCurso(ordem: number): PlanoCurso {
-  return { ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulos: [], duracaoMin: 0 };
+/** Identificador novo para um plano (acrescentado ou duplicado). */
+export function novoIdPlano() {
+  return `plano-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 7)}`;
+}
+
+export function novoPlanoCurso(ordem: number, modulos: string[] = []): PlanoCurso {
+  return { id: novoIdPlano(), ordem, objetivosGerais: "", objetivosEspecificos: "", momentos: emptyPlano().momentos, sumario: { conteudos: "", atividades: "" }, modulos, duracaoMin: 0 };
 }
 
 function lerPlanos(raw: unknown): PlanoCurso[] {
@@ -90,4 +100,22 @@ export function usePlanosCurso(regime: "gold" | "fin", cursoNome: string) {
     return () => { vivo = false; };
   }, [id, regime]);
   return { planos, valores };
+}
+
+/** Códigos dos módulos de um plano («M3 + M4»); sem módulo, «Sem módulo». */
+export function codigosDoPlano(p: Pick<PlanoCurso, "modulos">) {
+  return p.modulos.length ? p.modulos.map(m => m.split("·")[0]!.trim()).join(" + ") : "Sem módulo";
+}
+
+/** Nome de cada plano no seu módulo: «M2 · Plano 1», «M2 · Plano 2»… (pela ordem da ficha). */
+export function nomesDosPlanos(planos: PlanoCurso[]) {
+  const vistos = new Map<string, number>();
+  const out = new Map<string, string>();
+  for (const p of [...planos].sort((a, b) => a.ordem - b.ordem)) {
+    const grupo = codigosDoPlano(p);
+    const n = (vistos.get(grupo) ?? 0) + 1;
+    vistos.set(grupo, n);
+    out.set(p.id, `${grupo} · Plano ${n}`);
+  }
+  return out;
 }

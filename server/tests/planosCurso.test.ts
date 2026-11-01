@@ -188,6 +188,28 @@ describe("planos de sessão do curso nas turmas", () => {
     expect(linhas.filter(l => l.sessao_n != null && l.plano).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "P1"], [2, "P2"]]);
   });
 
+  it("turma já criada: mudar ou reordenar a ficha não troca os planos que a turma já tem ao gravar o cronograma", async () => {
+    const ctx = await arrancar();
+    const curso = unico("Curso Fixo");
+    await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", { nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "B-learning", horas: 20 });
+    const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_gold WHERE nome = $1", [curso])).rows[0]!.id;
+    const ficha = (planosSessao: unknown[]) => pedido(ctx, "secretaria", "PUT", `/v1/cursos/gold/${cursoId}/ficha`, { payload: { planosSessao } });
+    await ficha([{ ...plano(1, "A"), id: "pa", modulos: ["M1 · X"] }, { ...plano(2, "B"), id: "pb", modulos: ["M2 · Y"] }]);
+    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-09-07", nome: unico("TFX"), curso, horario: "Laboral manhã" });
+    const id = t.json().turma.id as number;
+    const s = (sid: string, data: string, extra: Record<string, unknown> = {}) => ({ id: sid, data, horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", modulos: [], formadores: [], ...extra });
+    const cron = [s("a", "2099-09-07", { planoId: "pa", modulos: ["M1 · X"] }), s("b", "2099-09-08", { planoId: "pb", modulos: ["M2 · Y"] })];
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, { cronograma: cron })).statusCode).toBe(200);
+    // A ficha muda: o plano A é reescrito e passa a ser o 2.º; aparece um plano novo no M1.
+    await ficha([{ ...plano(1, "Novo"), id: "pn", modulos: ["M1 · X"] }, { ...plano(2, "A mudado"), id: "pa", modulos: ["M1 · X"] }, { ...plano(3, "B"), id: "pb", modulos: ["M2 · Y"] }]);
+    const t2 = await pedido(ctx, "secretaria", "GET", `/v1/turmas/gold/${id}`);
+    const r = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, { cronograma: [...cron, s("c", "2099-09-09")], versao: t2.json().turma.versao });
+    expect(r.statusCode, r.body).toBe(200);
+    const linhas = await planosDaTurma(ctx, id);
+    // As sessões que já tinham plano ficam como estavam, mesmo com a ficha mudada.
+    expect(linhas.filter(l => l.sessao_n != null && l.plano).slice(0, 2).map(l => [l.sessao_n, l.plano?.objetivosGerais ?? null])).toEqual([[1, "A"], [2, "B"]]);
+  });
+
   it("turma nova com sessões sem módulo: cada sessão fica com o plano e o módulo do plano", async () => {
     const ctx = await arrancar();
     const curso = unico("Curso Herda Modulos");

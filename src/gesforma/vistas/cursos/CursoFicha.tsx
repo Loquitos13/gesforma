@@ -11,7 +11,8 @@ import { PreviewSite, TabPublicacao } from "./ficha/PreviewSite";
 import { TabAvaliacao } from "./ficha/TabAvaliacao";
 import { TabIdentidade } from "./ficha/TabIdentidade";
 import { TabOferta } from "./ficha/TabOferta";
-import { TabConteudo, TabPlanos, TabPrograma } from "./ficha/TabTextos";
+import { TabConteudo, TabPrograma } from "./ficha/TabTextos";
+import { TabPlanos } from "./ficha/TabPlanos";
 import { useFichaCurso } from "./ficha/useFichaCurso";
 import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 

@@ -1,7 +1,7 @@
-// Que plano da ficha do curso vai para cada sessão lectiva da turma. Um plano ligado a um ou mais módulos / temas vai
-// para as sessões desses módulos, pela ordem (o 1.º plano do M1 para a 1.ª sessão do M1, o 2.º para a 2.ª…; um plano
-// do M3 e M4 para as sessões do M3 e M4). Os planos sem módulo vão pelo número da sessão (o plano n para a sessão n).
-// Partilhado pelo servidor e pelo backoffice.
+// Que plano da ficha do curso vai para cada sessão lectiva da turma. Os planos pertencem aos módulos (um módulo pode ter
+// vários planos; um plano pode ser de mais do que um módulo). No cronograma, cada sessão marca-se com um plano (o seu
+// `id`); as sessões não marcadas recebem os planos livres: o próximo plano do seu módulo e, sem módulo, o plano com o
+// mesmo número. Partilhado pelo servidor e pelo backoffice.
 
 /** Código do módulo («M1 · Aprendizagem…» → «m1»); sem código, o nome todo (sem acentos nem maiúsculas). */
 export function chaveModuloPlano(nome: string) {
@@ -17,13 +17,34 @@ export function modulosDoPlano(p: { modulos?: unknown; modulo?: unknown }): stri
   return [...new Set(lista.map(m => String(m ?? "").trim()).filter(Boolean))];
 }
 
-/** Plano da ficha do curso com que a sessão foi marcada no cronograma (`planoOrdem`), ou null (0 = «Personalizado»). */
-export function planoDaSessao(s: { planoOrdem?: unknown } | null | undefined): number | null {
-  const n = Number(s?.planoOrdem);
-  return Number.isInteger(n) && n >= 1 ? n : null;
+/**
+ * Identificador fixo de um plano da ficha: o `id` gravado; os planos gravados antes de haver `id` usam «plano-<ordem>»
+ * (o número com que foram gravados), para as sessões já ligadas a eles continuarem a apontar para o mesmo plano.
+ */
+export function chavePlano(p: { id?: unknown; ordem?: unknown }): string {
+  const id = String(p.id ?? "").trim();
+  return id || `plano-${Number(p.ordem) || 0}`;
 }
 
-type PlanoComModulos = { ordem: number; modulos?: unknown; modulo?: unknown };
+/** «Personalizado»: a sessão foi marcada sem plano do curso (não recebe nenhum). */
+export const SEM_PLANO = "-";
+
+type SessaoComPlano = { planoId?: unknown; planoOrdem?: unknown };
+
+/** O plano com que a sessão foi marcada no cronograma (`planoId`; antes, `planoOrdem`), ou null. */
+export function planoDaSessao(s: SessaoComPlano | null | undefined): string | null {
+  const id = String(s?.planoId ?? "").trim();
+  if (id) return id === SEM_PLANO ? null : id;
+  const n = Number(s?.planoOrdem);
+  return Number.isInteger(n) && n >= 1 ? `plano-${n}` : null;
+}
+
+/** A sessão foi marcada no cronograma (com um plano ou «Personalizado»)? As outras recebem os planos livres. */
+export function sessaoMarcada(s: SessaoComPlano | null | undefined) {
+  return Boolean(String(s?.planoId ?? "").trim()) || (s?.planoOrdem != null && s.planoOrdem !== "");
+}
+
+type PlanoComModulos = { ordem: number; id?: unknown; modulos?: unknown; modulo?: unknown };
 
 const chaves = (modulos: unknown) =>
   [...new Set((Array.isArray(modulos) ? modulos : []).map(m => chaveModuloPlano(String(m ?? ""))).filter(Boolean))].sort();
@@ -33,18 +54,18 @@ const chaves = (modulos: unknown) =>
  * o próximo plano com exatamente os mesmos módulos e, não havendo, o próximo que tenha algum deles. As outras: o plano
  * com o mesmo número, se ainda não foi usado (a sessão sem módulo passa a ter os módulos desse plano: `modulosEmFalta`).
  */
-export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: { modulos?: unknown; planoOrdem?: unknown }[]): (P | null)[] {
+export function atribuirPlanos<P extends PlanoComModulos>(planos: P[], sessoes: ({ modulos?: unknown } & SessaoComPlano)[]): (P | null)[] {
   const ordenados = [...planos].sort((a, b) => a.ordem - b.ordem);
   const usados = new Set<P>();
   const out: (P | null)[] = sessoes.map(() => null);
   // 1.º As sessões marcadas no cronograma com um plano («Sessão do curso») levam esse plano.
   sessoes.forEach((s, i) => {
-    const n = planoDaSessao(s);
-    const p = n == null ? undefined : ordenados.find(x => x.ordem === n && !usados.has(x));
+    const k = planoDaSessao(s);
+    const p = k == null ? undefined : ordenados.find(x => chavePlano(x) === k && !usados.has(x));
     if (p) { usados.add(p); out[i] = p; }
   });
-  // As marcadas «Personalizado» (planoOrdem 0) ou com um plano ficam fora; as outras recebem os planos livres.
-  const livre = (s: { planoOrdem?: unknown }) => s.planoOrdem == null || s.planoOrdem === "";
+  // As marcadas («Personalizado» ou com um plano) ficam fora; as outras recebem os planos livres.
+  const livre = (s: SessaoComPlano) => !sessaoMarcada(s);
   const restantes = ordenados.filter(p => !usados.has(p));
   const comModulos = restantes.map(p => ({ p, k: chaves(modulosDoPlano(p)) })).filter(x => x.k.length);
   const ligados = new Set(comModulos.flatMap(x => x.k));

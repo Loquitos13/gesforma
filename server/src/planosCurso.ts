@@ -13,7 +13,7 @@ import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from ".
 import { turmaParaPlanos } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
-import { atribuirPlanos, modulosDoPlano, modulosEmFalta } from "../../src/partilhado/planosModulo.js";
+import { atribuirPlanos, chavePlano, modulosDoPlano, modulosEmFalta, sessaoMarcada } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
 const CAMPOS = ["conteudo", "atividades", "metodos", "avaliacao", "recursos", "materiais", "tempo"] as const;
@@ -54,7 +54,7 @@ export function planoTemTexto(raw: unknown) {
 
 type SumarioCurso = { conteudos: string; atividades: string };
 
-type ModeloCurso = { ordem: number; modulos: string[]; plano: PlanoSessao | null; sumario: SumarioCurso | null };
+type ModeloCurso = { id: string; ordem: number; modulos: string[]; plano: PlanoSessao | null; sumario: SumarioCurso | null };
 
 /** Plano e sumário padrão de cada sessão da ficha do curso (só os que têm texto), com o módulo / tema a que se ligam. */
 async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
@@ -68,7 +68,7 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
     const sumario = { conteudos: txt(s.conteudos, 6000), atividades: txt(s.atividades, 6000) };
     const temSumario = regime === "gold" && Boolean(sumario.conteudos.trim() || sumario.atividades.trim());
     if (planoTemTexto(p.plano) || temSumario) {
-      out.push({ ordem: p.ordem, modulos: modulosDoPlano(asObj(l)).map(m => txt(m, 300)), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
+      out.push({ id: chavePlano({ id: asObj(l).id, ordem: p.ordem }), ordem: p.ordem, modulos: modulosDoPlano(asObj(l)).map(m => txt(m, 300)), plano: planoTemTexto(p.plano) ? p.plano : null, sumario: temSumario ? sumario : null });
     }
   }
   return out;
@@ -89,7 +89,7 @@ export async function cursoTemPlanos(db: Db, regime: Regime, curso: string) {
  */
 export async function importarAgendados(db: Db, regime: Regime, turmaId: number, cronograma: unknown) {
   if (!Array.isArray(cronograma) || !cronograma.length) return;
-  await importarPlanosCurso(db, regime, turmaId).catch(err => console.error(`[planos] importar planos do curso na turma ${regime} #${turmaId} falhou:`, err));
+  await importarPlanosCurso(db, regime, turmaId, { aoGravar: true }).catch(err => console.error(`[planos] importar planos do curso na turma ${regime} #${turmaId} falhou:`, err));
 }
 
 /**
@@ -142,7 +142,12 @@ function estavel(v: unknown): unknown {
 }
 const igual = (a: unknown, b: unknown) => JSON.stringify(estavel(a)) === JSON.stringify(estavel(b));
 
-export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: number, o: { substituir?: boolean } = {}): Promise<ResultadoImportacao> {
+/**
+ * `aoGravar` (ao gravar o cronograma): as sessões não marcadas só recebem plano se não tiverem nenhum, e nada que a turma
+ * já tem do curso é trocado nem apagado, a não ser numa sessão marcada no cronograma com outro plano ou «Personalizado».
+ * Sem `aoGravar` (botão «Importar planos do curso»): os planos do curso que a turma não alterou acertam-se pela ficha.
+ */
+export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: number, o: { substituir?: boolean; aoGravar?: boolean } = {}): Promise<ResultadoImportacao> {
   const vazio = { importados: 0, mantidos: 0, semModelo: 0, sumarios: 0 };
   const turma = await turmaParaPlanos(db, regime, turmaId);
   if (!turma) return vazio;
@@ -161,6 +166,12 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
     const sessaoId = String(lectivas[n - 1]?.id ?? "");
     const modelo = atribuidos[n - 1];
     const linha = actuais.get(sessaoId);
+    const sessao = lectivas[n - 1] as { planoId?: unknown; planoOrdem?: unknown } | undefined;
+    const marcada = sessaoMarcada(sessao);
+    if (o.aoGravar && !marcada) {
+      // Sessão não marcada, ao gravar: só se preenche o que está vazio (as turmas já criadas não mudam).
+      if (!modelo || !sessaoId || planoTemTexto(linha?.plano)) { r.mantidos += 1; continue; }
+    }
     if (!modelo || !sessaoId) {
       // Esta sessão já não recebe plano do curso (ex.: os planos passaram a ir por módulo): o plano e o sumário que
       // vieram do curso e que a turma não alterou nem assinou saem, para não ficarem planos de outra sessão.
@@ -178,17 +189,22 @@ export async function importarPlanosCurso(db: Db, regime: Regime, turmaId: numbe
 
     const plano = asObj(linha?.plano);
     // Sem plano, ainda o do curso (não alterado na turma) ou, ao substituir, um não assinado.
-    const herdavel = !planoTemTexto(plano) || (plano.origem === "curso" && plano.assinado !== true) || (o.substituir && plano.assinado !== true);
+    // Ao gravar, numa sessão marcada: o plano do curso troca só se for de outro plano (a sessão mudou de plano).
+    const outroPlano = plano.origem === "curso" && String(plano.planoCurso ?? "") !== modelo.id;
+    const herdavel = !planoTemTexto(plano)
+      || (plano.origem === "curso" && plano.assinado !== true && (!o.aoGravar || outroPlano))
+      || (o.substituir && plano.assinado !== true);
     if (modelo.plano && herdavel) {
       // Definido pela coordenação na ficha do curso: chega à turma já aprovado.
-      const novo = { ...modelo.plano, origem: "curso", estado: "aprovado", assinado: false, revistoPor: "Ficha do curso" };
+      const novo = { ...modelo.plano, origem: "curso", planoCurso: modelo.id, estado: "aprovado", assinado: false, revistoPor: "Ficha do curso" };
       if (!igual({ ...plano, revistoEm: undefined }, { ...novo, revistoEm: undefined })) partes.plano = { ...novo, revistoEm: new Date().toISOString() };
     }
 
     const sumario = asObj(linha?.sumario);
     const sumarioVazio = !String(sumario.conteudos ?? "").trim() && !String(sumario.atividades ?? "").trim();
-    if (modelo.sumario && sumario.assinado !== true && (sumarioVazio || sumario.origem === "curso" || o.substituir)) {
-      const novo = { ...sumario, conteudos: modelo.sumario.conteudos, atividades: modelo.sumario.atividades, assinado: false, origem: "curso" };
+    const sumarioTroca = sumario.origem === "curso" && (!o.aoGravar || String(sumario.planoCurso ?? "") !== modelo.id);
+    if (modelo.sumario && sumario.assinado !== true && (sumarioVazio || sumarioTroca || o.substituir)) {
+      const novo = { ...sumario, conteudos: modelo.sumario.conteudos, atividades: modelo.sumario.atividades, assinado: false, origem: "curso", planoCurso: modelo.id };
       if (!igual(sumario, novo)) partes.sumario = novo;
     }
 

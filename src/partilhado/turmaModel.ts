@@ -12,7 +12,9 @@ export type SessaoCronograma = {
   modulos: string[];
   formadores: string[];
   modalidade?: SessaoModalidade;
-  /** Marcada a partir do plano de sessão n da ficha do curso (recebe esse plano). */
+  /** Marcada com um plano da ficha do curso (o `id` do plano; «-» = «Personalizado», sem plano). */
+  planoId?: string;
+  /** Formato anterior (número do plano; 0 = «Personalizado»): ainda se lê. */
   planoOrdem?: number;
   iniciadaEm?: string;
   fechadaEm?: string;

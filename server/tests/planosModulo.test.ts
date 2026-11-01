@@ -59,3 +59,13 @@ describe("tempo dos planos", () => {
     expect(somarMinutos("19:00", 210)).toEqual("22:30");
   });
 });
+
+describe("planos por id (pertencem aos módulos)", () => {
+  it("a sessão marcada com o id do plano leva-o, mesmo que a ordem mude; o formato antigo (planoOrdem) aponta para plano-<n>", () => {
+    const planos = [
+      { id: "plano-1", ordem: 3, modulos: ["M1"] }, { id: "plano-x", ordem: 1, modulos: ["M2"] }, { id: "plano-y", ordem: 2, modulos: ["M2"] },
+    ];
+    const r = atribuirPlanos(planos, [{ planoId: "plano-y" }, { planoOrdem: 1 }, { planoId: "-" }, { modulos: ["M2"] }]);
+    expect(r.map(p => p?.id ?? null)).toEqual(["plano-y", "plano-1", null, "plano-x"]);
+  });
+});

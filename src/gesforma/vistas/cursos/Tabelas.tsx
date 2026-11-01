@@ -102,16 +102,15 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         nota: <p className="m-0 text-[13px] text-tinta-suave">A pré-inscrição só mostra os horários que estão numa turma Gold activa daquele curso e local.</p>,
       };
     }
-    {
-      return {
-        kind: "areas", regime, singular: "área", plural: "áreas temáticas", campoEstado: "estado",
-        rotulo: i => txt(i.nome), pesquisa: i => txt(i.nome),
-        campos: [{ chave: "nome", rotulo: "Nome", obrigatorio: true }],
-        colunas: [{ id: "nome", titulo: "Área temática", principal: true, celula: i => <span className="font-semibold">{txt(i.nome)}</span> }],
-        validar: (v, itens, id) => repetido(itens, id, "nome", v.nome, "Já existe uma área com esse nome."),
-        nota: <p className="m-0 text-[13px] text-tinta-suave">{regime === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."}</p>,
-      };
-    }
+    // Áreas temáticas.
+    return {
+      kind: "areas", regime, singular: "área", plural: "áreas temáticas", campoEstado: "estado",
+      rotulo: i => txt(i.nome), pesquisa: i => txt(i.nome),
+      campos: [{ chave: "nome", rotulo: "Nome", obrigatorio: true }],
+      colunas: [{ id: "nome", titulo: "Área temática", principal: true, celula: i => <span className="font-semibold">{txt(i.nome)}</span> }],
+      validar: (v, itens, id) => repetido(itens, id, "nome", v.nome, "Já existe uma área com esse nome."),
+      nota: <p className="m-0 text-[13px] text-tinta-suave">{regime === "gold" ? "Agrupam os cursos Gold no site e no backoffice." : "Agrupam as UFCD no backoffice e nos relatórios ao financiador."}</p>,
+    };
   }, [tabela, regime, cursos.selecao, locais.selecao, horarios.selecao]);
 
   const separadores = (Object.keys(VISTAS[regime]) as Tabela[]).map(id => ({

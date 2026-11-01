@@ -12,7 +12,7 @@ import { codigoInternoTurma } from "../partilhado/turmaCodigo";
 import { formatDiaMes, sessaoModalidade, type SessaoCronograma } from "../partilhado/turmaModel";
 import { ConfirmarPerigo } from "../partilhado/ui";
 import { TONE, TONE_GOLD, EventoModal, planosPorAgendar, rotuloPlano } from "./CronogramaGrelha";
-import { usePlanosCurso } from "./planosCurso";
+import { nomesDosPlanos, usePlanosCurso } from "./planosCurso";
 
 export function CronogramaGrelha({
   sessoes,
@@ -48,6 +48,7 @@ export function CronogramaGrelha({
   // Planos de sessão da ficha do curso: os que ainda não têm dia ficam «por agendar» até se marcarem na grelha.
   const { planos } = usePlanosCurso(accent, curso ?? "");
   const porAgendar = useMemo(() => planosPorAgendar(planos, sessoes), [planos, sessoes]);
+  const nomesPlanos = useMemo(() => nomesDosPlanos(planos), [planos]);
   const unidade = programa.unidade.singular;
   const periodo = useMemo(() => grelhaPeriodo(sessoes, inicio), [sessoes, inicio]);
   const [fim, setFim] = useState(periodo.fim);
@@ -224,13 +225,13 @@ export function CronogramaGrelha({
         <div className={`rounded-xl border px-4 py-3 ${porAgendar.length ? "border-amber-200 bg-amber-50" : "border-emerald-200 bg-emerald-50"}`}>
           <p className="text-xs font-semibold text-slate-800">
             {porAgendar.length
-              ? `${porAgendar.length} de ${planos.length} sessões do curso por agendar. Clique num dia (ou numa hora) da grelha para marcar a próxima; e-learning, avaliações e outras sessões marcam-se como «Personalizado».`
-              : `As ${planos.length} sessões do curso estão todas agendadas.`}
+              ? `${porAgendar.length} de ${planos.length} planos do curso por agendar. Clique num dia (ou numa hora) da grelha para marcar o próximo; e-learning, avaliações e outras sessões marcam-se como «Personalizado».`
+              : `Os ${planos.length} planos do curso estão todos agendados.`}
           </p>
           {porAgendar.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
               {porAgendar.map(p => (
-                <span key={p.ordem} title={p.objetivosGerais || undefined} className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">{rotuloPlano(p)}</span>
+                <span key={p.id} title={p.objetivosGerais || undefined} className="rounded-lg border border-amber-200 bg-white px-2 py-1 text-[11px] font-semibold text-slate-700">{rotuloPlano(p, nomesPlanos)}</span>
               ))}
             </div>
           )}

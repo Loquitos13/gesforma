@@ -5,7 +5,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { generateCronograma } from "../cronograma.js";
-import { comModulosDosPlanos, importarPlanosCurso } from "../planosCurso.js";
+import { comModulosDosPlanos, importarPlanosCurso, sessoesDosPlanos } from "../planosCurso.js";
 import { erroSobreposicao } from "../conflitos.js";
 import { docsBase } from "../docsCurso.js";
 import { largarDespesasFormadorDaTurma, sincronizarDespesasDaTurma, sincronizarDespesasFormador } from "../despesasFormador.js";
@@ -238,7 +238,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     // As sessões sem módulo que recebem um plano do curso ligado a um módulo ficam já com esse módulo.
     const cronograma = await comModulosDosPlanos(db, "gold", d.curso, comIdsUnicos(d.cronograma?.length
       ? d.cronograma
-      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos })));
+      : generateCronograma({ inicio: d.dataInicio, horario: d.horario, horas: d.horas, formador: d.formador, curso: d.curso, modulos,
+        sessoes: await sessoesDosPlanos(db, "gold", d.curso) ?? undefined })));
     const cruzamento = await erroSobreposicao(db, "gold", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });
     if (await repo.existeNome(db, "gold", d.nome, null)) {
@@ -343,6 +344,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       : generateCronograma({
         inicio: d.dataInicio, horario: d.horario === "Online" ? "Pós Laboral" : d.horario, horas: d.horas,
         formador: d.formador, curso: d.curso, hoursPerSession: 3, modulos,
+        sessoes: await sessoesDosPlanos(db, "fin", d.curso) ?? undefined,
       })));
     const cruzamento = await erroSobreposicao(db, "fin", null, cronograma);
     if (cruzamento) return reply.code(400).send({ error: cruzamento });

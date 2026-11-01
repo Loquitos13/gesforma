@@ -241,7 +241,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
               identidade={`${regime}-form-${turmaId}`}
             />
           ) : (
-            <p className="text-xs text-tinta-suave">O cronograma é gerado a partir das horas do curso e do horário. Ajusta-se depois em Editar ou no cockpit da turma.</p>
+            <p className="text-xs text-tinta-suave">O cronograma é gerado com uma sessão por cada plano de sessão da ficha do curso (sem planos, a partir das horas do curso) e o horário. Ajusta-se depois em Editar ou no cockpit da turma.</p>
           )}
         </div>
       )}

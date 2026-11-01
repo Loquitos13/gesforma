@@ -75,6 +75,17 @@ async function modelosDoCurso(db: Db, regime: Regime, cursoId: number) {
 }
 
 /**
+ * Turma nova sem cronograma: uma sessão por plano da ficha do curso (pela ordem), com os módulos de cada plano.
+ * Sem planos, null (o cronograma sai das horas do curso).
+ */
+export async function sessoesDosPlanos(db: Db, regime: Regime, curso: string): Promise<string[][] | null> {
+  const cursoId = (await cursoPorNome(db, regime, curso))?.id;
+  if (!cursoId) return null;
+  const modelos = (await modelosDoCurso(db, regime, Number(cursoId))).sort((a, b) => a.ordem - b.ordem);
+  return modelos.length ? modelos.map(m => m.modulos) : null;
+}
+
+/**
  * Antes de gravar o cronograma de uma turma: as sessões lectivas sem módulo que vão receber um plano do curso ligado a
  * um módulo ficam com esse módulo (assim a turma nova herda o plano e o módulo de cada sessão).
  */

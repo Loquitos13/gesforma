@@ -2,19 +2,17 @@
  * Validação da pré-inscrição pela secretaria, sugestão por turma cheia e ligação ao formando Gold.
  * Separado de `percurso.ts` (escolha pública e documentos).
  */
+import { enviarModelo } from "./emailModelo.js";
 import { InscricaoErro, garantirVaga } from "./inscricao.js";
 import * as docsRepo from "./repos/leadDocs.js";
 import { apagarFicheiroSubstituido } from "./driveFicheiros.js";
 import { ingestEvent } from "./automations.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
-import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { docsDoCurso, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { idsRecusados } from "./lembretePre.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
 import { moverPastaFormando } from "./driveArvore.js";
-import { sendMail } from "./mailer.js";
 import { isEmail, normalizeEmail } from "./security.js";
 import { PercursoErro, evento, norm, regimeDe, sugestoesTurmaCheia, turmaPorId } from "./percurso.js";
 import * as leads from "./repos/leads.js";
@@ -169,19 +167,24 @@ export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?:
   const token = await ensureDocsToken(db, leadId);
   const url = `${documentosUrl(token)}?passo=cronograma`;
   const nome = `${row.nome ?? ""} ${row.apelido ?? ""}`.trim();
-  const linhas = [
-    `A turma de ${curso} em ${local} já não tem vaga.`,
-    sugestoes.length
-      ? "Estas são as próximas turmas do mesmo curso, no mesmo local, no mesmo horário ou noutro horário:"
-      : "Neste momento não há outra turma com vaga nesse local. A secretaria avisa quando abrir uma data.",
-    ...sugestoes.map(t => `${t.nome} · ${t.horario} · início ${fmtData(t.dataInicio)} · ${t.livres} vaga${t.livres === 1 ? "" : "s"}`),
-    "A ligação pessoal continua aberta para escolher outro cronograma.",
-  ];
-  const mail = renderAutomaticEmail({
-    nome, xml: "", linhas, cta: "Escolher outro cronograma", href: url,
-    vars: { nome, curso, documentos_url: url }, origin: config.appOrigin,
+  await enviarModelo(db, {
+    tipo: "turma_cheia", para: email, nome, link: url,
+    vars: {
+      curso, local, documentos_url: url,
+      turmas_itens: sugestoes.map(t => `${t.nome} · ${t.horario} · início ${fmtData(t.dataInicio)} · ${t.livres} vaga${t.livres === 1 ? "" : "s"}`),
+      sem_turmas: sugestoes.length ? "" : "Neste momento não há outra turma com vaga nesse local. A secretaria avisa quando abrir uma data.",
+    },
+    reserva: {
+      assunto: "Turma cheia · outras datas de {{curso}}",
+      linhas: [
+        "A turma de {{curso}} em {{local}} já não tem vaga.",
+        "Estas são as próximas turmas do mesmo curso com vaga:<br>{{turmas_itens}}",
+        "{{sem_turmas}}",
+        "A ligação pessoal continua aberta para escolher outro cronograma.",
+      ],
+      cta: "Escolher outro cronograma",
+    },
   });
-  await sendMail(db, { to: email, name: nome, subject: `Turma cheia · outras datas de ${curso}`, text: mail.text, html: mail.html });
   await repo.recusarTurmaCheia(db, leadId, turmaId);
   await evento(db, leadId, actorId, "Sugestão por turma cheia", sugestoes.map(t => t.nome).join(", ") || "Sem turmas com vaga");
   return { ok: true as const, enviadas: sugestoes.length, turmas: sugestoes };

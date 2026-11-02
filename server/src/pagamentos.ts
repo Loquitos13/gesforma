@@ -1,9 +1,8 @@
+import { enviarModelo } from "./emailModelo.js";
 import { ingestEvent } from "./automations.js";
 import { config } from "./config.js";
 import { carimboUtc } from "./datas.js";
 import type { Db } from "./db/pool.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
-import { sendMail } from "./mailer.js";
 import {
   mapPagamento, marcarFormandoGoldPago, marcarLeadPago, marcarPago, obterPagamento, pagamentosPorReferencia, registarRecusa,
 } from "./repos/pagamentos.js";
@@ -72,18 +71,21 @@ export async function recusarPagamento(db: Db, id: string, motivo: string) {
   let avisado = false;
   if (isEmail(email)) {
     const href = await ligacaoParaPagamento(db, id);
-    const linhas = [
-      `Não conseguimos confirmar o comprovativo de pagamento de ${mapped.curso || "a sua inscrição"}.`,
-      `Motivo: ${motivo}`,
-      href
-        ? "Pode anexar um novo comprovativo na sua ligação pessoal, no passo «Pagamento»."
-        : "Responda a este email com um novo comprovativo e a secretaria trata do resto.",
-    ];
-    const mail = renderAutomaticEmail({
-      nome: mapped.nome, xml: "", linhas, cta: href ? "Anexar novo comprovativo" : "", href: href ?? "",
-      vars: { nome: mapped.nome, curso: mapped.curso }, origin: config.appOrigin,
+    await enviarModelo(db, {
+      tipo: "comprovativo_recusado", para: email, nome: mapped.nome, link: href ?? "",
+      vars: { curso: mapped.curso || "a sua inscrição", motivo, comprovativo_url: href ?? "" },
+      reserva: {
+        assunto: "Comprovativo de pagamento · {{curso}}",
+        linhas: [
+          "Não conseguimos confirmar o comprovativo de pagamento de {{curso}}.",
+          "Motivo: {{motivo}}",
+          href
+            ? "Pode anexar um novo comprovativo na sua ligação pessoal, no passo «Pagamento»."
+            : "Responda a este email com um novo comprovativo e a secretaria trata do resto.",
+        ],
+        cta: href ? "Anexar novo comprovativo" : "",
+      },
     });
-    await sendMail(db, { to: email, name: mapped.nome, subject: `Comprovativo de pagamento · ${mapped.curso}`.trim(), text: mail.text, html: mail.html });
     avisado = true;
   }
   return { pagamento: mapPagamento((await obterPagamento(db, id)) ?? row), avisado };

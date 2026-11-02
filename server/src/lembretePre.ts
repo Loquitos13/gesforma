@@ -1,5 +1,6 @@
+import { enviarModelo } from "./emailModelo.js";
 import { renderModelo, telefonesPorZona } from "./automations.js";
-import { config, onVercel } from "./config.js";
+import { onVercel } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import { buildCtaVars } from "./emailCta.js";
 import { modeloEmail } from "./repos/emails.js";
@@ -9,7 +10,6 @@ import { pendenciaDocsLead } from "./pendenciaDocs.js";
 import type { Db } from "./db/pool.js";
 import * as repo from "./repos/lembretesPre.js";
 import { documentosUrl, ensureDocsToken } from "./docsLink.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
@@ -189,37 +189,33 @@ async function enviarLembrete(db: Db, lead: repo.LeadLembrete, limite: Date) {
       return true;
     }
   }
-  const linhas = [`Lembrete da pré-inscrição em ${lead.curso}.`];
-  if (pendencia.faltam.length) {
-    linhas.push("Ainda faltam estes documentos:");
-    linhas.push(...pendencia.faltam);
-  }
-  if (pendencia.recusados.length) {
-    linhas.push("A secretaria recusou estes documentos:");
-    linhas.push(...pendencia.recusados.map(d => `${d.label}: ${d.observacao || "não está correcto. Volte a enviar o ficheiro."}`));
-  }
-  if (pendencia.turmaCheia) {
-    linhas.push(pendencia.turmaCheiaNome
-      ? `A turma ${pendencia.turmaCheiaNome} foi dada como cheia pela secretaria. Escolha outra turma.`
-      : "A turma escolhida foi dada como cheia pela secretaria. Escolha outra turma.");
-  }
-  if (pendencia.semTurma) linhas.push("Ainda falta escolher a turma.");
-  linhas.push("Use o botão para abrir a ligação pessoal no passo que falta concluir.");
-  const mail = renderAutomaticEmail({
-    nome,
-    xml: "",
-    linhas,
-    cta: docs ? "Enviar documentos" : "Escolher turma",
-    href,
-    vars: { nome, curso: lead.curso, documentos_url: href },
-    origin: config.appOrigin,
-  });
-  await sendMail(db, {
-    to: email,
-    name: nome,
-    subject: `Lembrete da pré-inscrição · ${lead.curso}`,
-    text: mail.text,
-    html: mail.html,
+  // Sem documentos em falta (ou sem o modelo dos documentos): modelo «lembrete_turma» (editável) ou o texto de reserva.
+  const situacao = [
+    ...(pendencia.turmaCheia
+      ? [pendencia.turmaCheiaNome
+        ? `A turma ${pendencia.turmaCheiaNome} foi dada como cheia pela secretaria. Escolha outra turma.`
+        : "A turma escolhida foi dada como cheia pela secretaria. Escolha outra turma."]
+      : []),
+    ...(pendencia.semTurma ? ["Ainda falta escolher a turma."] : []),
+  ].join(" ");
+  const recusadosTexto = pendencia.recusados.map(d => `${d.label}: ${d.observacao || "não está correcto. Volte a enviar o ficheiro."}`);
+  await enviarModelo(db, {
+    tipo: docs ? "lembrete_docs" : "lembrete_turma", para: email, nome, link: href,
+    vars: {
+      curso: lead.curso, documentos_url: href, situacao,
+      documentos_em_falta_itens: pendencia.faltam, documentos_recusados_itens: recusadosTexto,
+    },
+    reserva: {
+      assunto: "Lembrete da pré-inscrição · {{curso}}",
+      linhas: [
+        "Lembrete da pré-inscrição em {{curso}}.",
+        "Ainda faltam estes documentos:<br>{{documentos_em_falta_itens}}",
+        "A secretaria recusou estes documentos:<br>{{documentos_recusados_itens}}",
+        "{{situacao}}",
+        "Use o botão para abrir a ligação pessoal no passo que falta concluir.",
+      ],
+      cta: docs ? "Enviar documentos" : "Escolher turma",
+    },
   });
   const nota = `Lembrete automático · ${docs ? "documentação pendente" : "falta escolher a turma"}`;
   await leads.inserirContacto(db, { leadId: lead.id, nota, meio: "Email" });

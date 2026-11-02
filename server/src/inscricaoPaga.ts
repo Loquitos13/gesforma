@@ -1,12 +1,11 @@
 import { gerarAcessoFormando } from "./areaFormando.js";
+import { enviarModelo } from "./emailModelo.js";
 import { config } from "./config.js";
 import { carimboUtc } from "./datas.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
 import { pedirFaturacaoSeFalta } from "./faturacao.js";
 import { InscricaoErro, garantirVaga, recontarTurma } from "./inscricao.js";
-import { sendMail } from "./mailer.js";
 import { newPublicId, nextOpsId } from "./ops.js";
 import { PercursoErro, ligarPreinscricaoAoFormandoGold, validarPreinscricao } from "./percurso.js";
 import { readPreinscricaoPii, writeFormandoPiiPatch } from "./pii.js";
@@ -49,29 +48,28 @@ async function criarFormandoGoldDoLead(db: Db, lead: Record<string, unknown>, tu
   return id;
 }
 
-/** Email com o acesso à área do formando. A palavra-passe só existe aqui (nunca fica gravada em claro). */
+/**
+ * Email com o acesso à área do formando (modelos «acesso_formando_pago» e «acesso_formando», editáveis).
+ * A palavra-passe só existe aqui (nunca fica gravada em claro).
+ */
 export async function enviarEmailAcesso(db: Db, input: { email: string; nome: string; curso: string; password?: string; pago: boolean }) {
-  const href = `${config.appOrigin.replace(/\/$/, "")}/area-formando`;
-  const linhas = [
-    input.pago
-      ? `O pagamento de ${input.curso} está confirmado e a sua inscrição está concluída.`
-      : `A sua inscrição em ${input.curso} está concluída.`,
-    "Já pode entrar na área do formando, onde encontra o curso, a agenda e os documentos.",
-    `Utilizador: ${input.email}`,
-    input.password
-      ? `Palavra-passe temporária: ${input.password} (vai ser pedida uma nova no primeiro acesso).`
-      : "Entre com a palavra-passe que já usa na área do formando. Se não se lembrar, use «Esqueci-me da palavra-passe».",
-  ];
-  const mail = renderAutomaticEmail({
-    nome: input.nome, xml: "", linhas, cta: "Entrar na área do formando", href,
-    vars: { nome: input.nome, curso: input.curso }, origin: config.appOrigin,
-  });
-  await sendMail(db, {
-    to: input.email,
-    name: input.nome,
-    subject: input.pago ? `Pagamento confirmado · acesso a ${input.curso}` : `Inscrição concluída · acesso a ${input.curso}`,
-    text: mail.text,
-    html: mail.html,
+  const link = `${config.appOrigin.replace(/\/$/, "")}/area-formando`;
+  const palavraPasse = input.password
+    ? `Palavra-passe temporária: ${input.password} (vai ser pedida uma nova no primeiro acesso).`
+    : "Entre com a palavra-passe que já usa na área do formando. Se não se lembrar, use «Esqueci-me da palavra-passe».";
+  await enviarModelo(db, {
+    tipo: input.pago ? "acesso_formando_pago" : "acesso_formando",
+    para: input.email, nome: input.nome, link,
+    vars: { curso: input.curso, palavra_passe: palavraPasse },
+    reserva: {
+      assunto: input.pago ? "Pagamento confirmado · acesso a {{curso}}" : "Inscrição concluída · acesso a {{curso}}",
+      linhas: [
+        input.pago ? "O pagamento de {{curso}} está confirmado e a sua inscrição está concluída." : "A sua inscrição em {{curso}} está concluída.",
+        "Já pode entrar na área do formando, onde encontra o curso, a agenda e os documentos.",
+        "Utilizador: {{email}}", "{{palavra_passe}}",
+      ],
+      cta: "Entrar na área do formando",
+    },
   });
 }
 

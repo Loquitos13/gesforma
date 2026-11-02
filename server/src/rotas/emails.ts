@@ -4,7 +4,8 @@ import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
 import { flushQueuedJobs, ingestEvent, processDueJobs, renderModelo, sendRuleTest, varsDeExemplo } from "../automations.js";
 import { config } from "../config.js";
-import { SECRETARIA_MAIL, ctaDestino } from "../emailCta.js";
+import { CTA_BY_TIPO, SECRETARIA_MAIL, ctaDestino } from "../emailCta.js";
+import { VARIAVEIS_DOS_MODELOS } from "../emailModelo.js";
 import {
   actualizarModelo, actualizarRegra, apagarRegra, cancelarEmFila, criarRegra, destinatarioConhecido, emailDaPreinscricao,
   estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto, obterEnvio, obterModelo, reenviarFalhado,
@@ -159,6 +160,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       modelos: modelos.map(m => ({ tipo: m.tipo, nome: m.nome })),
       ambitos: AMBITOS,
       variaveis: VARIAVEIS,
+      // Modelos dos emails automáticos com variáveis próprias e botão para o endereço próprio do email.
+      variaveisPorTipo: Object.fromEntries(Object.entries(VARIAVEIS_DOS_MODELOS).map(([t, v]) => [t, Object.keys(v).filter(k => k !== "link")])),
+      botaoProprio: Object.fromEntries(Object.entries(CTA_BY_TIPO).filter(([, d]) => d.href === "{{link}}").map(([t, d]) => [t, d.funcao])),
       remetente: await remetente(db),
       contacto: SECRETARIA_MAIL,
     };
@@ -198,7 +202,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       cta_ambito: v.body.cta_ambito ?? base.cta_ambito,
     };
     const nome = actor(req).name;
-    const vars = await varsDeExemplo(db, v.body.curso || null, { email: actor(req).email, nome });
+    const vars = { ...await varsDeExemplo(db, v.body.curso || null, { email: actor(req).email, nome }), ...(VARIAVEIS_DOS_MODELOS[v.body.tipo] ?? {}) };
     const mail = renderModelo(m, nome, vars);
     return { assunto: mail.subject, html: mail.html, texto: mail.text, para: actor(req).email, de: await remetente(db) };
   });

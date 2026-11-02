@@ -9,6 +9,10 @@ export type OpcoesEmail = {
   modelos: { tipo: string; nome: string }[];
   ambitos: { valor: CtaAmbito; rotulo: string }[];
   variaveis: string[];
+  /** Variáveis próprias de alguns modelos (emails automáticos com dados próprios). */
+  variaveisPorTipo?: Record<string, string[]>;
+  /** Modelos cujo botão leva ao endereço próprio do email (tipo → para onde). */
+  botaoProprio?: Record<string, string>;
   remetente: string;
   contacto: string;
 };

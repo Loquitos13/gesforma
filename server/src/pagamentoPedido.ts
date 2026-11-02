@@ -1,9 +1,8 @@
 import { garantirToken } from "./ligacaoPessoal.js";
+import { enviarModelo } from "./emailModelo.js";
 import { config } from "./config.js";
 import { carimboUtc } from "./datas.js";
 import { getLeadDossier, logLeadEvent } from "./crmDossier.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
-import { sendMail } from "./mailer.js";
 import { lerEntidade } from "./regrasConfig.js";
 import type { Db } from "./db/pool.js";
 import { confirmarPagamento, nextOpsId } from "./ops.js";
@@ -99,21 +98,23 @@ export async function pedirPagamento(db: Db, leadId: number, actorId?: string) {
   const valor = Number(pag.valor ?? lead.preco) || 0;
   const ent = await lerEntidade(db);
   const iban = ent.iban.replace(/(.{4})/g, "$1 ").trim();
-  const titular = ent.titularConta || ent.nome;
   const url = `${documentosUrl(await garantirToken(db, leadId))}?passo=pagamento`;
   const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const linhas = [
-    `A secretaria validou os seus documentos de ${lead.curso}.`,
-    `Para concluir a inscrição, faça o pagamento de € ${fmtEuros(valor)} por transferência bancária.`,
-    iban ? `IBAN: ${iban} · Titular: ${titular}` : "A secretaria indica-lhe os dados para a transferência.",
-    "Depois anexe o comprovativo na sua ligação pessoal, no passo «Pagamento».",
-    "Assim que o pagamento for confirmado, recebe por email o acesso à área do formando.",
-  ];
-  const mail = renderAutomaticEmail({
-    nome, xml: "", linhas, cta: "Abrir o passo de pagamento", href: url,
-    vars: { nome, curso: lead.curso, documentos_url: url }, origin: config.appOrigin,
+  // Sem o IBAN no email: o botão abre a página de pagamento, com os dados da transferência e o campo do comprovativo.
+  await enviarModelo(db, {
+    tipo: "pedido_pagamento", para: email, nome, link: url,
+    vars: { curso: lead.curso, valor: fmtEuros(valor), documentos_url: url, comprovativo_url: url },
+    reserva: {
+      assunto: "Pagamento da inscrição em {{curso}}",
+      linhas: [
+        "A secretaria validou os seus documentos de {{curso}}.",
+        "Para concluir a inscrição, falta o pagamento de € {{valor}} por transferência bancária.",
+        "Clique no botão para abrir a sua página de pagamento: aí encontra os dados para a transferência e o campo para anexar o comprovativo.",
+        "Assim que o pagamento for confirmado, recebe por email o acesso à área do formando.",
+      ],
+      cta: "Pagar e anexar o comprovativo",
+    },
   });
-  await sendMail(db, { to: email, name: nome, subject: `Pagamento da inscrição em ${lead.curso}`, text: mail.text, html: mail.html });
   const nota = `Pagamento pedido · € ${fmtEuros(valor)} por transferência${iban ? ` para ${iban}` : ""}.`;
   await leads.inserirContacto(db, { leadId, actorId, nota, meio: "Email" });
   await logLeadEvent(db, leadId, actorId, "seguimento", "Pagamento pedido", nota);

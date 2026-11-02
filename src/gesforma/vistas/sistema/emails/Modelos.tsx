@@ -99,15 +99,19 @@ export function Modelos({ opcoes }: { opcoes?: OpcoesEmail }) {
             <Campo rotulo="Assunto" ajuda="Pode usar variáveis, por exemplo {{nome}} ou {{curso}}.">
               {a => <Entrada {...a} value={r.assunto} maxLength={200} onChange={e => setR({ ...r, assunto: e.target.value })} />}
             </Campo>
-            <EmailXmlEditor xml={r.xml} onChange={xml => setR({ ...r, xml, cta: parseEmailXml(xml).cta || r.cta })} variaveis={opcoes?.variaveis ?? []} />
+            <EmailXmlEditor xml={r.xml} onChange={xml => setR({ ...r, xml, cta: parseEmailXml(xml).cta || r.cta })} variaveis={[...(opcoes?.variaveis ?? []), ...(opcoes?.variaveisPorTipo?.[sel.tipo] ?? [])]} />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <Campo rotulo="Texto do botão">{a => <Entrada {...a} value={r.cta} maxLength={120} onChange={e => mudarCta(e.target.value, r.ambito)} />}</Campo>
-              <Campo rotulo="O botão leva a" ajuda="O endereço é o da pessoa (ligação pessoal, passo de pagamento…).">
-                {a => (
-                  <Selecao {...a} vazio="Sem botão" opcoes={(opcoes?.ambitos ?? []).map(x => ({ valor: x.valor, rotulo: x.rotulo }))}
-                    value={r.ambito} onChange={e => mudarCta(r.cta, (isCtaAmbito(e.target.value) ? e.target.value : ""))} />
+              {opcoes?.botaoProprio?.[sel.tipo]
+                ? <p className="m-0 self-end pb-2 text-[13px] text-tinta-suave">O botão leva a: <strong className="text-tinta">{opcoes.botaoProprio[sel.tipo]}</strong> (o endereço de cada pessoa).</p>
+                : (
+                  <Campo rotulo="O botão leva a" ajuda="O endereço é o da pessoa (ligação pessoal, passo de pagamento…).">
+                    {a => (
+                      <Selecao {...a} vazio="Sem botão" opcoes={(opcoes?.ambitos ?? []).map(x => ({ valor: x.valor, rotulo: x.rotulo }))}
+                        value={r.ambito} onChange={e => mudarCta(r.cta, (isCtaAmbito(e.target.value) ? e.target.value : ""))} />
+                    )}
+                  </Campo>
                 )}
-              </Campo>
             </div>
           </fieldset>
         </Cartao>

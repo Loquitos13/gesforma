@@ -1,3 +1,4 @@
+import { enviarModelo } from "./emailModelo.js";
 import { garantirToken } from "./ligacaoPessoal.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { randomBytes } from "node:crypto";
@@ -7,8 +8,6 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import type { AtorCrm } from "./repos/sql.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso } from "./docsCurso.js";
-import { renderAutomaticEmail } from "./emailHtml.js";
-import { sendMail } from "./mailer.js";
 import { isEmail, normalizeEmail } from "./security.js";
 import * as docs from "./repos/leadDocs.js";
 import * as leads from "./repos/leads.js";
@@ -145,31 +144,23 @@ export async function avisarDocumentosEmFalta(
   const token = await ensureDocsToken(db, leadId);
   const url = `${documentosUrl(token)}?passo=documentos`;
   const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const linhas = [`A pré-inscrição em ${lead.curso} ficou registada e aguarda validação da secretaria.`];
-  if (faltam.length) {
-    linhas.push("Ainda faltam estes documentos:");
-    linhas.push(...faltam.map(d => d.label));
-  }
-  if (recusados.length) {
-    linhas.push("A secretaria recusou estes documentos:");
-    linhas.push(...recusados.map(d => `${d.label}: ${d.observacao?.trim() || "não está correcto. Volte a enviar o ficheiro."}`));
-  }
-  linhas.push("Use o botão para abrir a ligação pessoal no passo de enviar os documentos. A ligação fecha quando a secretaria validar todos.");
-  const mail = renderAutomaticEmail({
-    nome,
-    xml: "",
-    linhas,
-    cta: "Enviar documentos",
-    href: url,
-    vars: { nome, curso: lead.curso, documentos_url: url },
-    origin: config.appOrigin,
-  });
-  await sendMail(db, {
-    to: email,
-    name: nome,
-    subject: `Documentos em falta · ${lead.curso}`,
-    text: mail.text,
-    html: mail.html,
+  await enviarModelo(db, {
+    tipo: "documentos_em_falta", para: email, nome, link: url,
+    vars: {
+      curso: lead.curso, documentos_url: url,
+      documentos_em_falta_itens: faltam.map(d => d.label),
+      documentos_recusados_itens: recusados.map(d => `${d.label}: ${d.observacao?.trim() || "não está correcto. Volte a enviar o ficheiro."}`),
+    },
+    reserva: {
+      assunto: "Documentos em falta · {{curso}}",
+      linhas: [
+        "A pré-inscrição em {{curso}} ficou registada e aguarda validação da secretaria.",
+        "Ainda faltam estes documentos:<br>{{documentos_em_falta_itens}}",
+        "A secretaria recusou estes documentos:<br>{{documentos_recusados_itens}}",
+        "Use o botão para abrir a ligação pessoal no passo de enviar os documentos. A ligação fecha quando a secretaria validar todos.",
+      ],
+      cta: "Enviar documentos",
+    },
   });
   await docs.marcarLembreteDocs(db, leadId);
   await logLeadEvent(db, leadId, undefined, "contacto", "Documentos em falta", [...faltam, ...recusados].map(d => d.label).join(", "));

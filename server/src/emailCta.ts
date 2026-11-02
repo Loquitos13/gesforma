@@ -79,6 +79,19 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
     href: SECRETARIA_HREF,
     funcao: "Pedir o certificado em PDF à secretaria",
   },
+  // Emails automáticos com endereço próprio ({{link}}): área do formando, ligação pessoal, inquérito, plano…
+  acesso_formando_pago: { ambito: "contacto", href: "{{link}}", funcao: "Área do formando" },
+  acesso_formando: { ambito: "contacto", href: "{{link}}", funcao: "Área do formando" },
+  pedido_pagamento: { ambito: "contacto", href: "{{link}}", funcao: "Página de pagamento da ligação pessoal" },
+  pedido_pagamento_formando: { ambito: "contacto", href: "{{link}}", funcao: "Área do formando" },
+  comprovativo_recusado: { ambito: "contacto", href: "{{link}}", funcao: "Página de pagamento da ligação pessoal" },
+  turma_cheia: { ambito: "contacto", href: "{{link}}", funcao: "Passo do cronograma da ligação pessoal" },
+  documentos_em_falta: { ambito: "contacto", href: "{{link}}", funcao: "Passo dos documentos da ligação pessoal" },
+  lembrete_turma: { ambito: "contacto", href: "{{link}}", funcao: "Passo do cronograma da ligação pessoal" },
+  lembrete_docs_fin_inicio: { ambito: "contacto", href: "{{link}}", funcao: "Área segura dos documentos" },
+  plano_aprovado: { ambito: "contacto", href: "{{link}}", funcao: "Sessões da turma no GesForma" },
+  plano_devolvido: { ambito: "contacto", href: "{{link}}", funcao: "Sessões da turma no GesForma" },
+  inquerito_turma: { ambito: "contacto", href: "{{link}}", funcao: "O (primeiro) inquérito" },
   reengagement: {
     ambito: "preinscricao",
     href: "{{preinscricao_url}}",
@@ -150,7 +163,7 @@ export function buildCtaVars(p: {
 
 export function fillCtaHref(href: string, vars: Record<string, string>) {
   return href.replace(/\{\{(\w+)\}\}/g, (_, k: string) => {
-    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url" || k === "comprovativo_url" || k === "faturacao_url") {
+    if (k === "preinscricao_url" || k === "secretaria_url" || k === "documentos_url" || k === "comprovativo_url" || k === "faturacao_url" || k === "link") {
       return vars[k] ?? "";
     }
     return encodeURIComponent(vars[k] ?? "");

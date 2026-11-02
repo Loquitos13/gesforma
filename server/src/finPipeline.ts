@@ -309,36 +309,22 @@ export async function enviarLembreteDocsFin(db: Db, formandoId: number, actorId?
   const emFalta = DOC_KEYS.filter(k => !docDeJson(docs, k).ok).map(k => labels[k] ?? k);
   if (!emFalta.length) return { enviado: false as const, erro: "Todos os documentos obrigatórios já estão validados." };
 
-  const { sendMail } = await import("./mailer.js");
-  const { renderAutomaticEmail } = await import("./emailHtml.js");
-  const { config } = await import("./config.js");
   const nome = `${f.nome} ${f.apelido}`.trim();
   const { ensureFinDocsToken, formandoFinDocsUrl } = await import("./formandoFinDocs.js");
   const token = await ensureFinDocsToken(db, formandoId);
   const portalUrl = formandoFinDocsUrl(token);
-  const linhas = [
-    `Olá ${f.nome},`,
-    "",
-    `Para concluir a inscrição na formação ${f.curso} faltam os seguintes documentos:`,
-    ...emFalta.map(d => `· ${d}`),
-    "",
-    "Use o botão para enviar um ficheiro de cada vez na área segura. Se a secretaria tiver recusado algum documento, só poderá reenviar esses.",
-  ];
-  const mail = renderAutomaticEmail({
-    nome,
-    xml: "",
-    linhas,
-    cta: "Enviar documentos",
-    href: portalUrl,
-    vars: { nome, curso: f.curso },
-    origin: config.appOrigin,
-  });
-  await sendMail(db, {
-    to: email,
-    name: nome,
-    subject: `Documentos em falta · ${f.curso}`,
-    text: mail.text,
-    html: mail.html,
+  const { enviarModelo } = await import("./emailModelo.js");
+  await enviarModelo(db, {
+    tipo: "lembrete_docs_fin_inicio", para: email, nome, link: portalUrl,
+    vars: { curso: f.curso, documentos_url: portalUrl, documentos_em_falta_itens: emFalta },
+    reserva: {
+      assunto: "Documentos em falta · {{curso}}",
+      linhas: [
+        "Para concluir a inscrição na formação {{curso}} faltam os seguintes documentos:<br>{{documentos_em_falta_itens}}",
+        "Use o botão para enviar um ficheiro de cada vez na área segura. Se a secretaria tiver recusado algum documento, só poderá reenviar esses.",
+      ],
+      cta: "Enviar documentos",
+    },
   });
   await notaDoSistemaFin(db, formandoId, actorId ?? null, `Lembrete de documentos enviado (${emFalta.length} em falta).`);
   // A partir daqui seguem lembretes automáticos (cadência das pré-inscrições) até os documentos ficarem completos.

@@ -75,7 +75,9 @@ export function renderAutomaticEmail(input: {
   // Um parágrafo com listas ({{…_itens}}) que ficaram todas vazias não sai (ex.: sem documentos em falta).
   const comLista = (p: string) => [...p.matchAll(/\{\{(\w+_itens)\}\}/g)].map(m => m[1]!);
   const listasVazias = (p: string) => { const ks = comLista(p); return ks.length > 0 && ks.every(k => !(input.vars[k] ?? "").trim()); };
-  const paras = (rawParas.length ? rawParas : input.linhas).filter(p => p.trim() && !listasVazias(p));
+  // Um parágrafo que fica vazio depois de preencher as variáveis (ex.: «{{palavra_passe}}» sem palavra-passe) não sai.
+  const vazioPreenchido = (p: string) => !fillVars(p, input.vars).replace(/<br\s*\/?>|<\/?(?:strong|em)>/gi, "").trim();
+  const paras = (rawParas.length ? rawParas : input.linhas).filter(p => p.trim() && !listasVazias(p) && !vazioPreenchido(p));
   // Os contactos dos locais ({{telefones_itens}}) vão para o fim do email, num quadro de 2 colunas.
   const temContactos = (p: string) => p.includes("{{telefones_itens}}");
   const corpo = paras.filter(p => !temContactos(p));

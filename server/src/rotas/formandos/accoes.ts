@@ -1,11 +1,10 @@
 /** Acções na ficha do formando: documentos, notas e pagamento (Gold). */
+import { enviarModelo } from "../../emailModelo.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { avisarRecusasFin } from "../../avisosDocumentos.js";
 import { config } from "../../config.js";
-import { renderAutomaticEmail } from "../../emailHtml.js";
 import { recusarDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
-import { sendMail } from "../../mailer.js";
 import { nextOpsId } from "../../ops.js";
 import { pode } from "../../permissoes/capacidades.js";
 import { lerEntidade } from "../../regrasConfig.js";
@@ -147,15 +146,20 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     });
     const iban = ent.iban.replace(/(.{4})/g, "$1 ").trim();
     const titular = ent.titularConta || ent.nome;
-    const linhas = [
-      `Para concluir a inscrição em ${f.curso}, faça o pagamento de € ${fmtEuros(valor)} por transferência bancária.`,
-      `IBAN: ${iban} · Titular: ${titular}`,
-      "Depois responda a este email com o comprovativo da transferência.",
-      "Assim que o pagamento for confirmado pela secretaria, recebe a confirmação por email.",
-    ];
-    const href = `${config.appOrigin.replace(/\/$/, "")}/area-formando`;
-    const mail = renderAutomaticEmail({ nome, xml: "", linhas, cta: "Abrir a área do formando", href, vars: { nome, curso: f.curso }, origin: config.appOrigin });
-    await sendMail(db, { to: email, name: nome, subject: `Pagamento da inscrição em ${f.curso}`, text: mail.text, html: mail.html });
+    await enviarModelo(db, {
+      tipo: "pedido_pagamento_formando", para: email, nome, link: `${config.appOrigin.replace(/\/$/, "")}/area-formando`,
+      vars: { curso: f.curso, valor: fmtEuros(valor), iban, titular },
+      reserva: {
+        assunto: "Pagamento da inscrição em {{curso}}",
+        linhas: [
+          "Para concluir a inscrição em {{curso}}, faça o pagamento de € {{valor}} por transferência bancária.",
+          "IBAN: {{iban}} · Titular: {{titular}}",
+          "Depois responda a este email com o comprovativo da transferência.",
+          "Assim que o pagamento for confirmado pela secretaria, recebe a confirmação por email.",
+        ],
+        cta: "Abrir a área do formando",
+      },
+    });
     await inserirNota(db, "gold", id, req.actor!.name, req.actor!.id, `Pagamento pedido por email · € ${fmtEuros(valor)} por transferência.`);
     await audit(db, req.actor!.id, "formando.pagamento_pedido", "formandos_gold", String(id), req.ip, { valor });
     return { ok: true, valor };

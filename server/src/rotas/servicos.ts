@@ -1,7 +1,7 @@
+import { enviarModelo } from "../emailModelo.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { LIMITES_SERVICO as L, slugServico, videoServico } from "../../../src/partilhado/siteServicos.js";
-import { sendMail } from "../mailer.js";
 import { lerEntidadePublica } from "../regrasConfig.js";
 import * as repo from "../repos/servicos.js";
 import { many, one, type Consulta } from "../repos/sql.js";
@@ -179,9 +179,21 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
     const ena = await lerEntidadePublica(db);
     if (ena.email) {
-      const texto = [`Novo pedido de proposta no site.`, "", `Nome: ${p.nome}`, `Empresa: ${p.empresa || "—"}`, `Email: ${p.email}`, `Telefone: ${p.telefone || "—"}`,
-        `Serviço: ${p.servico || "—"}`, "", p.mensagem || "(sem mensagem)", "", "Ficou registado em CRM › Clientes."].join("\n");
-      await sendMail(db, { to: ena.email, name: ena.nomeCurto || ena.nome, subject: `Pedido de proposta: ${p.empresa || p.nome}`, text: texto }).catch(() => undefined);
+      await enviarModelo(db, {
+        tipo: "pedido_proposta", para: ena.email, nome: ena.nomeCurto || ena.nome,
+        vars: {
+          nome_contacto: p.nome, empresa: p.empresa || p.nome, email_contacto: p.email, telefone: p.telefone || "—",
+          servico: p.servico || "—", mensagem: p.mensagem || "(sem mensagem)",
+        },
+        reserva: {
+          assunto: "Pedido de proposta: {{empresa}}",
+          linhas: [
+            "Novo pedido de proposta no site.",
+            "Nome: {{nome_contacto}}<br>Empresa: {{empresa}}<br>Email: {{email_contacto}}<br>Telefone: {{telefone}}<br>Serviço: {{servico}}",
+            "{{mensagem}}", "Ficou registado em CRM › Clientes.",
+          ],
+        },
+      }).catch(() => undefined);
     }
     return { ok: true };
   });

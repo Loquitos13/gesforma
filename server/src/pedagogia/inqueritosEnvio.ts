@@ -1,12 +1,11 @@
 /** Envio dos inquéritos do regime aos formandos e formadores de uma turma. */
+import { enviarModelo } from "../emailModelo.js";
 import { randomBytes } from "node:crypto";
 import { config } from "../config.js";
 import type { Db } from "../db/pool.js";
-import { sendMail } from "../mailer.js";
 import { rotuloPublicoInquerito } from "../relatorioFinal.js";
 import { gravarToken, inqueritosDoRegime, registarEnvio } from "../repos/inqueritos.js";
 import { contactosFormadores, contactosFormandos, equipaDaTurma } from "../repos/pedagogiaTurma.js";
-import { escapeHtml } from "../xss.js";
 import { anexarPerguntasDaTurma } from "./ficheiros.js";
 import { publicoInquerito, type PublicoInquerito } from "./inqueritos.js";
 import { asArr, asObj, type Regime } from "./util.js";
@@ -73,15 +72,15 @@ export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefine
       if (!vistosSemEmail.has(pessoa.nome)) { semEmail += 1; vistosSemEmail.add(pessoa.nome); }
       continue;
     }
-    const linhas = links.map(l => `${l.titulo}: ${l.url}`).join("\n");
-    const htmlLinks = links.map(l => `<li><a href="${escapeHtml(l.url)}">${escapeHtml(l.titulo)}</a></li>`).join("");
     const alvos = pessoa.publicos.filter(p => (porPublico.get(p) ?? []).length).map(rotuloPublicoInquerito).join(" e ");
-    await sendMail(db, {
-      to: pessoa.email,
-      name: pessoa.nome,
-      subject: `Inquérito da turma ${row.nome}`,
-      text: `Olá ${pessoa.nome},\n\nPedimos a sua resposta ao inquérito da turma ${row.nome} (${row.curso}). Público-alvo: ${alvos}.\n\n${linhas}\n`,
-      html: `<p>Olá ${escapeHtml(pessoa.nome)},</p><p>Pedimos a sua resposta ao inquérito da turma <strong>${escapeHtml(row.nome)}</strong> (${escapeHtml(row.curso)}). Público-alvo: ${escapeHtml(alvos)}.</p><ul>${htmlLinks}</ul>`,
+    await enviarModelo(db, {
+      tipo: "inquerito_turma", para: pessoa.email, nome: pessoa.nome, link: links[0]!.url,
+      vars: { turma: row.nome, curso: row.curso, publico: alvos, inqueritos_itens: links.map(l => `${l.titulo}: ${l.url}`) },
+      reserva: {
+        assunto: "Inquérito da turma {{turma}}",
+        linhas: ["Pedimos a sua resposta ao inquérito da turma {{turma}} ({{curso}}). Público-alvo: {{publico}}.", "{{inqueritos_itens}}"],
+        cta: "Responder ao inquérito",
+      },
     });
     enviados += 1;
   }

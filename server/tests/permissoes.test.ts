@@ -11,11 +11,29 @@ describe("matriz de permissões", () => {
     }
   });
 
-  it("pagamentos e emails: admin e secretaria", () => {
+  it("pagamentos: admin e secretaria", () => {
     expect(podeAceder("secretaria", "PATCH", "/v1/pagamentos/TRX-1")).toBe(true);
     expect(podeAceder("comercial", "POST", "/v1/pagamentos")).toBe(false);
     expect(podeAceder("formador", "GET", "/v1/pagamentos")).toBe(false);
-    expect(podeAceder("comercial", "PATCH", "/v1/email/templates/1")).toBe(false);
+  });
+
+  it("emails: modelos e regras para toda a equipa; histórico só da secretaria", () => {
+    for (const perfil of ["secretaria", "financiada", "comercial"]) {
+      expect(podeAceder(perfil, "GET", "/v1/email/opcoes")).toBe(true);
+      expect(podeAceder(perfil, "PATCH", "/v1/email/templates/1")).toBe(true);
+      expect(podeAceder(perfil, "POST", "/v1/email/previsualizar")).toBe(true);
+      expect(podeAceder(perfil, "POST", "/v1/email/rules")).toBe(true);
+      expect(podeAceder(perfil, "PATCH", "/v1/email/rules/3")).toBe(true);
+      expect(podeAceder(perfil, "POST", "/v1/email/rules/3/teste")).toBe(true);
+      expect(podeAceder(perfil, "DELETE", "/v1/email/rules/3")).toBe(true);
+    }
+    for (const perfil of ["financiada", "comercial"]) {
+      expect(podeAceder(perfil, "GET", "/v1/email/envios")).toBe(false);
+      expect(podeAceder(perfil, "POST", "/v1/email/envios/1/reenviar")).toBe(false);
+      expect(podeAceder(perfil, "GET", "/v1/email/jobs")).toBe(false);
+    }
+    expect(podeAceder("secretaria", "GET", "/v1/email/envios")).toBe(true);
+    expect(podeAceder("formador", "PATCH", "/v1/email/templates/1")).toBe(false);
   });
 
   it("formador: só leitura, excepto sumários, presenças e planos das suas sessões", () => {

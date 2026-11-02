@@ -1,6 +1,6 @@
 /**
  * O perfil comercial (Gold) só vende: painel de vendas, CRM (pré-inscrições, clientes, parceiros, contratos),
- * equipa (os seus objetivos e propostas), campanhas e os cronogramas das turmas (só leitura).
+ * equipa (os seus objetivos e propostas), campanhas, os modelos e regras dos emails automáticos e os cronogramas das turmas (só leitura).
  * Turmas, cursos, formandos, formadores, dossiê, inquéritos, blog e listas de opções ficam de fora.
  *
  * Partilhado entre o menu do backoffice (`shell/navegacao.ts`) e o servidor (pesquisa global e notificações),
@@ -14,6 +14,7 @@ export const VISTAS_COMERCIAL = [
   "gold-campanhas",
   "gold-cronogramas",
   "notificacoes",
+  "emails",
 ] as const;
 
 const ABERTAS = new Set<string>(VISTAS_COMERCIAL);

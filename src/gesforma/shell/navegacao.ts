@@ -87,7 +87,7 @@ export function painelDoPerfil(role: string): Vista {
 
 function gruposDoPerfil(role: string): string[] {
   if (role === "formador") return ["Formador"];
-  if (role === "financiada") return ["Financiada", "Gestão"];
+  if (role === "financiada") return ["Financiada", "Gestão", "Sistema"];
   return ["Gold", "Financiada", "Gestão", "Sistema"];
 }
 
@@ -116,6 +116,8 @@ export function menuDoPerfil(role: string): GrupoMenu[] {
     .map(g => (g.group !== "Sistema" || role === "admin")
       ? g
       : { ...g, items: g.items.filter(item => item.view !== "utilizadores" && item.view !== "site") })
+    // A coordenação da Financiada só tem, em Sistema, os emails automáticos (modelos e regras).
+    .map(g => (g.group === "Sistema" && role === "financiada") ? { ...g, items: g.items.filter(item => item.view === "emails") } : g)
     // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
     .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
     // O blog é da secretaria: a Financiada vê só as listas de opções em Gestão (o comercial não tem Gestão, ver soVendas).

@@ -142,6 +142,7 @@ describe("Emails automáticos", () => {
     expect(prev.json().html).toContain("<html");
     expect(prev.json().html).not.toMatch(/123 456 789|VNG-SM/);
 
-    expect((await pedido(ctx, "comercial", "GET", "/v1/email/regras")).statusCode).toBe(403);
+    expect((await pedido(ctx, "comercial", "GET", "/v1/email/regras")).statusCode).toBe(200);
+    expect((await pedido(ctx, "comercial", "GET", "/v1/email/envios")).statusCode).toBe(403);
   });
 });

@@ -1,6 +1,7 @@
 // Sistema › Emails automáticos: regras (quando sai cada email), modelos (o que diz) e histórico de envios.
 import { apiOpcoesEmail } from "../../../partilhado/api/emails";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
+import { usePode } from "../../../partilhado/AuthGate";
 import { ErroCarregar, PageHeader, Separadores, useFiltrosUrl } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { Historico } from "./emails/Historico";
@@ -11,7 +12,10 @@ type Aba = "regras" | "modelos" | "historico";
 
 export default function Emails({ navigate }: VistaProps) {
   const [f, setF] = useFiltrosUrl({ aba: "regras" });
-  const aba = (["regras", "modelos", "historico"].includes(f.aba) ? f.aba : "regras") as Aba;
+  // O histórico dos envios (destinatários) é só da secretaria; modelos e regras são de toda a equipa.
+  const verHistorico = usePode()("emails.historico");
+  const abas: Aba[] = verHistorico ? ["regras", "modelos", "historico"] : ["regras", "modelos"];
+  const aba = (abas.includes(f.aba as Aba) ? f.aba : "regras") as Aba;
   const { dados: opcoes, erro, recarregar } = useRecurso("emails:opcoes", apiOpcoesEmail);
 
   return (
@@ -26,11 +30,11 @@ export default function Emails({ navigate }: VistaProps) {
         rotulo="Emails automáticos"
         ativo={aba}
         onMudar={id => setF({ aba: id })}
-        itens={[{ id: "regras", rotulo: "Regras" }, { id: "modelos", rotulo: "Modelos" }, { id: "historico", rotulo: "Histórico" }]}
+        itens={[{ id: "regras", rotulo: "Regras" }, { id: "modelos", rotulo: "Modelos" }, ...(verHistorico ? [{ id: "historico", rotulo: "Histórico" }] : [])]}
       />
       {aba === "regras" && <Regras opcoes={opcoes} onEditarModelo={() => setF({ aba: "modelos" })} />}
       {aba === "modelos" && <Modelos opcoes={opcoes} />}
-      {aba === "historico" && <Historico />}
+      {aba === "historico" && verHistorico && <Historico />}
     </div>
   );
 }

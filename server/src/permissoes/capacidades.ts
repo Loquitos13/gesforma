@@ -16,7 +16,8 @@ export const CAPACIDADES = {
   "crm.validarDocumentos": PEDAGOGIA,
   "pagamentos.ver": SECRETARIA,
   "pagamentos.confirmar": SECRETARIA,
-  "emails.gerir": SECRETARIA,
+  "emails.gerir": EQUIPA,
+  "emails.historico": SECRETARIA,
   // O comercial só vende: não edita cursos nem gere turmas (ver permissoes/comercial.ts).
   "cursos.editar": SECRETARIA,
   "cursos.apagar": SECRETARIA,

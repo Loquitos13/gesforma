@@ -21,6 +21,12 @@ export const COMERCIAL_PERMITIDO: [Metodo, string][] = [
   ["GET", "/v1/search"],
   ["*", "/v1/notificacoes*"],
   ["POST", "/v1/events"],
+  // Modelos e regras dos emails automáticos (o histórico dos envios não).
+  ["GET", "/v1/email/opcoes"],
+  ["*", "/v1/email/templates*"],
+  ["POST", "/v1/email/previsualizar"],
+  ["*", "/v1/email/rules*"],
+  ["*", "/v1/email/regras*"],
   // Opções dos formulários de venda (curso, turma, local, horário…). Formadores, módulos e conteúdos não.
   ["GET", "/v1/opcoes"],
   ...(["cursos", "turmas", "locais", "datas", "horarios", "areas", "tematicas", "financiadores", "comerciais", "campanhas", "lista"]

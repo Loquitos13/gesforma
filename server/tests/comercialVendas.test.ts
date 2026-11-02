@@ -61,13 +61,13 @@ async function leadDoComercial() {
 }
 
 describe("menu do comercial", () => {
-  it("só vendas: painel, CRM, equipa, campanhas e cronogramas", () => {
+  it("só vendas: painel, CRM, equipa, campanhas, cronogramas e os emails automáticos", () => {
     const menu = menuDoPerfil("comercial");
     const vistas = menu.flatMap(g => g.items.flatMap(i => [i.view, ...(i.children ?? []).map(c => c.view)]).filter(Boolean));
-    expect(menu.map(g => g.group)).toEqual(["Gold"]);
+    expect(menu.map(g => g.group)).toEqual(["Gold", "Sistema"]);
     expect(vistas).toEqual([
       "gold-painel", "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos",
-      "gold-equipa", "gold-campanhas", "gold-cronogramas",
+      "gold-equipa", "gold-campanhas", "gold-cronogramas", "emails",
     ]);
   });
 

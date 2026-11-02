@@ -27,7 +27,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
   const pode = usePode();
   const gerir = pode("emails.gerir");
   const { dados, erro, aCarregar, recarregar } = useRecurso("emails:regras", apiRegrasEmail);
-  const { dados: envios } = useRecurso("emails:envios:resumo", signal => apiEnviosEmail({ porPagina: 1 }, signal));
+  const { dados: envios } = useRecurso(pode("emails.historico") ? "emails:envios:resumo" : null, signal => apiEnviosEmail({ porPagina: 1 }, signal));
   const { dados: modelos } = useRecurso("emails:modelos", apiModelosEmail);
   const [selId, setSelId] = useState<number | null>(null);
   const [form, setForm] = useState<RegraEmail | "nova" | null>(null);

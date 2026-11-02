@@ -3,7 +3,7 @@ import { dtpDriveSegments } from "./dtpPasta.js";
 import type { Db } from "./db/pool.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
-  apagarContaGoogle, apagarEstadosOauthExpirados, contaGoogle, gravarConfigDrive, gravarContaGoogle, lembrarPastaRaiz,
+  apagarContaGoogle, apagarEstadosOauthExpirados, contaGoogle, esquecerPastasDrive, gravarConfigDrive, gravarContaGoogle, lembrarPastaRaiz,
   lerConfigDrive, renovarTokenGoogle,
 } from "./repos/drive.js";
 import { openSecret, sealSecret } from "./secretBox.js";
@@ -208,6 +208,9 @@ export async function saveGoogleAccount(db: Db, tokens: {
 }) {
   const email = await googleUserEmail(tokens.access_token);
   const prev = await contaGoogle(db);
+  // Outra conta Google: as pastas guardadas eram da anterior e a nova não as vê.
+  const outraConta = Boolean(prev?.email && email && prev.email.trim().toLowerCase() !== email.trim().toLowerCase());
+  if (outraConta) await esquecerPastasDrive(db);
   const refresh = tokens.refresh_token
     ?? refreshLegivel(prev?.refresh_token);
   if (!refresh) throw new Error("Google não devolveu refresh token. Volte a ligar a conta.");
@@ -218,7 +221,7 @@ export async function saveGoogleAccount(db: Db, tokens: {
     refreshSelado: sealSecret(refresh),
     expiry,
     scope: tokens.scope ?? googleScopes().join(" "),
-    folderId: prev?.folder_id ?? null,
+    folderId: outraConta ? null : prev?.folder_id ?? null,
     folderName: prev?.folder_name ?? null,
   });
   return { email };
@@ -336,6 +339,17 @@ function usableFolderId(id: string | null | undefined) {
   const value = (id ?? "").trim();
   if (!value || value === "." || value === "root") return "";
   return value;
+}
+
+/** A pasta guardada ainda existe (e não está no lixo) na conta ligada? Num erro que não seja «não existe», assume-se que sim. */
+export async function pastaExiste(token: string, id: string) {
+  if (!id.trim()) return false;
+  try {
+    const r = await driveComToken<{ id?: string; trashed?: boolean }>(token, `${DRIVE_FILES}/${encodeURIComponent(id)}?fields=id,trashed&supportsAllDrives=true`);
+    return r.trashed !== true;
+  } catch (err) {
+    return !isNotFound(err);
+  }
 }
 
 export function isNotFound(err: unknown) {

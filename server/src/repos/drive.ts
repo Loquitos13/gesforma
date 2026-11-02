@@ -196,3 +196,23 @@ export function ficheirosForaDaPastaDaTurma(c: Consulta, limite: number) {
 export async function gravarCaminhoFicheiro(c: Consulta, id: string, folderPath: string) {
   await many(c, "UPDATE drive_files SET folder_path = $2 WHERE id = $1", [id, folderPath]);
 }
+
+/**
+ * Outra conta Google ligada: as pastas guardadas eram da conta anterior (a nova não as vê). Esquecem-se todas; as
+ * pastas criam-se de novo, na conta nova, quando forem precisas.
+ */
+export async function esquecerPastasDrive(c: Consulta) {
+  for (const t of ["turmas_gold", "turmas_fin"]) {
+    await many(c, `UPDATE ${t} SET drive_pasta_id = '', drive_dossie_id = '', drive_formandos_id = '', drive_formadores_id = '', drive_partilhas_em = NULL
+                    WHERE drive_pasta_id <> '' OR drive_dossie_id <> '' OR drive_formandos_id <> '' OR drive_formadores_id <> ''`);
+  }
+  await many(c, "UPDATE preinscricoes SET drive_pasta_id = '', drive_pasta_parent_id = '' WHERE drive_pasta_id <> ''");
+  await many(c, "UPDATE formadores SET drive_pasta_id = '' WHERE drive_pasta_id <> ''");
+  await many(c, "UPDATE oauth_accounts SET folder_id = NULL, updated_at = now() WHERE provider = 'google'");
+}
+
+/** A pasta da turma deixou de existir na Drive ligada: esquece-se (cria-se de novo no próximo ficheiro). */
+export async function esquecerPastaDaTurma(c: Consulta, regime: Regime, nome: string) {
+  await many(c, `UPDATE ${tabelaRegime("turmas", regime)} SET drive_pasta_id = '', drive_dossie_id = '', drive_formandos_id = '', drive_formadores_id = '', drive_partilhas_em = NULL
+                  WHERE trim(nome) = trim($1)`, [nome]);
+}

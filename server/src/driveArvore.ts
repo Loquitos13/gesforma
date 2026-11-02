@@ -10,7 +10,7 @@ import { contaGoogle, contarPartilhasPorAcertar, marcarPartilhasSincronizadas, p
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
-  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, isNotFound, moverPastaDrive, partilharPasta, permissoesDoItem, raizDoProjecto,
+  apagarItemGoogle, criarAtalhoDrive, garantirPastaFilha, isNotFound, moverPastaDrive, pastaExiste, partilharPasta, permissoesDoItem, raizDoProjecto,
   renomearItemDrive, revogarPermissao, tokenDrive, type PapelDrive,
 } from "./googleDrive.js";
 
@@ -182,7 +182,8 @@ export async function garantirPastaPendente(db: Db, lead: { id: number; nome: st
   const gravada = await pastaDaPreinscricao(db, lead.id);
   const nome = nomePastaPessoa(lead.id, `${lead.nome} ${lead.apelido}`);
   const path = `${ZONA_PENDENTES} / ${nome}`;
-  if (gravada?.drive_pasta_id) {
+  // A pasta guardada pode ser de outra conta Google (a Drive foi ligada de novo): só se usa se ainda existir.
+  if (gravada?.drive_pasta_id && await pastaExiste(token, gravada.drive_pasta_id)) {
     return { pastaId: gravada.drive_pasta_id, parentId: gravada.drive_pasta_parent_id, path };
   }
   const root = await raizDoProjecto(db, token);
@@ -222,7 +223,7 @@ export async function garantirBolsaFormador(db: Db, nome: string) {
   const token = await tokenDrive(db);
   if (!token || !nome.trim()) return null;
   const formador = await formadorPorNome(db, nome.trim());
-  if (formador?.drive_pasta_id) {
+  if (formador?.drive_pasta_id && await pastaExiste(token, formador.drive_pasta_id)) {
     return {
       pastaId: formador.drive_pasta_id,
       path: `${ZONA_BOLSA} / ${nomePastaPessoa(formador.id, formador.nome)}`,

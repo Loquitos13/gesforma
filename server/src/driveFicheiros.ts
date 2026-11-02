@@ -11,7 +11,7 @@ import {
   NA_PASTA_DA_TURMA,
 } from "./googleDrive.js";
 import {
-  apagarRegistoFicheiro, ficheiroDrive, inserirFicheiroGoogle, inserirFicheiroLocal,
+  apagarRegistoFicheiro, esquecerPastaDaTurma, ficheiroDrive, inserirFicheiroGoogle, inserirFicheiroLocal,
   ficheirosForaDaPastaDaTurma, gravarCaminhoFicheiro, listarFicheirosDrive, pastaDaTurmaPorNome, type DriveFileRow,
 } from "./repos/drive.js";
 import { dtpDriveSegments } from "./dtpPasta.js";
@@ -173,7 +173,18 @@ export async function storeDriveFile(
       }
       throw err instanceof Error ? err : new Error(msg || "upload recusado");
     }
-    const uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
+    let uploaded: Awaited<ReturnType<typeof uploadToGoogle>>;
+    try {
+      uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
+    } catch (err) {
+      // A pasta guardada da turma pode ser de outra conta Google (a Drive foi ligada de novo): esquece-se e tenta-se
+      // outra vez numa pasta criada agora na conta ligada.
+      if (!isNotFound(err) || ctx.parentDriveId?.trim() || !ctx.turma || (ctx.regime !== "gold" && ctx.regime !== "fin")) throw err;
+      await esquecerPastaDaTurma(db, ctx.regime, ctx.turma);
+      parent = await pastaFinDaTurma(db, token, ctx, creds.folderName)
+        || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+      uploaded = await uploadToGoogle(token, parent, name, file.mime, file.bytes);
+    }
     try {
       await inserirFicheiroGoogle(db, {
         id, driveId: uploaded.id, name: uploaded.name ?? name, mime: uploaded.mimeType ?? file.mime,

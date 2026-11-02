@@ -441,7 +441,12 @@ async function nestFolders(token: string, parentId: string, names: string[]) {
 
 export async function ensureFolderPath(db: Db, token: string, segments: string[], folderId?: string) {
   const account = await loadAccount(db);
-  const pinned = usableFolderId(folderId) || usableFolderId(account?.folder_id);
+  // A pasta raiz fixada (nas Configurações ou lembrada da conta) pode ser de outra conta Google, que a ligada não vê:
+  // só se usa a que ainda existe; senão cria-se (ou encontra-se) a raiz na conta ligada.
+  let pinned = "";
+  for (const id of [usableFolderId(folderId), usableFolderId(account?.folder_id)]) {
+    if (id && id !== pinned && await pastaExiste(token, id)) { pinned = id; break; }
+  }
   const rootName = segments[0] ?? config.googleDriveFolder;
   const rest = segments.slice(1).filter(name => name.trim());
   const remember = async (id: string) => {

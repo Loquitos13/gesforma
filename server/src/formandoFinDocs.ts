@@ -3,7 +3,7 @@ import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { DOCS_FORMANDO_FIN } from "../../src/partilhado/dossierDocs.js";
 import { storeDriveFile } from "./driveFicheiros.js";
-import { erroFicheiroPublico } from "./ficheirosValidacao.js";
+import { erroFicheiroPublico, nomeIdentificado } from "./ficheirosValidacao.js";
 import { readFormandoDocs } from "./pii.js";
 import {
   decidirDoc, definirTokenFin, docDoFormando, docEnviado, docManual, docsDoFormando, fichaFinDoUtilizador,
@@ -120,7 +120,8 @@ export async function uploadDocFormandoFin(
   const p = await pessoaFin(db, formandoId);
   if (!p) return { error: "Formando inexistente." as const };
   const label = DOCS_FORMANDO_FIN.find(d => d.id === tipo)?.label ?? tipo;
-  const stored = await storeDriveFile(db, opts.actorId, file, {
+  const nome = nomeIdentificado(file.name, label, `${p.nome} ${p.apelido}`);
+  const stored = await storeDriveFile(db, opts.actorId, { ...file, name: nome }, {
     kind: "formando-doc",
     regime: "fin",
     formando: `${p.nome} ${p.apelido}`.trim(),

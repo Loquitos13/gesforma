@@ -41,6 +41,18 @@ export function sanitizeFileName(name: string) {
 }
 
 /**
+ * Nome que identifica o documento: «Cartão de Cidadão - Ana Silva.pdf» (o documento e a pessoa), com a extensão do
+ * ficheiro enviado. Sem documento, fica o nome original.
+ */
+export function nomeIdentificado(original: string, documento: string, pessoa: string) {
+  const doc = documento.trim();
+  if (!doc) return original;
+  const ext = (/\.([a-z0-9]{1,8})$/i.exec(original)?.[1] ?? "").toLowerCase();
+  const base = [doc, pessoa.trim()].filter(Boolean).join(" - ").replace(/[/\\:*?"<>|]+/g, " ").replace(/\s+/g, " ").trim();
+  return sanitizeFileName(`${base.slice(0, 160)}${ext ? `.${ext}` : ""}`);
+}
+
+/**
  * Ficheiros enviados por pessoas de fora (ligação pessoal, portal e área do formando):
  * só PDF, JPEG ou PNG, e o conteúdo tem de corresponder à extensão — o MIME do browser não chega.
  */

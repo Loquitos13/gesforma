@@ -8,6 +8,7 @@ import {
   disconnectGoogle, driveCreds, exchangeCode, getDriveStatus, googleAuthUrl, googleConfigured, purgeExpiredStates, saveDriveConfig, saveGoogleAccount,
 } from "../googleDrive.js";
 import { garantirBolsaFormador } from "../driveArvore.js";
+import { nomeIdentificado } from "../ficheirosValidacao.js";
 import { pode } from "../permissoes/capacidades.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { ficheiroDrive, turmaEntre, type DriveFileRow } from "../repos/drive.js";
@@ -305,7 +306,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         return reply.code(403).send({ error: "Sem acesso aos ficheiros deste regime." });
       }
       const bolsa = kind === "formador-doc" ? await garantirBolsaFormador(db, fields.formando || "") : null;
-      const file = await storeDriveFile(db, req.actor?.id, { name, mime, bytes }, {
+      // Documentos de uma pessoa (formando, formador, pré-inscrição): o nome diz o documento e de quem é.
+      const pessoal = ["formando-doc", "formador-doc", "preinscricao-doc"].includes(kind) && fields.label && fields.formando;
+      const nomeFinal = pessoal ? nomeIdentificado(name, fields.label!.slice(0, 120), fields.formando!.slice(0, 80)) : name;
+      const file = await storeDriveFile(db, req.actor?.id, { name: nomeFinal, mime, bytes }, {
         kind,
         regime: fields.regime === "fin" ? "fin" : fields.regime === "gold" ? "gold" : undefined,
         turma: fields.turma?.slice(0, 120),

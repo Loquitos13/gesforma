@@ -18,3 +18,13 @@ describe("vídeo de apresentação do curso", () => {
     expect(src("texto qualquer")).toBeNull();
   });
 });
+
+import { nomeIdentificado } from "../src/ficheirosValidacao.js";
+
+describe("nome dos documentos", () => {
+  it("documento e pessoa, com a extensão do ficheiro enviado", () => {
+    expect(nomeIdentificado("UC 01799_Cronograma.PDF", "Cartão de Cidadão", "Ana  Silva")).toBe("Cartão de Cidadão - Ana Silva.pdf");
+    expect(nomeIdentificado("foto.jpg", "IBAN / comprovativo de NIB", "Rui Costa")).toBe("IBAN comprovativo de NIB - Rui Costa.jpg");
+    expect(nomeIdentificado("x.pdf", "", "Ana")).toBe("x.pdf");
+  });
+});

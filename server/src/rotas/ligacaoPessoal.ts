@@ -12,7 +12,7 @@ import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } f
 import { garantirPastaPendente } from "../driveArvore.js";
 import { formandoFinPorToken, uploadDocFormandoFin } from "../formandoFinDocs.js";
 import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "../driveFicheiros.js";
-import { erroFicheiroPublico } from "../ficheirosValidacao.js";
+import { erroFicheiroPublico, nomeIdentificado } from "../ficheirosValidacao.js";
 import { fechoDaLigacao, leadPorToken, marcarUso, textoFecho, vistaEncerrada } from "../ligacaoPessoal.js";
 import { DadosFinErro, aceitarTermosFin, faltaDadosFin, gravarIdentificacaoFin, gravarMoradaFin } from "../percursoDadosFin.js";
 import { PercursoErro, concluirPercurso, escolherTurmaPublica, registarConsentimento, vistaDocumentosPublica } from "../percurso.js";
@@ -210,7 +210,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     try {
       const antigo = ja.find(d => d.tipo === tipo && d.drive_file_id);
       const zona = await garantirPastaPendente(db, { id: leadId, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? "") });
-      const file = await storeDriveFile(db, undefined, { name: up.name, mime: up.mime, bytes: up.bytes }, {
+      // O ficheiro fica com o nome do documento e da pessoa («Cartão de Cidadão - Ana Silva.pdf»).
+      const rotulo = comprovativo ? COMPROVATIVO.label : pedidos.find(p => p.id === tipo)?.label ?? tipo;
+      const nome = nomeIdentificado(up.name, rotulo, `${lead.nome ?? ""} ${lead.apelido ?? ""}`);
+      const file = await storeDriveFile(db, undefined, { name: nome, mime: up.mime, bytes: up.bytes }, {
         kind: comprovativo ? "comprovativo-pagamento" : "preinscricao-doc",
         regime,
         formando: `${lead.nome} ${lead.apelido}`.trim(),

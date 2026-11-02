@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Botao, Selecao, type OpcaoSelecao } from "../../../../partilhado/ui";
-import { apiLote, type AccaoLote, type Etiqueta } from "../../../../partilhado/api/crm";
+import { Botao, ConfirmarPerigo, Selecao, type OpcaoSelecao } from "../../../../partilhado/ui";
+import { apiApagarLeads, apiLote, type AccaoLote, type Etiqueta } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { ETAPAS, rotuloEtapa } from "./util";
@@ -19,6 +19,14 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
   const [motivo, setMotivo] = useState("");
   const motivos = useOpcoes("lista", { lista: "motivos_desistencia" });
   const lote = useAccao(apiLote, { ok: r => `${r.updated} pré-inscrições actualizadas.`, invalidar: ["crm:"] });
+
+  const [apagar, setApagar] = useState(false);
+  const apagarLote = useAccao(apiApagarLeads, {
+    ok: r => r.recusadas.length
+      ? `${r.apagadas} apagadas; ${r.recusadas.length} não (${[...new Set(r.recusadas.map(x => x.motivo))].join(" ")})`
+      : `${r.apagadas} pré-inscrições apagadas.`,
+    invalidar: ["crm:"],
+  });
 
   async function correr(a: Omit<AccaoLote, "ids">) {
     const r = await lote.correr({ ids, ...a });
@@ -64,7 +72,12 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
             onClick={() => void correr({ acao: "etiqueta", etiquetaId: etiqueta === "0" ? null : Number(etiqueta) })}>Marcar</Botao>
         </span>
       )}
+      <Botao tamanho="sm" variante="perigo" aCarregar={apagarLote.aCorrer} onClick={() => setApagar(true)}>Apagar</Botao>
       <Botao tamanho="sm" variante="ligacao" className="ml-auto" onClick={onLimpar}>Limpar selecção</Botao>
+      <ConfirmarPerigo aberto={apagar} onFechar={() => setApagar(false)} acao="Apagar"
+        titulo={`Apagar ${ids.length} ${ids.length === 1 ? "pré-inscrição" : "pré-inscrições"}?`}
+        descricao="As pré-inscrições seleccionadas saem do CRM, com o histórico e os documentos. Não se pode desfazer. As já validadas (ou que já são formandos) só o administrador as apaga: as outras pessoas veem-nas ficar, com o motivo."
+        onConfirmar={async () => { setApagar(false); const r = await apagarLote.correr(ids); if (r) onLimpar(); }} />
     </div>
   );
 }

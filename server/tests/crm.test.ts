@@ -204,6 +204,16 @@ describe("CRM: permissões", () => {
     const fin = await novoLead(ctx, { telf: "915000002", regime: "gold" }, "financiada");
     const r = await ctx.db.query<{ regime: string }>("SELECT regime FROM preinscricoes WHERE id = $1", [fin]);
     expect(r.rows[0]!.regime).toBe("fin");
+    // Apagar em lote: o comercial não; a secretaria apaga as que pode e diz quais ficaram (validada).
+    const a = await novoLead(ctx, { telf: "915000011" });
+    const b = await novoLead(ctx, { telf: "915000012" });
+    const c = await novoLead(ctx, { telf: "915000013" });
+    await ctx.db.query("UPDATE preinscricoes SET validada_em = now() WHERE id = $1", [c]);
+    expect((await pedido(ctx, "comercial", "POST", "/v1/crm/lote/apagar", { ids: [a] })).statusCode).toBe(403);
+    const lote = await pedido(ctx, "secretaria", "POST", "/v1/crm/lote/apagar", { ids: [a, b, c] });
+    expect(lote.statusCode, lote.body).toBe(200);
+    expect(lote.json()).toMatchObject({ apagadas: 2, recusadas: [{ id: c }] });
+    expect((await ctx.db.query("SELECT id FROM preinscricoes WHERE id = ANY($1::int[])", [`{${a},${b},${c}}`])).rows.map(r => (r as { id: number }).id)).toEqual([c]);
     // Apagar fica auditado.
     expect((await pedido(ctx, "secretaria", "DELETE", `/v1/preinscricoes/${id}`)).statusCode).toBe(200);
     const audit = await ctx.db.query("SELECT 1 FROM audit_log WHERE action = 'preinscricao.apagar' AND entity_id = $1", [String(id)]);

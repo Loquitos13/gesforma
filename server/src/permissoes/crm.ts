@@ -24,6 +24,7 @@ export function linhaCrmDoCaminho(path: string): { tabela: TabelaCrm; id: number
 /** CRM: documentos, validação, pagamento pedido e remoção de leads. O formador não entra em `/v1/crm*`. */
 export const regras: Regra[] = [
   ["DELETE", "/v1/preinscricoes/:id", PEDAGOGIA],
+  ["POST", "/v1/crm/lote/apagar", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/documentos/:docId/validar", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/documentos/:docId/recusar", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/validar-preinscricao", PEDAGOGIA],

@@ -4,6 +4,7 @@
  */
 import type { FastifyInstance, FastifyReply } from "fastify";
 import { z } from "zod";
+import { linhaVisivel } from "../repos/crmVisivel.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads } from "../crm.js";
 import { addLeadNota, createCrmCampo, createCrmEtiqueta, deleteCrmEtiqueta, findDuplicados, fixarNota, getLeadDossier, listCrmCampos, listCrmEtiquetas, setCampoValores } from "../crmDossier.js";
 import {
@@ -420,6 +421,29 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     } catch (err) {
       if (erroCrm(reply, err)) return;
     }
+  });
+
+  /** Apagar várias pré-inscrições de uma vez (as mesmas regras do apagar uma a uma); devolve as recusadas e porquê. */
+  app.post("/v1/crm/lote/apagar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { body: z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }) }, req);
+    if (!v) return;
+    let apagadas = 0;
+    const recusadas: { id: number; motivo: string }[] = [];
+    for (const id of [...new Set(v.body.ids)]) {
+      // Como no apagar uma a uma: só as pré-inscrições que esta pessoa pode ver.
+      const todas = req.actor!.role === "admin" || req.actor!.role === "secretaria";
+      if (!todas && !(await linhaVisivel(db, "preinscricoes", id, req.actor!))) { recusadas.push({ id, motivo: "pré-inscrição inexistente" }); continue; }
+      try {
+        const meta = await apagarLead(db, req.actor!, id);
+        await audit(db, req.actor!.id, "preinscricao.apagar", "preinscricao", String(id), req.ip, { ...meta, lote: true });
+        apagadas++;
+      } catch (err) {
+        if (!(err instanceof CrmErro)) throw err;
+        recusadas.push({ id, motivo: err.message });
+      }
+    }
+    return { apagadas, recusadas };
   });
 
   app.delete("/v1/preinscricoes/:id", async (req, reply) => {

@@ -188,6 +188,9 @@ export const apiCriarLead = (d: DadosLead & { nome: string }) =>
   enviar.post<{ preinscricao: Lead; duplicados: { id: number; nome: string; apelido: string; estado: string; curso: string }[] }>("/v1/preinscricoes", d);
 export const apiEditarLead = (id: number, d: DadosLead) => enviar.patch<{ preinscricao: Lead }>(`/v1/preinscricoes/${id}`, d);
 export const apiApagarLead = (id: number) => enviar.delete<{ ok: boolean }>(`/v1/preinscricoes/${id}`);
+/** Apaga várias pré-inscrições; as que não se podem apagar vêm em `recusadas`, com o motivo. */
+export const apiApagarLeads = (ids: number[]) =>
+  enviar.post<{ apagadas: number; recusadas: { id: number; motivo: string }[] }>("/v1/crm/lote/apagar", { ids });
 export const apiCompletar = (id: number, d: DadosLead) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/completar`, d);
 
 export const apiNota = (id: number, nota: string, meio = "", resultado = "") =>

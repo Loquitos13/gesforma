@@ -1,6 +1,7 @@
 import nodemailer, { type Transporter } from "nodemailer";
 import type { Db } from "./db/pool.js";
 import { resolveSmtpTransport, smtpConfigured } from "./smtpConfig.js";
+import { remetenteDoDestinatario } from "./remetenteLocal.js";
 import { sanitizeHeader } from "./security.js";
 
 type Anexo = { nome: string; tipo: string; conteudo: Buffer };
@@ -10,6 +11,8 @@ type SendInput = {
   de?: { nome: string; email: string };
   /** Cópia oculta (ex.: para a caixa do remetente ficar com o registo do que se enviou). */
   bcc?: string;
+  /** Sem o remetente do local da pessoa (ex.: o teste do SMTP): sai o da configuração. */
+  semLocal?: boolean;
 };
 
 // Um transporte por configuração, reaproveitado entre envios (o cron manda vários seguidos). Com limites de tempo:
@@ -42,9 +45,11 @@ export async function sendMail(db: Db, input: SendInput) {
     };
   }
   const mailer = emCache.mailer;
-  const info = await mailer.sendMail({
-    from: input.de ? { name: sanitizeHeader(input.de.nome), address: sanitizeHeader(input.de.email) } : transport.from,
-    replyTo: input.de ? sanitizeHeader(input.de.email) : transport.replyTo || undefined,
+  // Sem remetente próprio, sai do email do local da pessoa (as respostas vão para lá). Se o servidor de email não
+  // deixar enviar com esse endereço, sai do remetente geral com a resposta para o local.
+  const doLocal = input.de || input.semLocal ? null : await remetenteDoDestinatario(db, to).catch(() => null);
+  const de = input.de ?? doLocal;
+  const mensagem = {
     bcc: input.bcc ? sanitizeHeader(input.bcc) : undefined,
     // Nome e endereço separados: com texto «Nome <email>», vírgulas ou endereços no nome viravam destinatários.
     to: { name: sanitizeHeader(input.name), address: to },
@@ -52,6 +57,18 @@ export async function sendMail(db: Db, input: SendInput) {
     text,
     html: input.html,
     attachments: input.anexos?.map(a => ({ filename: sanitizeHeader(a.nome), contentType: a.tipo, content: a.conteudo })),
+  };
+  const comRemetente = (r: { nome: string; email: string } | null | undefined) => ({
+    from: r ? { name: sanitizeHeader(r.nome), address: sanitizeHeader(r.email) } : transport.from,
+    replyTo: r ? sanitizeHeader(r.email) : transport.replyTo || undefined,
   });
+  let info;
+  try {
+    info = await mailer.sendMail({ ...comRemetente(de), ...mensagem });
+  } catch (err) {
+    if (!doLocal) throw err;
+    console.warn(`[mail] remetente ${doLocal.email} recusado; sai do remetente geral com resposta para o local`);
+    info = await mailer.sendMail({ from: transport.from, replyTo: sanitizeHeader(doLocal.email), ...mensagem });
+  }
   return info.messageId ?? "smtp";
 }

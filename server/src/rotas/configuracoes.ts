@@ -155,6 +155,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         to,
         name: req.actor!.name,
         subject: "GesForma · teste SMTP",
+        semLocal: true,
         text: [
           "Este é um envio de teste do GesForma.",
           "Se chegou à caixa, o serviço SMTP está correcto.",

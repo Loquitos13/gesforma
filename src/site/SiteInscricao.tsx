@@ -2,7 +2,7 @@ import { precoDoLocal } from "../partilhado/precoLocal";
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
-import { ofertaFiltrada, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
+import { ofertaFiltrada, turmaCheia, turmasParaMostrar, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import type { Course } from "./SiteLanding";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
@@ -123,7 +123,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     const nomes = new Set([norm(curso?.title ?? ""), norm(curso?.nomeOferta ?? "")].filter(Boolean));
     // Só as datas de início ainda por vir (as mesmas que a página do curso mostra).
     const hoje = hojeLisboa();
-    return turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime) && (!t.dataInicio || t.dataInicio >= hoje));
+    // Uma turma cheia esconde-se se houver outra com vagas no mesmo local e horário; senão fica bloqueada.
+    return turmasParaMostrar(turmas.filter(t => nomes.has(norm(t.curso)) && (!t.regime || t.regime === curso?.regime) && (!t.dataInicio || t.dataInicio >= hoje)));
   }, [turmas, curso?.title, curso?.nomeOferta, curso?.regime]);
   const locais = uniqueVals(doCurso, "local");
   // Pré-inscrição: todos os locais que a página do curso mostra (com turmas primeiro; depois os atribuídos ao curso
@@ -383,10 +384,13 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                             <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-5 gap-y-3 border px-5 py-5 sm:min-h-[88px] ${ativo ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
                               <button type="button" disabled={vagas <= 0} onClick={() => escolherTurma(t)} aria-pressed={ativo}
                                 className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-1.5 text-left disabled:cursor-not-allowed">
+                                {t.matricula && (
+                                  <span className="basis-full text-xs font-semibold opacity-75">Data limite de matrícula: {fmtDataPt(t.matricula)}</span>
+                                )}
                                 <strong className="text-lg">{fmtDataPt(t.dataInicio)}</strong>
                                 <span className="text-sm opacity-80">{t.horario}</span>
                                 {t.preco != null && <span className="text-base font-bold">{eur(t.preco, true)}</span>}
-                                <span className="text-xs opacity-65">{vagasPublicas(t)}</span>
+                                <span className={turmaCheia(t) ? "text-xs font-bold" : "text-xs opacity-65"}>{vagasPublicas(t)}</span>
                               </button>
                               {/* O cronograma é o da turma (já traz o nome dela); só existe no site depois de publicado. */}
                               {t.cronogramaPublicado ? (

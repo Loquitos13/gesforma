@@ -11,12 +11,31 @@ export type OfertaTurma = {
   preco?: number | null;
   cronogramaPublicado?: boolean;
   regime?: "gold" | "fin";
+  /** Data limite da matrícula (marcador do cronograma), ou "". */
+  matricula?: string;
 };
+
+const semVagas = (t: Pick<OfertaTurma, "vagasLivres" | "vagasMostradas">) => !t.vagasLivres || !(t.vagasMostradas ?? t.vagasLivres);
+
+/**
+ * Turmas que o site mostra. Uma turma cheia esconde-se quando há outra turma aberta do mesmo curso, local e horário
+ * com vagas; se não houver, fica à vista mas bloqueada («Novas datas em breve», ver `turmaCheia`).
+ */
+export function turmasParaMostrar<T extends OfertaTurma>(turmas: T[]): T[] {
+  const chave = (t: OfertaTurma) => `${t.regime ?? ""}|${t.curso}|${t.local}|${t.horario}`.toLowerCase();
+  const comVagas = new Set(turmas.filter(t => !semVagas(t)).map(chave));
+  return turmas.filter(t => !semVagas(t) || !comVagas.has(chave(t)));
+}
+
+/** A turma está cheia (o site mostra-a bloqueada, com «Novas datas em breve»). */
+export function turmaCheia(t: Pick<OfertaTurma, "vagasLivres" | "vagasMostradas">) {
+  return semVagas(t);
+}
 
 /** Texto público das vagas de uma turma (sem o código interno da turma). */
 export function vagasPublicas(t: Pick<OfertaTurma, "vagasLivres" | "vagasMostradas">) {
   const n = t.vagasMostradas ?? t.vagasLivres;
-  if (!t.vagasLivres || !n) return "sem vagas";
+  if (!t.vagasLivres || !n) return "Novas datas em breve";
   return n === 1 ? "1 vaga restante" : `${n} vagas restantes`;
 }
 

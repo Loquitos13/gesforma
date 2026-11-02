@@ -377,6 +377,9 @@ type OfertaProps = {
   /** Botões das áreas com cursos, a seguir aos cursos: escolher uma filtra a grelha. */
   areas: boolean; tituloAreas: string;
   limite: number | null;
+  /** Botão «Ver todos os cursos» por baixo dos filtros (ex.: os destaques da página inicial). */
+  /** Sem escolha guardada: aparece na página inicial (onde a oferta é um resumo) e não no catálogo. */
+  botaoTodos?: boolean; textoTodos: string; ligacaoTodos: string;
   corFiltroAtivo: string;
   tipoFiltros: Tipografia; tipoTotal: Tipografia; tipoPesquisa: Tipografia;
   larguraPesquisa: number | null; raioPesquisa: number | null; fundoPesquisa: string;
@@ -390,7 +393,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     zonaMeio: { type: "slot", label: "Blocos entre os filtros e a pesquisa" },
     zonaCursos: { type: "slot", label: "Blocos antes dos cursos" },
     regime: { type: "select", label: "Cursos", options: [{ label: "Todos", value: "todos" }, { label: "Só Gold", value: "gold" }, { label: "Só Financiada", value: "fin" }] },
-    ordem: { type: "select", label: "Ordem", options: [{ label: "Cursos em destaque primeiro (arrastar para ordenar)", value: "manual" }, { label: "Mais procurados primeiro", value: "procura" }, { label: "Alfabética", value: "titulo" }] },
+    ordem: { type: "select", label: "Ordem", options: [{ label: "Cursos em destaque primeiro (arrastar para ordenar)", value: "manual" }, { label: "A começar primeiro (com vagas), depois os mais procurados", value: "procura" }, { label: "Alfabética", value: "titulo" }] },
     ordemManual: campoOrdemCursos("Cursos em destaque (Gold e Financiada)", {
       topo: "Em destaque, por esta ordem (arraste para mudar). Os restantes cursos vêm a seguir, pelos mais procurados.",
       vazio: "Ainda sem cursos em destaque. Acrescente-os na lista em baixo",
@@ -404,6 +407,9 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     areas: simNao("Botões das áreas de formação a seguir aos cursos"),
     tituloAreas: { type: "text", label: "Título dos botões das áreas (vazio = sem título)" },
     limite: campoNumero("Máximo de cursos (vazio = todos)", ""),
+    botaoTodos: simNao("Botão «Ver todos os cursos» por baixo dos filtros"),
+    textoTodos: { type: "text", label: "Texto do botão" },
+    ligacaoTodos: { type: "text", label: "Ligação do botão" },
     corFiltroAtivo: campoCor("Cor do filtro ativo"),
     tipoFiltros: campoTipografia("Tipografia dos botões de filtro"),
     tipoTotal: campoTipografia("Tipografia do número de formações"),
@@ -418,7 +424,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     zonaMeio: [], zonaCursos: [],
     regime: "todos", ordem: "procura", ordemManual: [], pesquisa: true, textoPesquisa: "Pesquisar formação", filtros: true, mostrarTotal: true,
     areas: true, tituloAreas: "Explore por área de formação",
-    limite: null, corFiltroAtivo: "var(--c-acento)",
+    limite: null, textoTodos: "Ver todos os cursos", ligacaoTodos: "/formacao", corFiltroAtivo: "var(--c-acento)",
     tipoFiltros: tipoVazia({ tamanho: 14, peso: "700" }), tipoTotal: tipoVazia({ tamanho: 14, peso: "600" }), tipoPesquisa: tipoVazia({ tamanho: 14 }),
     larguraPesquisa: 384, raioPesquisa: 999, fundoPesquisa: "#ffffff",
     cartao: cartaoPadrao(), aparencia: estiloVazio(),
@@ -426,9 +432,10 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
   resolveFields: (data, { fields }) => {
     const f = { ...fields } as Record<string, Field>;
     if (data.props.ordem !== "manual") delete f.ordemManual;
+    if (data.props.botaoTodos === false) { delete f.textoTodos; delete f.ligacaoTodos; }
     return f as typeof fields;
   },
-  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, ordemManual, pesquisa, textoPesquisa, filtros, mostrarTotal, areas, tituloAreas, limite, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
+  render: ({ puck, zonaMeio, zonaCursos, regime, ordem, ordemManual, pesquisa, textoPesquisa, filtros, mostrarTotal, areas, tituloAreas, limite, botaoTodos, textoTodos, ligacaoTodos, corFiltroAtivo, tipoFiltros, tipoTotal, tipoPesquisa, larguraPesquisa, raioPesquisa, fundoPesquisa, cartao, aparencia }) => {
     const tf = estiloTexto(tipoFiltros);
     const tt = estiloTexto(tipoTotal);
     const tp = estiloTexto(tipoPesquisa);
@@ -441,7 +448,9 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     const base = useMemo(() => {
       const r = cursos.filter(c => regime === "todos" || c.regime === regime);
       if (ordem === "titulo") return [...r].sort((a, b) => a.title.localeCompare(b.title, "pt"));
-      const porProcura = [...r].sort((a, b) => b.vendas - a.vendas);
+      // Os que começam mais cedo e ainda têm vagas vêm primeiro; depois os restantes, pelos mais procurados.
+      const porProcura = [...r].sort((a, b) =>
+        (a.proximaComVagas || "9999").localeCompare(b.proximaComVagas || "9999") || b.vendas - a.vendas);
       if (ordem !== "manual") return porProcura;
       const pos = new Map((ordemManual ?? []).map((id, i) => [id, i]));
       // sort estável: os que não estão na ordem manual mantêm a ordem por procura, no fim.
@@ -479,6 +488,13 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
                 <input value={q} onChange={ev => setQ(ev.target.value)} placeholder={textoPesquisa} className={juntar("w-full bg-transparent text-sm outline-none placeholder:text-[#4A6078] placeholder:opacity-80", tp.className)} style={tp.style} />
               </label>
             )}
+          </div>
+        )}
+        {(botaoTodos ?? (typeof window !== "undefined" && window.location.pathname === "/")) && (
+          <div className="mb-6 flex justify-end">
+            <a href={ligacaoTodos || "/formacao"} className="inline-flex items-center gap-2 bg-[var(--c-destaque)] px-5 py-2.5 text-sm font-bold text-white hover:brightness-90">
+              {textoTodos || "Ver todos os cursos"} <span aria-hidden="true">→</span>
+            </a>
           </div>
         )}
         {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}

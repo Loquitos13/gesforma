@@ -123,9 +123,9 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
                 <h2 className="mt-12 border-b border-black/15 pb-4 font-serif text-3xl">{p.tituloTurmas}</h2>
                 <div className="divide-y divide-black/15">
                   {curso.sessoes.map(s => (
-                    <div key={`${s.data}-${s.local}-${s.horario}`} className="flex flex-wrap items-center justify-between gap-3 py-5">
+                    <div key={`${s.data}-${s.local}-${s.horario}`} className={`flex flex-wrap items-center justify-between gap-3 py-5 ${s.cheia ? "opacity-55" : ""}`}>
                       <strong>{s.data}</strong>
-                      <span className="text-sm opacity-65">{[s.local, s.horario].filter(Boolean).join(" · ")}</span>
+                      <span className="text-sm opacity-65">{[s.local, s.horario, s.cheia ? "Novas datas em breve" : ""].filter(Boolean).join(" · ")}</span>
                     </div>
                   ))}
                 </div>

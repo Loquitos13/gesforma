@@ -68,7 +68,7 @@ function LinhaCurso({ c, guardado, comparado, onGuardar, onComparar, guardar, co
       <div className="relative cursor-pointer p-6">
         {(etiquetas || guardar) && <div className="flex flex-wrap items-center gap-3">
           {etiquetas && <>
-          <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">{c.enrollment}</span>
+          {c.enrollment !== "Acesso direto" && <span className="text-[10px] font-bold uppercase tracking-wider opacity-50">{c.enrollment}</span>}
           <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{c.area}</span>
           </>}
           {guardar && <button type="button" onClick={onGuardar} className={`relative z-10 ml-auto text-xs font-bold ${guardado ? "text-[var(--c-destaque)]" : "opacity-45"}`}>{guardado ? "Guardado" : "Guardar"}</button>}

@@ -10,6 +10,8 @@ import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
 import { textosCurso } from "../../src/partilhado/textosCurso.js";
 import { AREA_FINANCIADA, areaCanonica } from "../../src/partilhado/areasFormacao.js";
 import { diaAntesDe } from "../../src/partilhado/moodle.js";
+import { turmaCheia, turmasParaMostrar } from "../../src/partilhado/oferta.js";
+import { listOfertaFin, listOfertaGold } from "./ofertaGold.js";
 
 export type ContactoLocal = { local: string; telemovel: string; telefone: string; email: string; whatsapp: string };
 
@@ -82,8 +84,10 @@ export type CursoPublico = {
   /** Regime da oferta (ficha › Oferta): síncrono, assíncrono, misto ou vazio. */
   sincronia: RegimeSincronia;
   /** Próximas datas; o preço segue as regras da ficha (local, horário ou os dois), como na pré-inscrição. */
-  sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string }[];
+  sessoes: { data: string; iso: string; local: string; horario: string; preco: number | null; morada: string; cheia: boolean; matricula: string }[];
   nomeOferta: string;
+  /** Início da próxima turma aberta com vagas (aaaa-mm-dd), ou "": o catálogo põe primeiro os que começam já. */
+  proximaComVagas: string;
 };
 
 type CursoBruto = {
@@ -275,16 +279,23 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
   }
 
   const hoje = hojeLisboa();
+  // Só as turmas abertas (liberadas) ainda por começar. Uma cheia esconde-se se houver outra com vagas no mesmo
+  // local e horário; senão aparece bloqueada («Novas datas em breve»).
+  const [ofertaGold, ofertaFin] = await Promise.all([listOfertaGold(db), listOfertaFin(db)]);
+  const abertas = turmasParaMostrar([...ofertaGold, ...ofertaFin]
+    .filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.dataInicio) && t.dataInicio >= hoje));
   const inicios = new Map<string, { data: string; local: string }>();
-  const sessoes = new Map<string, Array<{ iso: string; data: string; local: string; horario: string }>>();
-  for (const row of dados.turmas) {
-    const data = String(row.data_inicio ?? "").slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje) continue;
-    const key = chave(row.curso);
+  const cheias = new Set<string>();
+  const sessoes = new Map<string, Array<{ iso: string; data: string; local: string; horario: string; cheia: boolean; matricula: string; regime: string }>>();
+  for (const t of abertas) {
+    const data = t.dataInicio;
+    const key = chave(t.curso);
+    const cheia = turmaCheia(t);
+    if (cheia) cheias.add(key);
     const actual = inicios.get(key);
-    if (!actual || data < actual.data) inicios.set(key, { data, local: row.local || "" });
+    if (!cheia && (!actual || data < actual.data)) inicios.set(key, { data, local: t.local || "" });
     const lista = sessoes.get(key) ?? [];
-    const sessao = { iso: data, data: dataCurta(data), local: row.local || "", horario: row.horario || "" };
+    const sessao = { iso: data, data: dataCurta(data), local: t.local || "", horario: t.horario || "", cheia, matricula: t.matricula, regime: t.regime };
     if (!lista.some(item => item.data === sessao.data && item.local === sessao.local && item.horario === sessao.horario)) {
       lista.push(sessao);
     }
@@ -368,7 +379,9 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       horasLabel,
       inicio: inicio
         ? `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
+        : curso.chaves.some(key => cheias.has(key)) ? "Novas datas em breve"
         : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
+      proximaComVagas: inicio?.data ?? "",
       precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${eur(desde, true)}` : eur(desde, true)) : "Sob consulta",
       precoDesde: desde,
       descricao: textos.completo,
@@ -400,18 +413,22 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       programa: programa.programa,
       sessoes: curso.chaves
         .flatMap(key => sessoes.get(key) ?? [])
+        .filter(x => x.regime === curso.regime)
         .sort((a, b) => a.iso.localeCompare(b.iso))
         .slice(0, 24)
-        .map(({ data, iso, local, horario }) => {
+        .map(({ data, iso, local, horario, cheia, matricula }) => {
           const preco = curso.regime === "gold" ? escolherPreco(curso.preco, local, horario, regrasDoPayload(payload)) : 0;
-          return { data, iso, local, horario, preco: preco > 0 ? preco : null, morada: moradas.get(`${curso.regime}:${chave(local)}`) ?? "" };
+          return { data, iso, local, horario, preco: preco > 0 ? preco : null, morada: moradas.get(`${curso.regime}:${chave(local)}`) ?? "", cheia, matricula };
         }),
       sincronia: regimeSincronia(payload.regimeSincronia),
       nomeOferta: curso.nomeOferta || curso.titulo,
     };
   });
 
-  cursos.sort((a, b) => b.vendas - a.vendas || a.titulo.localeCompare(b.titulo, "pt"));
+  // Primeiro os que começam mais cedo e ainda têm vagas; depois os restantes, pelos mais procurados.
+  cursos.sort((a, b) =>
+    (a.proximaComVagas || "9999").localeCompare(b.proximaComVagas || "9999")
+    || b.vendas - a.vendas || a.titulo.localeCompare(b.titulo, "pt"));
   const ccp = cursos
     .filter(curso => curso.regime === "gold" && /formador/i.test(curso.titulo) && /ccp/i.test(curso.titulo))
     .sort((a, b) => b.vendas - a.vendas)[0] ?? null;

@@ -295,7 +295,7 @@ export async function gravarFicha(c: Consulta, regime: Regime, cursoId: number, 
 
 // ── Catálogo público (site) ─────────────────────────────────────────────────
 
-/** Tudo o que o site precisa para montar o catálogo: cursos com ficha, vendas e turmas. */
+/** Tudo o que o site precisa para montar o catálogo: cursos com ficha, vendas e locais (as turmas vêm da oferta). */
 export async function dadosCatalogoPublico(c: Consulta) {
   const gold = await many<{ id: number; nome: string; categoria: string; tipo: string; preco: number; regime: string; horas: number; estado: string; payload: unknown }>(c,
     `SELECT c.id, c.nome, c.categoria, c.tipo, c.preco, c.regime, c.horas, c.estado, f.payload
@@ -309,14 +309,11 @@ export async function dadosCatalogoPublico(c: Consulta) {
        UNION ALL SELECT curso, count(*) FROM pagamentos WHERE lower(trim(estado)) = 'pago' GROUP BY curso
        UNION ALL SELECT curso, count(*) FROM formandos_fin GROUP BY curso
      ) v GROUP BY curso`);
-  const turmas = await many<{ curso: string; local: string; horario: string; data_inicio: string; estado: string }>(c,
-    `SELECT curso, local, horario, data_inicio, estado FROM turmas_gold
-     UNION ALL SELECT curso, local, horario, data_inicio, estado FROM turmas_fin`);
   // Morada de cada local (Edição de cursos › Locais): aparece na escolha do local da página do curso.
   const locais = await many<{ regime: string; nome: string; morada: string; telemovel: string; telefone: string; email: string; whatsapp: string }>(c,
     `SELECT regime, COALESCE(payload->>'nome', '') AS nome, COALESCE(payload->>'morada', '') AS morada,
             COALESCE(payload->>'telemovel', '') AS telemovel, COALESCE(payload->>'telefone', '') AS telefone,
             COALESCE(payload->>'email', '') AS email, COALESCE(payload->>'whatsapp', '') AS whatsapp
        FROM catalog_items WHERE kind = 'locais'`);
-  return { gold, fin, vendas, turmas, locais };
+  return { gold, fin, vendas, locais };
 }

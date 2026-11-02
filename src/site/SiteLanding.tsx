@@ -22,6 +22,8 @@ export type Course = {
   banner: string | null;
   precoDesde: number | null;
   vendas: number;
+  /** Início da próxima turma com vagas (aaaa-mm-dd) ou "". */
+  proximaComVagas?: string;
   regime: "gold" | "fin";
   objetivos: string[];
   funcionamento: string;
@@ -40,7 +42,7 @@ export type Course = {
   programa: { titulo: string; horas: string }[];
   /** Regime da oferta (ficha › Oferta): síncrono, assíncrono, misto ou vazio. */
   sincronia: "" | "sincrono" | "assincrono" | "misto";
-  sessoes: { data: string; local: string; horario: string; preco?: number | null; morada?: string }[];
+  sessoes: { data: string; local: string; horario: string; preco?: number | null; morada?: string; cheia?: boolean; matricula?: string }[];
   nomeOferta: string;
 };
 
@@ -64,6 +66,7 @@ type CatalogoApi = {
     capa?: string | null;
     banner?: string | null;
     vendas: number;
+    proximaComVagas?: string;
     objetivos?: string[];
     funcionamento?: string;
     topicos?: TopicosCurso;
@@ -100,6 +103,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     banner: curso.banner ?? curso.capa ?? curso.miniatura,
     precoDesde: curso.precoDesde,
     vendas: curso.vendas,
+    proximaComVagas: curso.proximaComVagas ?? "",
     regime: curso.regime,
     objetivos: curso.objetivos ?? [],
     funcionamento: curso.funcionamento ?? "",

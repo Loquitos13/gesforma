@@ -16,6 +16,8 @@ export type OfertaTurma = {
   preco: number | null;
   cronogramaPublicado: boolean;
   regime: "gold" | "fin";
+  /** Data limite da matrícula (marcador do cronograma), ou "". */
+  matricula: string;
 };
 
 export type CursoOfertaPublico = {
@@ -55,6 +57,7 @@ export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {
       preco: precoNoMapa(mapa, curso, local, horario),
       cronogramaPublicado: Boolean(r.tem_cronograma),
       regime: "gold" as const,
+      matricula: String(r.data_matricula ?? "").slice(0, 10),
     };
   });
 }
@@ -72,6 +75,7 @@ export async function listOfertaFin(db: Db): Promise<OfertaTurma[]> {
     preco: null,
     cronogramaPublicado: Boolean(r.tem_cronograma),
     regime: "fin" as const,
+    matricula: String(r.data_matricula ?? "").slice(0, 10),
   }));
 }
 

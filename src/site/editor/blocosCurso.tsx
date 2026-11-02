@@ -530,10 +530,10 @@ function TurmasCurso(p: Omit<TurmasProps, "entreTitulo"> & { entreTitulo?: unkno
             <ZonaEntreTitulo zona={p.entreTitulo} />
             <div className="divide-y divide-black/15">
               {lista.map(s => (
-                <div key={`${s.data}-${s.local}-${s.horario}`} className="flex flex-wrap items-center justify-between gap-3 py-5">
+                <div key={`${s.data}-${s.local}-${s.horario}`} className={`flex flex-wrap items-center justify-between gap-3 py-5 ${s.cheia ? "opacity-55" : ""}`}>
                   <strong>{s.data}</strong>
                   <span className="text-sm opacity-65">
-                    {[s.local, s.horario, p.mostrarPreco && s.preco != null ? euros(s.preco) : ""].filter(Boolean).join(" · ")}
+                    {[s.local, s.horario, s.cheia ? "Novas datas em breve" : p.mostrarPreco && s.preco != null ? euros(s.preco) : ""].filter(Boolean).join(" · ")}
                   </span>
                 </div>
               ))}

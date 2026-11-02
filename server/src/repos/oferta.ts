@@ -5,10 +5,13 @@ export function turmasGoldActivas(c: Consulta) {
   return many<{
     id: number; nome: string; curso: string; local: string; horario: string;
     data_inicio: string; total_alunos: number; vagas: number; tolerancia: number; tem_cronograma: boolean;
-    vagas_anunciadas: number | null;
+    vagas_anunciadas: number | null; data_matricula: string | null;
   }>(c,
     `SELECT id, nome, curso, local, horario, data_inicio, total_alunos, vagas, vagas_anunciadas,
             COALESCE(tolerancia_vagas, 0) AS tolerancia,
+            -- Data limite da matrícula (o marcador «Matrícula» do cronograma).
+            (SELECT left(e->>'data', 10) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e
+              WHERE e->>'modalidade' = 'matricula' OR e->>'id' = 'matricula' LIMIT 1) AS data_matricula,
             -- Com sessões no cronograma já se mostra no site, mesmo sem «Publicar».
             (cronograma_publicado_em IS NOT NULL OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e
@@ -28,10 +31,13 @@ export function turmasFinActivas(c: Consulta) {
   return many<{
     id: number; nome: string; curso: string; local: string; horario: string;
     data_inicio: string; alunos: number; alunos_total: number; tolerancia: number; tem_cronograma: boolean;
-    vagas_anunciadas: number | null;
+    vagas_anunciadas: number | null; data_matricula: string | null;
   }>(c,
     `SELECT id, nome, curso, local, horario, data_inicio, alunos, alunos_total, vagas_anunciadas,
             COALESCE(tolerancia_vagas, 0) AS tolerancia,
+            -- Data limite da matrícula (o marcador «Matrícula» do cronograma).
+            (SELECT left(e->>'data', 10) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e
+              WHERE e->>'modalidade' = 'matricula' OR e->>'id' = 'matricula' LIMIT 1) AS data_matricula,
             -- Com sessões no cronograma já se mostra no site, mesmo sem «Publicar».
             (cronograma_publicado_em IS NOT NULL OR EXISTS (
               SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(cronograma) = 'array' THEN cronograma ELSE '[]'::jsonb END) e

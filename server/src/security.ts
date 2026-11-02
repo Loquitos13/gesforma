@@ -121,11 +121,13 @@ export const TRIGGER_MAP: Record<string, string> = {
 
 export const EVENT_ALIASES: Record<string, string[]> = {
   "preinscricao.created": ["preinscricao.created"],
-  "preinscricao.promoted": ["preinscricao.promoted", "preinscricao.created"],
+  // Só as regras da pré-inscrição promovida (antes também as da nova pré-inscrição: a confirmação saía duas vezes).
+  "preinscricao.promoted": ["preinscricao.promoted"],
   "preinscricao.docs_completos": ["preinscricao.docs_completos"],
   "preinscricao.validated": ["preinscricao.validated"],
   "preinscricao.contacted": ["preinscricao.contacted"],
-  "payment.confirmed": ["payment.confirmed", "sale.followup"],
+  // Um pagamento confirmado dá um só email (antes também o «contacto após a venda», que repetia a confirmação).
+  "payment.confirmed": ["payment.confirmed"],
   "sale.followup": ["sale.followup"],
   "formando.completed": ["formando.completed"],
   "sessao.summary_signed": ["sessao.summary_signed"],

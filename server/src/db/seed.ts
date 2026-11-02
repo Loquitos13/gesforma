@@ -340,8 +340,9 @@ async function seedCompleto(db: Db) {
     if (existing.rows[0]) continue;
     await db.query(
       `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, ativo)
-       VALUES ($1, $2, $3, $4, $5, true)`,
-      [r.nome, r.key, r.gatilho, r.tipo, r.delay],
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      // «Contacto após a venda» nasce desligada: o pagamento confirmado já dá um email.
+      [r.nome, r.key, r.gatilho, r.tipo, r.delay, r.key !== "sale.followup"],
     );
   }
 

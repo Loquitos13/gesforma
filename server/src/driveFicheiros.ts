@@ -45,7 +45,7 @@ function driveDir() {
   return config.driveDir;
 }
 
-async function uploadToGoogle(token: string, parentId: string, name: string, mime: string, bytes: Buffer) {
+export async function uploadToGoogle(token: string, parentId: string, name: string, mime: string, bytes: Buffer) {
   const boundary = `gesforma_${newToken(8)}`;
   const meta = JSON.stringify({ name, parents: [parentId] });
   const head = Buffer.from(
@@ -144,6 +144,15 @@ async function pastaDaTurmaDirecta(db: Db, ctx: DriveContext) {
   return pastaDaTurmaPorNome(db, ctx.regime, ctx.turma);
 }
 
+/** A pasta da Drive onde fica um ficheiro com este contexto (a mesma regra dos uploads). */
+export async function pastaDeDestino(db: Db, token: string, ctx: DriveContext) {
+  const creds = await driveCreds(db);
+  return ctx.parentDriveId?.trim()
+    || await pastaDaTurmaDirecta(db, ctx)
+    || await pastaFinDaTurma(db, token, ctx, creds.folderName)
+    || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+}
+
 export async function storeDriveFile(
   db: Db,
   actorId: string | undefined,
@@ -162,10 +171,7 @@ export async function storeDriveFile(
   if (token) {
     let parent: string;
     try {
-      parent = ctx.parentDriveId?.trim()
-        || await pastaDaTurmaDirecta(db, ctx)
-        || await pastaFinDaTurma(db, token, ctx, creds.folderName)
-        || await ensureFolderPath(db, token, folderSegments(ctx, creds.folderName), creds.folderId);
+      parent = await pastaDeDestino(db, token, ctx);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "";
       if (isNotFound(err)) {

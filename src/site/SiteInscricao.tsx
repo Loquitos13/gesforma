@@ -92,8 +92,9 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setErrosFin({});
     setErro("");
     setAviso("");
-    // Sem local pré-escolhido: a pessoa vê todos os locais e escolhe (com um só, fica escolhido sozinho).
-    setLocal("");
+    // O local só vem escolhido quando se clicou no botão de um local (página do curso). Do catálogo, a pessoa vê
+    // todos os locais e escolhe (com um só, fica escolhido sozinho).
+    setLocal(localInicial);
     setTrocarLocal(false);
     setHorario("");
     setDataInicio("");

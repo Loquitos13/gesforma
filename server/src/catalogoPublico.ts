@@ -385,7 +385,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
           ? "Em várias localizações"
           : `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
         : curso.chaves.some(key => cheias.has(key)) ? "Novas datas em breve"
-        : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
+        // «Acesso imediato» só no e-learning Gold (compra e entra); na Financiada há sempre turma e datas.
+        : modo === "E-learning" && curso.regime === "gold" ? "Acesso imediato" : "Data a anunciar",
       proximaComVagas: inicio?.data ?? "",
       precoLabel: curso.regime === "fin" ? "Financiada" : desde != null ? (precos.length > 1 ? `A partir de ${eur(desde, true)}` : eur(desde, true)) : "Sob consulta",
       precoDesde: desde,

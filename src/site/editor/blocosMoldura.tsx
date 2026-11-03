@@ -160,12 +160,25 @@ export type RodapeProps = {
   tipografia: Tipografia; aparencia: Estilo;
 };
 
+/** Ícone de uma linha do rodapé pelo que ela é: telefone, email, morada ou horário (as outras ficam sem ícone). */
+function iconeLinha(texto: string, url: string) {
+  const d = /^tel:/i.test(url) ? "M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"
+    : /^mailto:/i.test(url) ? "M4 6h16v12H4zM4 7l8 6 8-6"
+    : /\d{4}-\d{3}/.test(texto) ? "M12 21s-7-6.2-7-11a7 7 0 0 1 14 0c0 4.8-7 11-7 11zM12 12.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5"
+    : /\d{1,2}h\d{0,2}/i.test(texto) ? "M12 7v5l3 2M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18"
+    : "";
+  return d ? <svg aria-hidden="true" viewBox="0 0 24 24" className="mt-1 h-4 w-4 shrink-0 opacity-70" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d={d} /></svg> : null;
+}
+
 /** "Texto | /ligação" numa linha vira ligação; o resto fica texto. {ano} troca pelo ano actual. */
 function Linha({ linha }: { linha: string }) {
-  const [texto, url] = linha.split("|").map(s => s.trim());
+  const [texto = "", url = ""] = linha.split("|").map(s => s.trim());
   const href = url ? ligacaoSegura(url) : "";
-  if (href) return <a href={href} {...(/^https?:/.test(href) ? { target: "_blank", rel: "noreferrer" } : {})} className="underline decoration-current/30 underline-offset-4 hover:opacity-80">{texto}</a>;
-  return <span>{texto}</span>;
+  const icone = iconeLinha(texto, url);
+  const conteudo = href
+    ? <a href={href} {...(/^https?:/.test(href) ? { target: "_blank", rel: "noreferrer" } : {})} className="hover:underline hover:underline-offset-4 hover:opacity-100">{texto}</a>
+    : <span>{texto}</span>;
+  return icone ? <span className="flex items-start gap-2.5">{icone}{conteudo}</span> : conteudo;
 }
 
 export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) => void) | null }) {
@@ -178,38 +191,50 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
   const ano = String(anoLisboa());
   const titulos = corSegura(p.corTitulos) ?? "#fff";
   const colunas = (p.colunas ?? []).filter(x => x.titulo || x.linhas);
+  const logos = (p.logos ?? []).filter(l => l.imagem);
   return (
     <footer ref={p.refRaiz ?? undefined} id="contactos" className={juntar(c.className, t.className, "scroll-mt-24")} style={{ ...c.style, ...t.style }}>
       <div className="mx-auto" style={{ maxWidth: "var(--largura)" }}>
-        <div className="ena-grelha gap-10 border-b border-white/15 pb-12" style={{ ["--cols" as string]: String(colunas.length + 2), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" } as CSSProperties}>
+        <div className="ena-grelha gap-x-10 gap-y-12 border-b border-white/10 pb-12" style={{ ["--cols" as string]: String(colunas.length + 2), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" } as CSSProperties}>
           <div style={{ gridColumn: "span 2 / span 2" }}>
+            {/* Sem logótipo próprio: o da ENA em branco (o quadrado com a marca só se o logótipo faltar). */}
             {p.marcaImagem
               ? <img src={p.marcaImagem} alt={p.marca || ""} style={{ height: `${p.alturaMarca ?? 48}px` }} className="w-auto" />
-              : p.marca && <span className="grid h-12 w-12 place-items-center text-sm font-extrabold text-white" style={{ background: corSegura(p.corMarca) ?? "var(--c-destaque)" }}>{p.marca}</span>}
-            {p.texto && <p className="mt-5 max-w-sm whitespace-pre-line text-sm leading-6">{p.texto}</p>}
+              : <img src="/imagens/ena_logo.svg" alt={p.marca || "ENA"} style={{ height: `${Math.min(p.alturaMarca ?? 40, 44)}px` }} className="w-auto brightness-0 invert" />}
+            {p.texto && <p className="mt-6 max-w-sm whitespace-pre-line text-sm leading-6 opacity-85">{p.texto}</p>}
             {/* Sem lista própria: as redes de Sistema › Site › SEO. */}
             <LigacoesRedes redes={p.redes} className="mt-6" />
           </div>
           {colunas.map((col, i) => (
             <div key={i}>
-              {col.titulo && <strong className="text-sm" style={{ color: titulos }}>{col.titulo}</strong>}
-              <div className="mt-4 flex flex-col gap-2 text-sm leading-6">
+              {col.titulo && (
+                <strong className="block text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: titulos }}>
+                  {col.titulo}
+                  <span aria-hidden="true" className="mt-3 block h-0.5 w-8" style={{ background: corSegura(p.corBarra) ?? "var(--c-acento)" }} />
+                </strong>
+              )}
+              <div className="mt-5 flex flex-col gap-3 text-sm leading-6">
                 {col.linhas.split("\n").filter(l => l.trim()).map((l, j) => <Linha key={j} linha={l} />)}
               </div>
             </div>
           ))}
         </div>
-        {(p.logos ?? []).some(l => l.imagem) && (
-          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-white/15 py-6">
-            {p.tituloLogos && <span className="text-xs font-semibold uppercase tracking-wider opacity-80">{p.tituloLogos}</span>}
-            {(p.logos ?? []).filter(l => l.imagem).map((l, i) => {
-              const img = <img src={l.imagem} alt={l.alt || ""} className="h-14 w-auto rounded bg-white p-1.5" />;
-              const href = l.ligacao ? ligacaoSegura(l.ligacao) : "";
-              return href ? <a key={i} href={href} target="_blank" rel="noreferrer" title={l.alt}>{img}</a> : <span key={i}>{img}</span>;
-            })}
+        {logos.length > 0 && (
+          <div className="flex flex-col gap-4 border-b border-white/10 py-8 sm:flex-row sm:items-center sm:gap-8">
+            {p.tituloLogos && <span className="text-xs font-extrabold uppercase tracking-[0.14em]" style={{ color: titulos }}>{p.tituloLogos}</span>}
+            <div className="flex flex-wrap items-center gap-4">
+              {logos.map((l, i) => {
+                const img = <img src={l.imagem} alt={l.alt || ""} className="h-16 w-auto object-contain" />;
+                const caixa = "grid h-20 min-w-24 place-items-center rounded-lg bg-white px-3 transition-transform hover:-translate-y-0.5";
+                const href = l.ligacao ? ligacaoSegura(l.ligacao) : "";
+                return href
+                  ? <a key={i} href={href} target="_blank" rel="noreferrer" title={l.alt} className={caixa}>{img}</a>
+                  : <span key={i} className={caixa}>{img}</span>;
+              })}
+            </div>
           </div>
         )}
-        <div className="flex flex-col justify-between gap-3 pt-6 text-xs opacity-80 sm:flex-row">
+        <div className="flex flex-col justify-between gap-3 pt-6 text-xs opacity-75 sm:flex-row">
           <span>{p.direitos.replace(/\{ano\}/g, ano)}</span>
           <span>{p.lema}</span>
         </div>
@@ -245,7 +270,7 @@ export const rodapePadrao: RodapeProps = {
     },
   ],
   direitos: "© {ano} ENA. Todos os direitos reservados.", lema: "Aprender. Evoluir. Transformar.", redes: [],
-  logos: LOGOS_CERTIFICACAO, tituloLogos: "Entidade certificada",
+  logos: LOGOS_CERTIFICACAO, tituloLogos: "Entidade formadora certificada",
   corFundo: "#0E1C2E", corTexto: "#D7E0EA", corTitulos: "#ffffff", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia(),
   aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),

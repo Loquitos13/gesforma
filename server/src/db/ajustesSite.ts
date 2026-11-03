@@ -117,7 +117,7 @@ export const AJUSTES: Ajuste[] = [
       b.props.colunas = colunas;
       if (variante) return;
       if (!Array.isArray(b.props.logos) || !b.props.logos.length) b.props.logos = LOGOS;
-      b.props.tituloLogos ??= "Entidade certificada";
+      b.props.tituloLogos ??= "Entidade formadora certificada";
     }),
   },
   {

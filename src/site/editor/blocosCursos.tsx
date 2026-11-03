@@ -377,7 +377,7 @@ type OfertaProps = {
   /** Botões das áreas com cursos, a seguir aos cursos: escolher uma filtra a grelha. */
   areas: boolean; tituloAreas: string;
   limite: number | null;
-  /** Botão «Ver todos os cursos» por baixo dos filtros (ex.: os destaques da página inicial). */
+  /** Botão «Ver todos os cursos» no fim da secção, por baixo dos cartões e das áreas (ex.: os destaques da página inicial). */
   /** Sem escolha guardada: aparece na página inicial (onde a oferta é um resumo) e não no catálogo. */
   botaoTodos?: boolean; textoTodos: string; ligacaoTodos: string;
   corFiltroAtivo: string;
@@ -407,7 +407,7 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
     areas: simNao("Botões das áreas de formação a seguir aos cursos"),
     tituloAreas: { type: "text", label: "Título dos botões das áreas (vazio = sem título)" },
     limite: campoNumero("Máximo de cursos (vazio = todos)", ""),
-    botaoTodos: simNao("Botão «Ver todos os cursos» por baixo dos filtros"),
+    botaoTodos: simNao("Botão «Ver todos os cursos» no fim da secção"),
     textoTodos: { type: "text", label: "Texto do botão" },
     ligacaoTodos: { type: "text", label: "Ligação do botão" },
     corFiltroAtivo: campoCor("Cor do filtro ativo"),
@@ -490,13 +490,6 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
             )}
           </div>
         )}
-        {(botaoTodos ?? (typeof window !== "undefined" && window.location.pathname === "/")) && (
-          <div className="mb-6 flex justify-end">
-            <a href={ligacaoTodos || "/formacao"} className="inline-flex items-center gap-2 bg-[var(--c-destaque)] px-5 py-2.5 text-sm font-bold text-white hover:brightness-90">
-              {textoTodos || "Ver todos os cursos"} <span aria-hidden="true">→</span>
-            </a>
-          </div>
-        )}
         {ZonaCursos && <ZonaCursos className="mb-6 flex flex-col gap-4 ena-zona" minEmptyHeight={40} />}
         {estado === "pronto" ? <Grelha cursos={lista} e={cartao} vazio="Não encontrámos formações para esta pesquisa." /> : <Estado estado={estado} recarregar={recarregar} />}
         {areas !== false && estado === "pronto" && listaAreas.length > 1 && (
@@ -510,6 +503,14 @@ export const OfertaFormativa: ComponentConfig<OfertaProps> = {
               ))}
             </LinhaRolavel>
           </nav>
+        )}
+        {/* Por baixo dos cartões e das áreas: o fim natural da secção. */}
+        {(botaoTodos ?? (typeof window !== "undefined" && window.location.pathname === "/")) && (
+          <div className="mt-8 flex justify-center">
+            <a href={ligacaoTodos || "/formacao"} className="inline-flex items-center gap-2 bg-[var(--c-destaque)] px-5 py-2.5 text-sm font-bold text-white hover:brightness-90">
+              {textoTodos || "Ver todos os cursos"} <span aria-hidden="true">→</span>
+            </a>
+          </div>
         )}
       </div>
     );

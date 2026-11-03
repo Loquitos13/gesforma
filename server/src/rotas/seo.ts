@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { htmlDaPagina, indexHtml, robotsTxt, sitemapXml } from "../seo.js";
+import { redirecionamentoAntigo } from "../seoRedirecionamentos.js";
 import type { Deps } from "./tipos.js";
 
 // SEO: cada página do site servida com as suas etiquetas, sitemap.xml e robots.txt (reescritos em vercel.json).
@@ -18,6 +19,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   app.get("/v1/public/pagina", { config: { rateLimit: { max: 300, timeWindow: "1 minute" } } }, async (req, reply) => {
     const q = caminhoSchema.safeParse(req.query);
     const caminho = q.success ? q.data.caminho : "/";
+    // Endereços do site antigo: 301 para o equivalente novo (a Google passa a posição para o endereço novo).
+    const r301 = await redirecionamentoAntigo(db, caminho).catch(() => null);
+    if (r301) return reply.code(r301.estado).header("cache-control", CACHE).redirect(r301.para, r301.estado);
     try {
       const r = await htmlDaPagina(db, caminho, hostDo(req));
       if (r) return reply.code(r.estado).header("cache-control", CACHE).type("text/html; charset=utf-8").send(r.html);

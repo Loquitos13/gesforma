@@ -64,7 +64,8 @@
 	}
 }
 
-# Com o domínio principal (ena.pt), o www passa para ele. Tire o # das 3 linhas depois de o www apontar para a VPS.
-# www.{$DOMINIO} {
-# 	redir https://{$DOMINIO}{uri} permanent
-# }
+# Com o domínio principal (ena.pt), o www passa para ele (301: a Google fica só com um endereço de cada página).
+# O www tem de apontar para a VPS (CNAME para ena.pt); senão, comente estas 3 linhas.
+www.{$DOMINIO} {
+	redir https://{$DOMINIO}{uri} permanent
+}

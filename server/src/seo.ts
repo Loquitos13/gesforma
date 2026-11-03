@@ -342,6 +342,13 @@ export async function sitemapXml(db: Db, host?: string) {
     for (const s of await servicosAtivos(db)) {
       urls.push({ loc: `${origem}/empresas/${encodeURIComponent(s.slug)}`, prioridade: "0.5", mudanca: "monthly" });
     }
+    // Páginas livres publicadas (Sistema › Site › Páginas livres).
+    const livres = await db.query<{ pagina: string; publicado_em: unknown }>(
+      "SELECT pagina, publicado_em FROM site_paginas WHERE pagina LIKE 'livre-%' AND publicado IS NOT NULL").catch(() => ({ rows: [] as { pagina: string; publicado_em: unknown }[] }));
+    for (const l of livres.rows) {
+      const data = l.publicado_em instanceof Date ? l.publicado_em.toISOString().slice(0, 10) : String(l.publicado_em ?? "").slice(0, 10);
+      urls.push({ loc: `${origem}/${encodeURIComponent(l.pagina.slice("livre-".length))}`, prioridade: "0.5", mudanca: "monthly", data: /^\d{4}-\d{2}-\d{2}$/.test(data) ? data : undefined });
+    }
     for (const n of await noticiasPublicas(db).catch(() => [])) {
       urls.push({ loc: `${origem}/noticias/${encodeURIComponent(n.slug)}`, prioridade: "0.5", mudanca: "monthly", data: /^\d{4}-\d{2}-\d{2}/.test(n.data) ? n.data.slice(0, 10) : undefined });
     }

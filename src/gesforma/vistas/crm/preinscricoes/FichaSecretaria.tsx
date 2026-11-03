@@ -1,8 +1,10 @@
 import { useEffect, useState } from "react";
-import { Aviso, Botao, Campo, Entrada, SelecaoPesquisa, data, eur } from "../../../../partilhado/ui";
+import { Aviso, Botao, BotaoLigacao, Campo, Entrada, Estado, SelecaoPesquisa, data, dataHora, eur } from "../../../../partilhado/ui";
 import {
-  apiCompletar, apiConcluirInscricao, apiInscreverGold, apiPedirPagamento, apiTurmaCheia, apiValidarPreinscricao, type DossieLead,
+  apiCompletar, apiConcluirInscricao, apiInscreverGold, apiPedirPagamento, apiRecusarDoc, apiTurmaCheia, apiValidarDoc, apiValidarPreinscricao,
+  type DossieLead,
 } from "../../../../partilhado/api/crm";
+import { usePode } from "../../../../partilhado/AuthGate";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { eSecretaria } from "./util";
 
@@ -31,6 +33,14 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
   const cheia = useAccao(apiTurmaCheia, { ok: r => r.enviadas ? `Email enviado com ${r.enviadas} turma${r.enviadas === 1 ? "" : "s"} no mesmo local.` : "Email enviado. Não há outra turma com vaga nesse local." });
   const concluir = useAccao(apiConcluirInscricao, { ok: "Inscrição concluída: ficha, conta e email de acesso.", invalidar: ["formandos:", "turmas:", "painel:"] });
   const inscrever = useAccao(apiInscreverGold, { ok: "Inscrito na turma. A ficha de formando foi criada.", invalidar: ["formandos:", "turmas:", "painel:"] });
+  // Comprovativo de pagamento: o comercial, as coordenações e a contabilidade validam-no aqui (conclui a inscrição).
+  const podeComprovativo = usePode()("pagamentos.validarComprovativo");
+  const comprovativo = d.documentos.find(x => x.tipo === "comprovativo") ?? null;
+  const [motivo, setMotivo] = useState("");
+  const validarComp = useAccao(apiValidarDoc, {
+    ok: "Comprovativo validado: pagamento confirmado e inscrição concluída.", invalidar: ["crm:", "pagamentos:", "formandos:", "turmas:", "painel:"],
+  });
+  const recusarComp = useAccao(apiRecusarDoc, { ok: "Comprovativo recusado. A pessoa recebeu o motivo e a ligação para enviar outro.", invalidar: ["crm:", "pagamentos:"] });
 
   const destinoSel = d.turmasDestino.find(t => String(t.id) === destino) ?? null;
   const destinoCheio = destinoSel ? destinoSel.livres <= 0 : !d.turmaPelaSecretaria && (d.turmaEscolhida?.livres ?? 1) <= 0;
@@ -68,7 +78,31 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
         <section aria-label="Pagamento" className="flex flex-col gap-2 rounded-cartao border border-acao/40 bg-acao-suave p-3 text-[13px]">
           <p className="m-0 text-xs font-semibold uppercase tracking-wide text-acao-texto">Pagamento · {eur(d.pagamento?.valor ?? l.preco, true)} por transferência</p>
           {d.estadoPagamento === "por_pedir" && <p className="m-0">{d.podePedirPagamento ? "Documentos validados: peça o pagamento. A pessoa recebe o IBAN e o passo de pagamento abre na ligação pessoal." : d.faltaPedirPagamento}</p>}
-          {d.estadoPagamento === "pedido" && <p className="m-0">Pedido{d.pagamentoPedidoEm ? ` em ${data(d.pagamentoPedidoEm)}` : ""}. Ao validar o comprovativo (separador Documentos) a inscrição conclui-se: ficha, conta e email de acesso.</p>}
+          {d.estadoPagamento === "pedido" && <p className="m-0">Pedido{d.pagamentoPedidoEm ? ` em ${data(d.pagamentoPedidoEm)}` : ""}. Ao validar o comprovativo a inscrição conclui-se: ficha, conta e email de acesso.</p>}
+          {d.estadoPagamento === "pedido" && (comprovativo ? (
+            <div className="flex flex-col gap-2 rounded-cartao border border-linha bg-superficie p-2.5">
+              <div className="flex items-center gap-2 flex-wrap">
+                <span className="font-semibold">Comprovativo</span>
+                <span className="min-w-0 flex-1 truncate text-tinta-suave" title={comprovativo.nome}>{comprovativo.nome}</span>
+                <span className="text-xs text-tinta-suave">{dataHora(comprovativo.createdAt)}</span>
+                <Estado tom={comprovativo.estado === "validado" ? "sucesso" : comprovativo.estado === "recusado" ? "perigo" : "aviso"}>
+                  {comprovativo.estado === "validado" ? "Validado" : comprovativo.estado === "recusado" ? "Recusado" : "Por validar"}
+                </Estado>
+                {comprovativo.url && <BotaoLigacao tamanho="sm" href={comprovativo.url} target="_blank" rel="noreferrer">Abrir</BotaoLigacao>}
+              </div>
+              {comprovativo.estado === "recusado" && comprovativo.observacao && <p className="m-0 text-xs text-perigo">{comprovativo.observacao}</p>}
+              {podeComprovativo && comprovativo.estado === "pendente" && (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Entrada aria-label="Motivo para recusar o comprovativo" placeholder="Motivo (para recusar)" className="h-8 min-w-[180px] flex-1 text-xs"
+                    value={motivo} onChange={e => setMotivo(e.target.value)} />
+                  <Botao tamanho="sm" variante="secundario" disabled={motivo.trim().length < 3} aCarregar={recusarComp.aCorrer}
+                    onClick={() => void recusarComp.correr(l.id, comprovativo.id, motivo.trim()).then(r => { if (r) { setMotivo(""); onMudou(); } })}>Recusar</Botao>
+                  <Botao tamanho="sm" variante="primario" aCarregar={validarComp.aCorrer}
+                    onClick={() => void validarComp.correr(l.id, comprovativo.id).then(depois)}>Validar comprovativo</Botao>
+                </div>
+              )}
+            </div>
+          ) : <p className="m-0 text-tinta-suave">A pessoa ainda não anexou o comprovativo.</p>)}
           {d.estadoPagamento === "pago" && <p className="m-0 font-semibold text-sucesso">Pagamento confirmado.</p>}
           {sec && (d.estadoPagamento === "por_pedir" || d.estadoPagamento === "pedido") && (
             <Botao variante="primario" aCarregar={pedir.aCorrer} disabled={!d.podePedirPagamento} onClick={() => void pedir.correr(l.id).then(depois)}>

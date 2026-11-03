@@ -180,7 +180,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const row = await obterPagamento(db, v.params.id);
     if (!row) return reply.code(404).send({ error: "pagamento inexistente" });
-    if (String(row.estado) === "Pago") return reply.code(409).send({ error: "Este pagamento já está confirmado." });
+    // Já confirmado (outra pessoa confirmou ao mesmo tempo): devolve-o como está, sem erro nem efeitos repetidos.
+    if (String(row.estado) === "Pago") return { pagamento: mapPagamento(row), detalhe: await obterPagamentoDetalhe(db, v.params.id), jaConfirmado: true };
     const t = validarTransicao("pagamento", String(row.estado), "Pago", req.actor!.role);
     if (!t.ok) return reply.code(409).send({ error: t.erro });
     try {

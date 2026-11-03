@@ -23,8 +23,14 @@ import type { Deps } from "./tipos.js";
 
 const docParams = idParam.extend({ docId: z.coerce.number().int().positive() });
 
-/** O comprovativo de pagamento valida-o (ou recusa-o) a contabilidade: só então a pré-inscrição fica concluída. */
-const SO_CONTABILIDADE = "O comprovativo de pagamento é validado pela contabilidade, em Pagamentos.";
+/**
+ * Quem valida ou recusa: o comprovativo de pagamento, a equipa (comercial e coordenações incluídos) e a contabilidade;
+ * os outros documentos, a coordenação. Validar o comprovativo confirma o pagamento e conclui a inscrição.
+ */
+function podeDecidir(role: string, tipo: string | null) {
+  return pode(role, tipo === "comprovativo" ? "pagamentos.validarComprovativo" : "crm.validarDocumentos");
+}
+const SEM_PERMISSAO = "Sem permissão para validar este documento.";
 
 export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
@@ -58,9 +64,10 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: docParams }, req);
     if (!v) return;
     const { id, docId } = v.params;
-    if ((await docs.tipoDoDoc(db, docId)) === "comprovativo" && !pode(req.actor!.role, "pagamentos.confirmar")) {
-      return reply.code(403).send({ error: SO_CONTABILIDADE });
-    }
+    const doc = await docs.tipoEstadoDoDoc(db, docId);
+    if (!podeDecidir(req.actor!.role, doc?.tipo ?? null)) return reply.code(403).send({ error: SEM_PERMISSAO });
+    // Já validado (outra pessoa validou ao mesmo tempo): fica como está, sem erro nem efeitos repetidos.
+    if (doc?.estado === "validado") return getLeadDossier(db, id, req.actor!);
     const ok = await definirEstadoDoc(db, id, docId, "validado", "", req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
@@ -89,8 +96,10 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     const { id, docId } = v.params;
     const observacao = v.body?.observacao ?? "";
     if (!observacao) return reply.code(400).send({ error: "Escreva o que está incorrecto." });
-    if ((await docs.tipoDoDoc(db, docId)) === "comprovativo" && !pode(req.actor!.role, "pagamentos.confirmar")) {
-      return reply.code(403).send({ error: SO_CONTABILIDADE });
+    const doc = await docs.tipoEstadoDoDoc(db, docId);
+    if (!podeDecidir(req.actor!.role, doc?.tipo ?? null)) return reply.code(403).send({ error: SEM_PERMISSAO });
+    if (doc?.estado === "validado" && doc.tipo === "comprovativo") {
+      return reply.code(409).send({ error: "Este comprovativo já foi validado (o pagamento está confirmado)." });
     }
     const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao, req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });

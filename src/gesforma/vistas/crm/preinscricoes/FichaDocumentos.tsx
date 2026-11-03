@@ -15,8 +15,8 @@ const ESTADO_DOC: Record<string, { texto: string; tom: "sucesso" | "perigo" | "a
 export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; onMudou: () => void }) {
   const pode = usePode();
   const podeValidar = pode("crm.validarDocumentos");
-  // O comprovativo de pagamento valida-o a contabilidade (em Pagamentos): só então a pré-inscrição fica concluída.
-  const podeComprovativo = pode("pagamentos.confirmar");
+  // O comprovativo de pagamento: valida-o a equipa (comercial e coordenações) e a contabilidade; conclui a inscrição.
+  const podeComprovativo = pode("pagamentos.validarComprovativo");
   const id = d.lead.id;
   const [obs, setObs] = useState<Record<number, string>>({});
   const [confirmarLigacao, setConfirmarLigacao] = useState(false);
@@ -97,9 +97,6 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
                   {doc.url && <a className="text-[13px] font-semibold text-ligacao" href={doc.url} target="_blank" rel="noreferrer">Abrir</a>}
                 </div>
                 {doc.observacao && <p className="m-0 mt-1 text-xs text-perigo">{doc.observacao}</p>}
-                {doc.tipo === "comprovativo" && !podeComprovativo && doc.estado === "pendente" && !d.docsFechado && (
-                  <p className="m-0 mt-1 text-xs text-tinta-suave">A contabilidade valida o comprovativo em Pagamentos; a pré-inscrição fica concluída com essa validação.</p>
-                )}
                 {podeValidar && (doc.tipo !== "comprovativo" || podeComprovativo) && doc.estado !== "validado" && !d.docsFechado && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Entrada

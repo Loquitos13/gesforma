@@ -46,9 +46,7 @@ describe("pagamento cancelado ou reembolsado não se reaproveita", () => {
       [leadId],
     );
     const doc = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1", [leadId]);
-    // O comprovativo valida-o a contabilidade (a coordenação Gold já não o valida na ficha); a administração também.
-    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${leadId}/documentos/${doc.rows[0]!.id}/validar`)).statusCode).toBe(403);
-    const r = await pedido(ctx, "admin", "POST", `/v1/crm/leads/${leadId}/documentos/${doc.rows[0]!.id}/validar`);
+    const r = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${leadId}/documentos/${doc.rows[0]!.id}/validar`);
     expect(r.statusCode, r.body).toBe(200);
     expect(await estadoDe(ctx, reemb)).toBe("Reembolsado");
 

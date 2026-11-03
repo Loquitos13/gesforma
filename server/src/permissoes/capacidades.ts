@@ -17,6 +17,8 @@ export const CAPACIDADES = {
   "pagamentos.ver": PAGAMENTOS,
   // Validar o comprovativo (e com ele concluir a inscrição) é da contabilidade.
   "pagamentos.confirmar": CONTABILIDADE,
+  // Validar ou recusar o comprovativo na ficha da pré-inscrição (confirma o pagamento e conclui a inscrição).
+  "pagamentos.validarComprovativo": EQUIPA,
   // Pagamento de quem já é formando, registado na ficha (numerário, transferência): a coordenação Gold.
   "pagamentos.registarFicha": SECRETARIA,
   // Acesso à área do formando da Gold (palavra-passe gerada): a coordenação Gold.

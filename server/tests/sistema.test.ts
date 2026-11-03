@@ -54,8 +54,10 @@ describe("Pagamentos", () => {
     const lead = await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [leadId]);
     expect(lead.rows[0]!.estado).toBe("Pago");
 
+    // Confirmar outra vez (duas pessoas ao mesmo tempo): sem erro e sem efeitos repetidos.
     const outra = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/confirmar`);
-    expect(outra.statusCode).toBe(409);
+    expect(outra.statusCode).toBe(200);
+    expect(outra.json()).toMatchObject({ jaConfirmado: true });
     lista = await pedido(ctx, "secretaria", "GET", "/v1/pagamentos?situacao=pago");
     linha = (lista.json() as Pagina<LinhaPag>).linhas.find(l => l.id === pagId)!;
     expect(linha.situacao).toBe("pago");

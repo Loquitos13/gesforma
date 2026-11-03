@@ -78,6 +78,11 @@ export function proximoPasso(l: Lead): { texto: string; tom: Tom } {
   if (l.estado === "Não contactado") return { texto: "Fazer o primeiro contacto", tom: "aviso" };
   if ((l.docsRecusados ?? 0) > 0) return { texto: "Aguarda correcção de documentos", tom: "perigo" };
   if (l.pagamentoPedido) return { texto: "Aguarda o comprovativo de pagamento", tom: "info" };
+  // Documentos todos validados: o passo seguinte é pedir o pagamento (curso pago) ou validar a pré-inscrição.
+  const env = l.docsEnviados ?? 0;
+  if (l.percursoConcluido && env > 0 && (l.docsValidados ?? 0) >= env) {
+    return l.regime === "gold" && Number(l.preco) > 0 ? { texto: "Pedir pagamento", tom: "acao" } : { texto: "Validar pré-inscrição", tom: "acao" };
+  }
   if (l.percursoConcluido) return { texto: "Validar documentos", tom: "acao" };
   if ((l.docsEnviados ?? 0) > 0) return { texto: "A enviar documentos", tom: "info" };
   if (l.estado === "Pré-inscrição") return { texto: "Aguarda documentos na ligação pessoal", tom: "info" };

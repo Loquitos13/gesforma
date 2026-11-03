@@ -186,10 +186,16 @@ describe("ligação pessoal até à validação", () => {
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
 
     expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
-    // A coordenação Gold não valida o comprovativo: é a contabilidade (em Pagamentos) ou a administração.
+    // O comprovativo valida-o a equipa na ficha (o comercial também); duas validações ao mesmo tempo não dão erro.
     const comp = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = 'comprovativo'", [id]);
-    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${comp.rows[0]!.id}/validar`)).statusCode).toBe(403);
-    await validarDoc(ctx, id, "comprovativo", "admin");
+    const url = `/v1/crm/leads/${id}/documentos/${comp.rows[0]!.id}/validar`;
+    const [a, b] = await Promise.all([pedido(ctx, "comercial", "POST", url), pedido(ctx, "secretaria", "POST", url)]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    expect((await pedido(ctx, "secretaria", "POST", url)).statusCode).toBe(200);
+    // Depois de validado, já não se recusa; e um documento que não é o comprovativo o comercial não valida.
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${comp.rows[0]!.id}/recusar`, { observacao: "tarde" })).statusCode).toBe(409);
+    const cc = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = 'cc'", [id]);
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/documentos/${cc.rows[0]!.id}/validar`)).statusCode).toBe(403);
     // Já concluída: repetir não cria nada de novo.
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(409);
 

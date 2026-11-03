@@ -34,6 +34,11 @@ export async function leadDoFicheiro(c: Consulta, driveFileId: string): Promise<
   return r ? Number(r.id) : null;
 }
 
+/** Tipo e estado de um ficheiro da pré-inscrição. */
+export async function tipoEstadoDoDoc(c: Consulta, docId: number) {
+  return one<{ tipo: string; estado: string }>(c, "SELECT tipo, COALESCE(estado, 'pendente') AS estado FROM preinscricao_docs WHERE id = $1", [docId]);
+}
+
 export async function tipoDoDoc(c: Consulta, docId: number) {
   return (await one<{ tipo: string }>(c, "SELECT tipo FROM preinscricao_docs WHERE id = $1", [docId]))?.tipo ?? null;
 }

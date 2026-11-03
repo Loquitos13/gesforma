@@ -1,5 +1,5 @@
 import type { TabelaCrm } from "../repos/crmVisivel.js";
-import { SECRETARIA, PEDAGOGIA, type Regra } from "./perfis.js";
+import { EQUIPA, SECRETARIA, PEDAGOGIA, type Regra } from "./perfis.js";
 
 /**
  * Rotas com o id de uma linha comercial no caminho (e tudo o que está por baixo). O preHandler de app.ts
@@ -25,8 +25,9 @@ export function linhaCrmDoCaminho(path: string): { tabela: TabelaCrm; id: number
 export const regras: Regra[] = [
   ["DELETE", "/v1/preinscricoes/:id", PEDAGOGIA],
   ["POST", "/v1/crm/lote/apagar", PEDAGOGIA],
-  ["POST", "/v1/crm/leads/:id/documentos/:docId/validar", PEDAGOGIA],
-  ["POST", "/v1/crm/leads/:id/documentos/:docId/recusar", PEDAGOGIA],
+  // O comercial valida e recusa o comprovativo; os outros documentos não (o handler decide pelo tipo).
+  ["POST", "/v1/crm/leads/:id/documentos/:docId/validar", EQUIPA],
+  ["POST", "/v1/crm/leads/:id/documentos/:docId/recusar", EQUIPA],
   ["POST", "/v1/crm/leads/:id/validar-preinscricao", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/pedir-pagamento", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/turma-cheia", PEDAGOGIA],

@@ -46,7 +46,7 @@ export const MENU: GrupoMenu[] = [
     { label: "Formadores", view: "fin-formadores", icon: "pessoa" },
     { label: "Edição de Cursos", icon: "livro", children: [
       { label: "Cursos", view: "fin-cursos" }, { label: "Módulos", view: "fin-modulos" },
-      { label: "Conteúdos", view: "fin-conteudos" },
+      { label: "Conteúdos", view: "fin-conteudos" }, { label: "Datas", view: "fin-datas" },
       { label: "Locais", view: "fin-locais" }, { label: "Programas", view: "fin-programas" },
       { label: "Áreas Temáticas", view: "fin-areas-tematicas" },
     ] },
@@ -189,7 +189,7 @@ export const TITULOS: Partial<Record<Vista, string>> = {
   "gold-cockpit-turma": "Turma", "gold-dtp": "Dossiê TP", "gold-inqueritos": "Inquéritos",
   "fin-cursos": "Cursos", "fin-curso-ficha": "Ficha do curso", "fin-turmas": "Turmas", "fin-formadores": "Formadores",
   "fin-presencas": "Sessões da turma", "fin-dtp": "Dossiê TP", "fin-cockpit-turma": "Turma", "fin-inqueritos": "Inquéritos",
-  "fin-modulos": "Módulos", "fin-conteudos": "Conteúdos", "fin-locais": "Locais", "fin-programas": "Programas", "fin-areas-tematicas": "Áreas Temáticas",
+  "fin-modulos": "Módulos", "fin-conteudos": "Conteúdos", "fin-datas": "Datas", "fin-locais": "Locais", "fin-programas": "Programas", "fin-areas-tematicas": "Áreas Temáticas",
   notificacoes: "Notificações",
   "blog-posts": "Posts", "blog-tematicas": "Temáticas", "listas-opcoes": "Listas de opções",
   emails: "Emails automáticos", pagamentos: "Pagamentos", configuracoes: "Configurações", utilizadores: "Utilizadores", site: "Site",

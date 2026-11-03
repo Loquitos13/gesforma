@@ -20,8 +20,10 @@ export const BLOG: Perfil[] = ["admin", "secretaria", "comercial", "financiada"]
 export const GOLD: Perfil[] = ["admin", "secretaria", "comercial"];
 /** Quem trabalha na Financiada (o menu Financiada): a coordenação Gold não entra. */
 export const FIN: Perfil[] = ["admin", "financiada"];
-/** Pagamentos (só há na Gold): a coordenação Gold e a contabilidade. */
+/** Pagamentos (só há na Gold): a coordenação Gold e a contabilidade veem. */
 export const PAGAMENTOS: Perfil[] = ["admin", "secretaria", "contabilidade"];
+/** Validar o comprovativo (confirmar ou recusar) e registar pagamentos: só a contabilidade (e a administração). */
+export const CONTABILIDADE: Perfil[] = ["admin", "contabilidade"];
 /** Notificações e pouco mais: toda a equipa do GesForma, também a contabilidade. */
 export const EQUIPA_E_CONTABILIDADE: Perfil[] = ["admin", "secretaria", "financiada", "comercial", "contabilidade"];
 /** Leituras abertas a toda a equipa (também o formador, que lê as notificações e os ficheiros das suas turmas). */

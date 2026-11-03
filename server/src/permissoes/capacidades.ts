@@ -1,4 +1,4 @@
-import { ADMIN, BLOG, COORDENACAO, EQUIPA, FIN, GOLD, MARKETING, PAGAMENTOS, PEDAGOGIA, SECRETARIA, type Perfil } from "./perfis.js";
+import { ADMIN, BLOG, CONTABILIDADE, COORDENACAO, EQUIPA, FIN, GOLD, MARKETING, PAGAMENTOS, PEDAGOGIA, SECRETARIA, type Perfil } from "./perfis.js";
 
 /**
  * Capacidades que o cliente usa para mostrar ou esconder acções (`/v1/me` → `pode`).
@@ -15,9 +15,12 @@ export const CAPACIDADES = {
   "crm.apagar": PEDAGOGIA,
   "crm.validarDocumentos": PEDAGOGIA,
   "pagamentos.ver": PAGAMENTOS,
-  // TODO (cliente): se a validação do comprovativo pela contabilidade também confirma o pagamento e conclui a
-  // inscrição. Até lá, confirmar e recusar ficam com a coordenação Gold.
-  "pagamentos.confirmar": SECRETARIA,
+  // Validar o comprovativo (e com ele concluir a inscrição) é da contabilidade.
+  "pagamentos.confirmar": CONTABILIDADE,
+  // Pagamento de quem já é formando, registado na ficha (numerário, transferência): a coordenação Gold.
+  "pagamentos.registarFicha": SECRETARIA,
+  // Acesso à área do formando da Gold (palavra-passe gerada): a coordenação Gold.
+  "formandosGold.gerir": SECRETARIA,
   "pagamentos.faturas": PAGAMENTOS,
   "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
   "emails.historico": SECRETARIA,

@@ -130,9 +130,9 @@ describe("apoios: API", () => {
     });
     expect(dup.statusCode).toBe(400);
     expect((await pedido(ctx, "financiada", "PUT", "/v1/apoios/regras", { financiador: "", regras: [{ tipo: "bolsa", modo: "hora", valor: -1 }] })).statusCode).toBe(400);
-    expect((await pedido(ctx, "secretaria", "PUT", "/v1/apoios/regras", { financiador: "", turmaId: 123456789, regras: [] })).statusCode).toBe(404);
+    expect((await pedido(ctx, "financiada", "PUT", "/v1/apoios/regras", { financiador: "", turmaId: 123456789, regras: [] })).statusCode).toBe(404);
     await configurar(ctx);
-    const r = (await pedido(ctx, "secretaria", "GET", "/v1/apoios/regras")).json();
+    const r = (await pedido(ctx, "financiada", "GET", "/v1/apoios/regras")).json();
     expect(r.financiadores).toContain("IEFP-Teste");
     expect(r.regras.filter((x: { financiador: string }) => x.financiador === "IEFP-Teste")).toHaveLength(2);
     expect(r.tipos).toHaveLength(5);
@@ -238,7 +238,8 @@ describe("apoios: API", () => {
   it("painel da Financiada mostra os apoios por aprovar ou pagar", async () => {
     const ctx = await preparar();
     await ctx.db.query("UPDATE apoios SET estado = 'calculado' WHERE turma_id = $1 AND estado = 'pago' AND tipo = 'transporte'", [TURMA]);
-    const p = (await pedido(ctx, "financiada", "GET", "/v1/painel/fin")).json() as { aTratar: { id: string; n: number; detalhe: string }[] };
+    // O painel é só da administração (as coordenações não têm painel).
+    const p = (await pedido(ctx, "admin", "GET", "/v1/painel/fin")).json() as { aTratar: { id: string; n: number; detalhe: string }[] };
     const t = p.aTratar.find(x => x.id === "apoios")!;
     expect(t.n).toBeGreaterThanOrEqual(1);
     expect(t.detalhe).toContain("por aprovar");

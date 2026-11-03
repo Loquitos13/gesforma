@@ -169,7 +169,7 @@ describe("ZIP do dossiê (Gold)", () => {
       "INSERT INTO formandos_gold (id, nome, apelido, email, curso, turma, turma_id) VALUES ($1, 'Inês', 'Recibo', 'ines.recibo@exemplo.pt', 'Curso', $2, $3)",
       [fid, nome, id],
     );
-    const p = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", {
+    const p = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", {
       nome: "Inês Recibo", valor: 50, metodo: "Transferência bancária", curso: "Curso Sem Ficha", email: "ines.recibo@exemplo.pt", estado: "Pago",
     });
     expect(p.statusCode, p.body).toBe(200);

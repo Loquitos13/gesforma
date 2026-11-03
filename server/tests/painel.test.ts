@@ -76,7 +76,7 @@ beforeAll(async () => {
 
 describe("GET /v1/painel/:regime", () => {
   it("indicadores Gold com o período anterior equivalente", async () => {
-    const r = await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?${Q}`);
+    const r = await pedido(ctx, "admin", "GET", `/v1/painel/gold?${Q}`);
     expect(r.statusCode).toBe(200);
     const p = r.json() as Painel;
     const kpi = (id: string) => p.kpis.find(k => k.id === id)!;
@@ -88,7 +88,7 @@ describe("GET /v1/painel/:regime", () => {
   });
 
   it("série de 24 meses com detalhe por curso e por origem", async () => {
-    const p = (await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
+    const p = (await pedido(ctx, "admin", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
     expect(p.serie).toHaveLength(24);
     expect(p.serie[0]!.chave).toBe("2024-04");
     const marco = p.serie[23]!;
@@ -106,7 +106,7 @@ describe("GET /v1/painel/:regime", () => {
   });
 
   it("funil, origens, métodos e por receber", async () => {
-    const p = (await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
+    const p = (await pedido(ctx, "admin", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
     expect(p.funil.principal.find(e => e.id === "pre")!.n).toBe(3);
     expect(p.funil.principal.find(e => e.id === "contactadas")!.n).toBe(1);
     expect(p.conheceu.map(c => [c.rotulo, c.n])).toEqual([["Google", 2], ["Instagram", 1]]);
@@ -115,13 +115,13 @@ describe("GET /v1/painel/:regime", () => {
   });
 
   it("desagregação por local junta pré-inscrições, formandos e receita", async () => {
-    const p = (await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?${Q}&eixo=local`)).json() as Painel;
+    const p = (await pedido(ctx, "admin", "GET", `/v1/painel/gold?${Q}&eixo=local`)).json() as Painel;
     expect(p.desagregacao.eixo).toBe("local");
     expect(p.desagregacao.linhas.find(l => l.chave === "Porto")).toMatchObject({ pre: 3, formandos: 1 });
   });
 
   it("próximas turmas contam formandos e reservas; a tratar hoje", async () => {
-    const p = (await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
+    const p = (await pedido(ctx, "admin", "GET", `/v1/painel/gold?${Q}`)).json() as Painel;
     expect(p.proximasTurmas.find(t => t.id === 990201)).toMatchObject({ ocupadas: 1, reservas: 1, capacidade: 10 });
     const tarefa = (id: string) => p.aTratar.find(t => t.id === id)!.n;
     expect(tarefa("contactar")).toBe(6);
@@ -129,7 +129,7 @@ describe("GET /v1/painel/:regime", () => {
   });
 
   it("os regimes não se misturam", async () => {
-    const rf = await pedido(ctx, "financiada", "GET", `/v1/painel/fin?${Q}`);
+    const rf = await pedido(ctx, "admin", "GET", `/v1/painel/fin?${Q}`);
     expect(rf.statusCode).toBe(200);
     const fin = rf.json() as Painel;
     expect(fin.kpis.find(k => k.id === "pre")!.valor).toBe(2);
@@ -141,7 +141,7 @@ describe("GET /v1/painel/:regime", () => {
   });
 
   it("datas inválidas dão 400", async () => {
-    const r = await pedido(ctx, "secretaria", "GET", "/v1/painel/gold?de=13-03-2026");
+    const r = await pedido(ctx, "admin", "GET", "/v1/painel/gold?de=13-03-2026");
     expect(r.statusCode).toBe(400);
   });
 
@@ -150,11 +150,14 @@ describe("GET /v1/painel/:regime", () => {
       (await pedido(ctx, perfil, "GET", `/v1/painel/${regime}`)).statusCode;
     expect(await estado("admin", "gold")).toBe(200);
     expect(await estado("admin", "fin")).toBe(200);
-    expect(await estado("secretaria", "fin")).toBe(200);
+    // As coordenações não têm painel (pedido do cliente); o comercial mantém o da Gold.
+    expect(await estado("secretaria", "gold")).toBe(403);
+    expect(await estado("secretaria", "fin")).toBe(403);
     expect(await estado("comercial", "gold")).toBe(200);
     expect(await estado("comercial", "fin")).toBe(403);
-    expect(await estado("financiada", "fin")).toBe(200);
+    expect(await estado("financiada", "fin")).toBe(403);
     expect(await estado("financiada", "gold")).toBe(403);
+    expect(await estado("contabilidade", "gold")).toBe(403);
     expect(await estado("formador", "gold")).toBe(403);
     expect(await estado("formando", "gold")).toBe(403);
     expect(await estado(null, "gold")).toBe(401);

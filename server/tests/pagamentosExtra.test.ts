@@ -27,7 +27,7 @@ async function carregarLogo(ctx: Ctx, perfil: "admin" | "secretaria", nome: stri
 }
 
 async function novoPagamento(ctx: Ctx, d: { nome: string; valor: number; estado: "Pago" | "Pendente"; curso?: string; email?: string }) {
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", {
+  const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", {
     nome: d.nome, valor: d.valor, metodo: "Transferência bancária", curso: d.curso ?? "Excel Avançado",
     email: d.email ?? "pagador@exemplo.pt", estado: d.estado,
   });
@@ -134,9 +134,9 @@ describe("pagamentos: recibos", () => {
   });
 
   it("pagamento recebido não muda de valor e o recibo guarda os dados da emissão", async () => {
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { nome: "Outra Pessoa" })).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125, referencia: "REF-1" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(409);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${pago1}`, { nome: "Outra Pessoa" })).statusCode).toBe(409);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125, referencia: "REF-1" })).statusCode).toBe(200);
     // O admin corrige (fica na auditoria), mas o recibo já emitido mantém o valor recebido.
     expect((await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo`)).statusCode).toBe(200);
@@ -176,7 +176,8 @@ describe("pagamentos: pré-inscrição confirmada", () => {
     const email = `lead.${Date.now()}@exemplo.pt`;
     const curso = `Curso Pago ${Date.now()}`;
     const criar = async (regime: "gold" | "fin") =>
-      (await pedido(ctx, "secretaria", "POST", "/v1/preinscricoes", { nome: "Lia", email, curso, regime })).json().preinscricao.id as number;
+      // Cada coordenação cria na sua linha (a coordenação Gold cria sempre na Gold).
+      (await pedido(ctx, regime === "fin" ? "financiada" : "secretaria", "POST", "/v1/preinscricoes", { nome: "Lia", email, curso, regime })).json().preinscricao.id as number;
     const desistiu = await criar("gold");
     await ctx.db.query("UPDATE preinscricoes SET estado = 'Desistiu', motivo_desistencia = 'Preço' WHERE id = $1", [desistiu]);
     const fin = await criar("fin");

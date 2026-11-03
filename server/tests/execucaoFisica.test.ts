@@ -65,7 +65,7 @@ async function turmaComFormandos(ctx: Ctx, opts: { curso?: string; numeroAcao?: 
   await ctx.db.query("INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1, 'locais', 'fin', $2::jsonb)",
     [900000 + (++seq), JSON.stringify({ nome: local, morada: "Rua das Flores, 10, 1000-100 Lisboa" })]);
   const nome = unico("TF Reembolso");
-  const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+  const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
     dataInicio: "2026-01-05", nome, curso: opts.curso ?? "UFCD Reembolso", capacidade: 10, local, cronograma: CRONOGRAMA,
     ...(opts.numeroAcao ? { numeroAcao: opts.numeroAcao } : {}),
   });
@@ -92,7 +92,7 @@ async function turmaComFormandos(ctx: Ctx, opts: { curso?: string; numeroAcao?: 
     3: [marca(ana, "Ana Silva", "presente")],
   };
   for (const [n, presencas] of Object.entries(folhas)) {
-    const r = await pedido(ctx, "secretaria", "PUT", `${base}/sessoes/${n}`, { presencas });
+    const r = await pedido(ctx, "financiada", "PUT", `${base}/sessoes/${n}`, { presencas });
     expect(r.statusCode, r.body).toBe(200);
   }
   return { id: turmaId, nome, ana, bruno, carla };
@@ -172,9 +172,9 @@ describe("execução física da turma (Financiada)", () => {
     expect(rotuloCodigoCurso("UC00277")).toBe("UC00277");
     const ctx = await arrancar();
     const base = { ufcd: "Comunicar e interagir", regime: "Online", horas: 25 };
-    const uc = await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "uc 00033", nomeComercial: `Comunicar ${Date.now()}` });
+    const uc = await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "uc 00033", nomeComercial: `Comunicar ${Date.now()}` });
     expect(uc.statusCode, uc.body).toBe(200);
-    const ruim = await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "  ", nomeComercial: `Ruim ${Date.now()}` });
+    const ruim = await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", { ...base, ufcdCod: "  ", nomeComercial: `Ruim ${Date.now()}` });
     expect(ruim.statusCode).toBe(400);
     const lido = await ctx.db.query<{ ufcd_cod: string }>("SELECT ufcd_cod FROM cursos_fin WHERE nome_comercial LIKE 'Comunicar %' ORDER BY id DESC LIMIT 1");
     expect(lido.rows[0]!.ufcd_cod).toBe("UC00033");
@@ -192,7 +192,7 @@ describe("execução física da turma (Financiada)", () => {
       numeroSigo: "1234567",
     });
     expect(a.statusCode, a.body).toBe(200);
-    const b = await financiamento(ctx, "secretaria", t.bruno, {
+    const b = await financiamento(ctx, "financiada", t.bruno, {
       nif: "234567890", niss: "98765432109", dataNascimento: "1985-11-30", genero: "1 - Homens", nacionalidade: "31 - Brasil",
       passaporte: "XY123456", tipoAutorizacaoResidencia: "Temporária", situacaoEmpregoEntrada: "3 - Desempregado à procura de novo emprego - Não DLD",
       habilitacoesEntrada: LISTA_HABILITACOES[2], numeroSigo: "7654321",
@@ -240,7 +240,7 @@ describe("execução física da turma (Financiada)", () => {
     // Fim da participação: «à saída» igual à entrada salvo indicação; procura emprego pela situação à saída.
     await financiamento(ctx, "financiada", t.ana, { situacaoEmpregoSaida: "3 - Desempregado à procura de novo emprego - Não DLD" });
     for (const id of [t.ana, t.bruno]) {
-      const n = await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 });
+      const n = await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 });
       expect(n.statusCode, n.body).toBe(200);
     }
     await ctx.db.query("UPDATE turmas_fin SET fechada_em = now() WHERE id = $1", [t.id]);
@@ -287,12 +287,12 @@ describe("execução física da turma (Financiada)", () => {
   it("turma só por vídeo-conferência: horas síncronas e E-Learning, sem presencial nem B-Learning", async () => {
     const ctx = await arrancar();
     const nome = unico("TF Distancia");
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2026-02-02", nome, curso: "UFCD Distancia", capacidade: 10, cronograma: CRONOGRAMA_DISTANCIA });
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2026-02-02", nome, curso: "UFCD Distancia", capacidade: 10, cronograma: CRONOGRAMA_DISTANCIA });
     expect(t.statusCode, t.body).toBe(200);
     const turmaId = t.json().turma.id as number;
     const [dora] = await inscrever(ctx, turmaId, [["Dora", `dora${Date.now()}@exemplo.pt`]]) as [number];
     for (const n of [1, 2]) {
-      const r = await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${turmaId}/sessoes/${n}`, { presencas: [marca(dora, "Dora Silva", "presente")] });
+      const r = await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${turmaId}/sessoes/${n}`, { presencas: [marca(dora, "Dora Silva", "presente")] });
       expect(r.statusCode, r.body).toBe(200);
     }
     const linha = linhasTemplate(await descarregar(ctx, turmaId)).find(l => String(l.M).startsWith("Dora"))!;
@@ -311,7 +311,9 @@ describe("execução física da turma (Financiada)", () => {
       expect((await financiamento(ctx, perfil, t.ana, { niss: "12345678901" })).statusCode, perfil).toBe(403);
     }
     expect((await financiamento(ctx, null, t.ana)).statusCode).toBe(401);
-    for (const perfil of ["admin", "secretaria", "financiada"] as const) expect((await financiamento(ctx, perfil, t.ana)).statusCode, perfil).toBe(200);
+    // A coordenação Gold não entra na Financiada.
+    expect((await financiamento(ctx, "secretaria", t.ana)).statusCode).toBe(403);
+    for (const perfil of ["admin", "financiada"] as const) expect((await financiamento(ctx, perfil, t.ana)).statusCode, perfil).toBe(200);
 
     // Fora da lista do template, formatos errados e campos desconhecidos são recusados.
     for (const corpo of [{ genero: "Feminino" }, { nacionalidade: "Portugal" }, { habilitacoesEntrada: "Licenciatura" }, { nif: "12345" },
@@ -349,7 +351,7 @@ describe("execução física da turma (Financiada)", () => {
     // Limpar um campo apaga-o.
     expect((await financiamento(ctx, "financiada", t.ana, { passaporte: "" })).json().dados.passaporte).toBe("");
     // Uma ficha Gold não tem estes dados (as rotas são da Financiada).
-    expect((await pedido(ctx, "secretaria", "GET", "/v1/formandos-fin/999999999/financiamento")).statusCode).toBe(404);
+    expect((await pedido(ctx, "financiada", "GET", "/v1/formandos-fin/999999999/financiamento")).statusCode).toBe(404);
   }, 60_000);
 
   it("só a equipa da Financiada vê e descarrega (nunca o comercial nem o formador)", async () => {
@@ -367,9 +369,10 @@ describe("execução física da turma (Financiada)", () => {
     const goldId = gold.json().turma.id as number;
     const existeFin = (await ctx.db.query("SELECT 1 FROM turmas_fin WHERE id = $1", [goldId])).rows.length > 0;
     if (!existeFin) expect((await pedido(ctx, "financiada", "GET", `/v1/turmas-fin/${goldId}/reembolso`)).statusCode).toBe(404);
-    for (const perfil of ["admin", "secretaria", "financiada"] as const) {
+    for (const perfil of ["admin", "financiada"] as const) {
       expect((await pedido(ctx, perfil, "GET", `/v1/turmas-fin/${t.id}/reembolso`)).statusCode).toBe(200);
     }
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas-fin/${t.id}/reembolso`)).statusCode).toBe(403);
   }, 60_000);
 
   it("cada turma tem um só ficheiro de cada: actualizar substitui a cópia e mostra o que falta", async () => {
@@ -422,7 +425,7 @@ describe("execução física da turma (Financiada)", () => {
     await pedido(ctx, "financiada", "POST", `/v1/turmas-fin/${t.id}/reembolso/atualizar`, {});
 
     // Novas presenças: o ficheiro fica desactualizado e, ao actualizar, a cópia é substituída (não duplicada).
-    await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/sessoes/3`, { presencas: [marca(t.ana, "Ana Silva", "presente"), marca(t.bruno, "Bruno Silva", "presente")] });
+    await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${t.id}/sessoes/3`, { presencas: [marca(t.ana, "Ana Silva", "presente"), marca(t.bruno, "Bruno Silva", "presente")] });
     const meio = (await pedido(ctx, "financiada", "GET", `/v1/turmas-fin/${t.id}/reembolso`)).json();
     expect(meio.ficheiros.find((f: { tipo: string }) => f.tipo === "execucao-fisica").desatualizado).toBe(true);
     expect(meio.ficheiros.find((f: { tipo: string }) => f.tipo === "despesas").desatualizado).toBe(false);
@@ -457,7 +460,7 @@ describe("execução física: situação no fim e formandos que mudaram de turma
     const t = await turmaComFormandos(ctx);
     // Ana: 10 h de 11 e nota positiva; Bruno: nota positiva mas 7 h de 11; Carla: sem nota nem presenças.
     for (const id of [t.ana, t.bruno]) {
-      expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 })).statusCode).toBe(200);
+      expect((await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${t.id}/certificados/${id}`, { nota: 15 })).statusCode).toBe(200);
     }
     await ctx.db.query("UPDATE turmas_fin SET fechada_em = now() WHERE id = $1", [t.id]);
     const linhas = linhasTemplate(await descarregar(ctx, t.id));
@@ -479,16 +482,16 @@ describe("execução física: situação no fim e formandos que mudaram de turma
   it("quem mudou de turma continua na de origem como «Transferido», só com as horas dela; e entra na nova", async () => {
     const ctx = await arrancar();
     const t = await turmaComFormandos(ctx);
-    const outra = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+    const outra = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
       dataInicio: "2026-01-05", nome: unico("TF Destino"), curso: "UFCD Reembolso", capacidade: 10, cronograma: CRONOGRAMA,
     });
     expect(outra.statusCode, outra.body).toBe(200);
     const destino = outra.json().turma.id as number;
     // O Bruno (4 h presenciais + 3 h síncronas na origem) passa para a outra turma e tem lá uma sessão.
-    const m = await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-fin/${t.bruno}`, { turmaId: destino });
+    const m = await pedido(ctx, "financiada", "PATCH", `/v1/formandos-fin/${t.bruno}`, { turmaId: destino });
     expect(m.statusCode, m.body).toBe(200);
     expect((await ctx.db.query<{ turma_id: number }>("SELECT turma_id FROM formandos_fin WHERE id = $1", [t.bruno])).rows[0]!.turma_id).toBe(destino);
-    await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${destino}/sessoes/3`, { presencas: [marca(t.bruno, "Bruno Silva", "presente")] });
+    await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${destino}/sessoes/3`, { presencas: [marca(t.bruno, "Bruno Silva", "presente")] });
 
     const origem = linhasTemplate(await descarregar(ctx, t.id));
     const bruno = origem.find(l => String(l.M ?? "").startsWith("Bruno"))!;

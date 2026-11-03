@@ -11,10 +11,47 @@ describe("matriz de permissões", () => {
     }
   });
 
-  it("pagamentos: admin e secretaria", () => {
-    expect(podeAceder("secretaria", "PATCH", "/v1/pagamentos/TRX-1")).toBe(true);
+  it("pagamentos: a coordenação Gold e a contabilidade veem; só a contabilidade valida e regista", () => {
+    for (const r of ["admin", "secretaria", "contabilidade"]) expect(podeAceder(r, "GET", "/v1/pagamentos"), r).toBe(true);
+    for (const r of ["admin", "contabilidade"]) {
+      expect(podeAceder(r, "POST", "/v1/pagamentos/TRX-1/confirmar"), r).toBe(true);
+      expect(podeAceder(r, "POST", "/v1/pagamentos/TRX-1/recusar"), r).toBe(true);
+      expect(podeAceder(r, "PATCH", "/v1/pagamentos/TRX-1"), r).toBe(true);
+    }
+    expect(podeAceder("secretaria", "POST", "/v1/pagamentos/TRX-1/confirmar")).toBe(false);
+    expect(podeAceder("secretaria", "PATCH", "/v1/pagamentos/TRX-1")).toBe(false);
+    expect(podeAceder("secretaria", "POST", "/v1/pagamentos/TRX-1/recibo")).toBe(true);
+    expect(podeAceder("contabilidade", "POST", "/v1/pagamentos/TRX-1/recibo")).toBe(true);
     expect(podeAceder("comercial", "POST", "/v1/pagamentos")).toBe(false);
+    expect(podeAceder("financiada", "GET", "/v1/pagamentos")).toBe(false);
     expect(podeAceder("formador", "GET", "/v1/pagamentos")).toBe(false);
+  });
+
+  it("contabilidade: só pagamentos, os seus emails e notificações; nada da Gold, da Financiada ou do Sistema", () => {
+    for (const [m, p] of [["GET", "/v1/crm/leads"], ["GET", "/v1/turmas-gold"], ["GET", "/v1/turmas-fin"], ["GET", "/v1/painel/gold"],
+      ["GET", "/v1/utilizadores"], ["PUT", "/v1/settings/entidade"], ["GET", "/v1/formandos-gold"], ["GET", "/v1/auditoria"]] as const) {
+      expect(podeAceder("contabilidade", m, p), `${m} ${p}`).toBe(false);
+    }
+    for (const [m, p] of [["GET", "/v1/notificacoes"], ["GET", "/v1/drive/files/abc/content"], ["GET", "/v1/pagamentos/exportar"]] as const) {
+      expect(podeAceder("contabilidade", m, p), `${m} ${p}`).toBe(true);
+    }
+  });
+
+  it("coordenações: cada uma só na sua linha, sem painéis; utilizadores e integrações só da administração", () => {
+    expect(podeAceder("secretaria", "GET", "/v1/turmas-fin")).toBe(false);
+    expect(podeAceder("secretaria", "GET", "/v1/turmas-gold")).toBe(true);
+    expect(podeAceder("financiada", "GET", "/v1/turmas-gold")).toBe(false);
+    expect(podeAceder("financiada", "GET", "/v1/turmas-fin")).toBe(true);
+    for (const r of ["secretaria", "financiada"]) {
+      expect(podeAceder(r, "GET", "/v1/painel/gold"), r).toBe(false);
+      expect(podeAceder(r, "GET", "/v1/painel/fin"), r).toBe(false);
+      expect(podeAceder(r, "GET", "/v1/utilizadores"), r).toBe(false);
+      expect(podeAceder(r, "PUT", "/v1/settings/smtp"), r).toBe(false);
+      expect(podeAceder(r, "PUT", "/v1/drive/config"), r).toBe(false);
+      expect(podeAceder(r, "GET", "/v1/auditoria"), r).toBe(true);
+      expect(podeAceder(r, "PUT", "/v1/settings/entidade"), r).toBe(true);
+      expect(podeAceder(r, "GET", "/v1/testemunhos"), r).toBe(true);
+    }
   });
 
   it("emails: modelos e regras para toda a equipa; histórico só da secretaria", () => {

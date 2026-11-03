@@ -122,7 +122,7 @@ describe("ficha do formando", () => {
     expect((await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-gold/${porPagar}`, { pago: false })).statusCode).toBe(409);
 
     // Reembolso: a ficha volta a ficar por pagar e o webhook não repõe o Pago.
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${mov[0]!.id}`, { estado: "Reembolsado" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${mov[0]!.id}`, { estado: "Reembolsado" })).statusCode).toBe(200);
     expect((await ctx.db.query<{ pago: boolean }>("SELECT pago FROM formandos_gold WHERE id = $1", [jaPago])).rows[0]!.pago).toBe(false);
     await ctx.db.query(
       `INSERT INTO app_settings (id, values) VALUES ('gold', $1::jsonb)

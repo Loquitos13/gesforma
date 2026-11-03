@@ -97,7 +97,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     const metodo = oferta ? "Oferta" : d.metodo;
     const estado = normalizarEstado("formandoGold", d.estado);
     if (!estado) return reply.code(400).send({ error: `Estado inválido: «${d.estado}».` });
-    if (pago && !pode(req.actor!.role, "pagamentos.confirmar")) return reply.code(403).send({ error: "Só a secretaria regista pagamentos." });
+    if (pago && !pode(req.actor!.role, "pagamentos.registarFicha")) return reply.code(403).send({ error: "Só a coordenação Gold regista pagamentos na ficha." });
     const id = await nextOpsId(db);
     // «Já pago»: a ficha nasce por pagar e o pagamento é registado na mesma transação (fica o movimento na tesouraria).
     const pagamentoId = pago ? `TRX-${await nextOpsId(db)}` : null;
@@ -135,7 +135,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     const id = v.params.id;
     const d = { ...v.body };
     // Pagamento da ficha só pela secretaria (o preço da turma continua a ser recalculado abaixo).
-    if (!pode(req.actor!.role, "pagamentos.confirmar")) { delete d.pago; delete d.valor; delete d.metodo; }
+    if (!pode(req.actor!.role, "pagamentos.registarFicha")) { delete d.pago; delete d.valor; delete d.metodo; }
     const atual = await linhaFormando(db, "gold", id);
     if (!atual) return reply.code(404).send({ error: "formando inexistente" });
     if (d.estado !== undefined) {

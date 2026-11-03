@@ -7,12 +7,13 @@ const pagina = (titulo: string) => ({
 });
 
 describe("páginas do site (editor visual)", () => {
-  it("rascunho fica privado; publicar mostra no site; só o admin edita", async () => {
+  it("rascunho fica privado; publicar mostra no site; só a administração e as coordenações editam", async () => {
     const ctx = await arrancar();
     expect((await ctx.app.inject({ method: "GET", url: "/v1/public/site/paginas/inicio" })).json()).toEqual({ dados: null });
 
-    expect((await pedido(ctx, "secretaria", "PUT", "/v1/site/paginas/inicio/publicar", { dados: pagina("x") })).statusCode).toBe(403);
-    expect((await pedido(ctx, "secretaria", "GET", "/v1/site/paginas/inicio")).statusCode).toBe(403);
+    expect((await pedido(ctx, "comercial", "PUT", "/v1/site/paginas/inicio/publicar", { dados: pagina("x") })).statusCode).toBe(403);
+    expect((await pedido(ctx, "comercial", "GET", "/v1/site/paginas/inicio")).statusCode).toBe(403);
+    expect((await pedido(ctx, "formador", "GET", "/v1/site/paginas/inicio")).statusCode).toBe(403);
 
     const rasc = await pedido(ctx, "admin", "PUT", "/v1/site/paginas/inicio/rascunho", { dados: pagina("Rascunho") });
     expect(rasc.statusCode, rasc.body).toBe(200);

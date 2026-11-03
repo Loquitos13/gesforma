@@ -103,9 +103,9 @@ describe("planos de sessão do curso nas turmas", () => {
     const c = await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", { ufcdCod: "9998", ufcd: nome, nomeComercial: nome, regime: "Presencial", horas: 25 });
     expect(c.statusCode, c.body).toBe(200);
     const cursoId = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_fin WHERE nome_comercial = $1", [nome])).rows[0]!.id;
-    const ficha = await pedido(ctx, "secretaria", "PUT", `/v1/cursos/fin/${cursoId}/ficha`, { payload: { planosSessao: [plano(1, "Fin 1"), plano(2, "Fin 2")] } });
+    const ficha = await pedido(ctx, "financiada", "PUT", `/v1/cursos/fin/${cursoId}/ficha`, { payload: { planosSessao: [plano(1, "Fin 1"), plano(2, "Fin 2")] } });
     expect(ficha.statusCode, ficha.body).toBe(200);
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
       dataInicio: "2099-07-01", nome: unico("TFP"), curso: nome, horas: 25,
       cronograma: [
         { id: "1", data: "2099-07-01", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] },

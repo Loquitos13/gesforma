@@ -84,7 +84,7 @@ async function turmaFin(ctx: Ctx): Promise<Turma> {
   });
   expect(c.statusCode, c.body).toBe(200);
   const nome = unico("TF Docs");
-  const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+  const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
     dataInicio: "2026-09-30", nome, curso: nomeComercial, capacidade: 10, local: "Sala Virtual / E-Learning", cronograma: CRONOGRAMA, numeroAcao: 2,
   });
   expect(t.statusCode, t.body).toBe(200);
@@ -119,7 +119,7 @@ async function turmaFin(ctx: Ctx): Promise<Turma> {
   });
   expect(fin.statusCode, fin.body).toBe(200);
   const base = `/v1/turmas/fin/${turmaId}/sessoes`;
-  const s1 = await pedido(ctx, "secretaria", "PUT", `${base}/1`, {
+  const s1 = await pedido(ctx, "financiada", "PUT", `${base}/1`, {
     plano: PLANO,
     sumario: { conteudos: "Técnicas de procura de emprego e CV.", atividades: "Simulação de entrevista.", assinado: true },
     presencas: [
@@ -128,7 +128,7 @@ async function turmaFin(ctx: Ctx): Promise<Turma> {
     ],
   });
   expect(s1.statusCode, s1.body).toBe(200);
-  const s2 = await pedido(ctx, "secretaria", "PUT", `${base}/2`, {
+  const s2 = await pedido(ctx, "financiada", "PUT", `${base}/2`, {
     presencas: [
       { id: ana, nome: "Ana Silva", presente: true, estado: "presente" },
       { id: bruno, nome: "Bruno Silva", presente: false, estado: "falta_injustificada" },
@@ -173,14 +173,14 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(s1.plano.momentos.desenvolvimento.tempo).toBe("2h30");
     // Formato antigo (sem «tempo»): aceite, e o tempo fica vazio.
     const antigo = { ...PLANO, momentos: Object.fromEntries(Object.entries(PLANO.momentos).map(([k, m]) => [k, { conteudo: m.conteudo }])) };
-    const r = await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/sessoes/2`, { plano: antigo });
+    const r = await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${t.id}/sessoes/2`, { plano: antigo });
     expect(r.statusCode, r.body).toBe(200);
     const depois = (await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/pedagogia`)).json();
     const s2 = (depois.sessoes as { n: number; plano: typeof PLANO }[]).find(s => s.n === 2)!;
     expect(s2.plano.momentos.introducao.tempo).toBe("");
     // Tempo comprido demais é recusado.
     const longo = { ...PLANO, momentos: { ...PLANO.momentos, conclusao: { tempo: "x".repeat(121) } } };
-    expect((await pedido(ctx, "secretaria", "PUT", `/v1/turmas/fin/${t.id}/sessoes/2`, { plano: longo })).statusCode).toBe(400);
+    expect((await pedido(ctx, "financiada", "PUT", `/v1/turmas/fin/${t.id}/sessoes/2`, { plano: longo })).statusCode).toBe(400);
   });
 
   it("fichas de inscrição: uma página por formando, com a candidatura, a UFCD e os dados pessoais em rótulos", async () => {
@@ -219,9 +219,10 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
     const url = `/v1/formandos-fin/${t.ana}/ficha-inscricao`;
-    for (const perfil of ["formador", "comercial"] as const) expect((await pedido(ctx, perfil, "GET", url)).statusCode, perfil).toBe(403);
+    // A coordenação Gold não entra na Financiada.
+    for (const perfil of ["formador", "comercial", "secretaria"] as const) expect((await pedido(ctx, perfil, "GET", url)).statusCode, perfil).toBe(403);
     expect((await pedido(ctx, null, "GET", url)).statusCode).toBe(401);
-    for (const perfil of ["admin", "secretaria", "financiada"] as const) {
+    for (const perfil of ["admin", "financiada"] as const) {
       const r = await pedido(ctx, perfil, "GET", url);
       expect(r.statusCode, perfil).toBe(200);
       expect(r.headers["content-disposition"]).toContain("FichaInscricao - Ana Silva.pdf");
@@ -388,22 +389,22 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
   it("folha de presenças com o plano de sessão no verso: frente e verso, sessão a sessão", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
-    const uma = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=1`);
+    const uma = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=1`);
     expect(uma.statusCode, uma.body.slice(0, 200)).toBe(200);
     const p1 = await paginas(uma.rawPayload);
     // Frente: a folha de presenças e sumário; verso: o plano da sessão.
     expect(p1).toHaveLength(2);
     expect(p1[1]).toContain("Introdução");
-    const todas = await paginas((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos`)).rawPayload);
+    const todas = await paginas((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-planos`)).rawPayload);
     expect(todas).toHaveLength(4);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=9`)).statusCode).toBe(404);
+    expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=9`)).statusCode).toBe(404);
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/folhas-planos?sessao=1`)).statusCode).toBe(403);
   });
 
   it("sessão a sessão no cockpit: folha e plano da sessão n; o formador fora da turma não os tira", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
-    const folha = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=2`);
+    const folha = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=2`);
     expect(folha.statusCode, folha.body.slice(0, 200)).toBe(200);
     expect(folha.headers["content-disposition"]).toContain("sessao 2");
     const pf = await paginas(folha.rawPayload);
@@ -414,7 +415,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(await paginas(plano.rawPayload)).toHaveLength(1);
     const todas = await pedido(ctx, "admin", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca`);
     expect(await paginas(todas.rawPayload)).toHaveLength(2);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=9`)).statusCode).toBe(404);
+    expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=9`)).statusCode).toBe(404);
     expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/folhas-presenca?sessao=1`)).statusCode).toBe(403);
     expect((await pedido(ctx, null, "GET", `/v1/turmas/fin/${t.id}/planos-sessao`)).statusCode).toBe(401);
     // O formador continua sem gerar o dossiê da turma.
@@ -429,20 +430,20 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     expect(antes).toContain(CANDIDATURA_FIN_OMISSAO.tipologia);
     const valores = { ...CANDIDATURA_FIN_OMISSAO, nome: "Programa Teste", tipologia: "1.09. Formação de Teste", programa: "" };
     expect((await pedido(ctx, "formador", "POST", "/v1/catalog/programas", { regime: "fin", payload: valores })).statusCode).toBe(403);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "" } })).statusCode).toBe(400);
-    const g = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: valores });
+    expect((await pedido(ctx, "financiada", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "" } })).statusCode).toBe(400);
+    const g = await pedido(ctx, "financiada", "POST", "/v1/catalog/programas", { regime: "fin", payload: valores });
     expect(g.statusCode, g.body).toBe(200);
-    const p = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Teste" });
+    const p = await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Teste" });
     expect(p.statusCode, p.body).toBe(200);
     expect(p.json().turma.programa).toBe("Programa Teste");
     // Renomear o programa leva a turma com ele; apagar um programa em uso é recusado.
     const id = g.json().item.id as number;
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/catalog/programas/${id}`, { payload: { ...valores, nome: "Programa Novo" } })).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "DELETE", `/v1/catalog/programas/${id}`)).statusCode).toBe(409);
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/catalog/programas/${id}`, { payload: { ...valores, nome: "Programa Novo" } })).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "DELETE", `/v1/catalog/programas/${id}`)).statusCode).toBe(409);
     // Turma sem programa: vale o da ficha do curso (Oferta › Programa).
-    const doCurso = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "Programa do Curso", tipologia: "1.10. Tipologia do Curso" } });
+    const doCurso = await pedido(ctx, "financiada", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...valores, nome: "Programa do Curso", tipologia: "1.10. Tipologia do Curso" } });
     expect(doCurso.statusCode, doCurso.body).toBe(200);
-    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
+    await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
     await ctx.db.query(
       `INSERT INTO curso_fichas (regime, curso_id, payload) SELECT 'fin', curso_id, '{"programaFin":"Programa do Curso"}'::jsonb FROM turmas_fin WHERE id = $1
        ON CONFLICT (regime, curso_id) DO UPDATE SET payload = curso_fichas.payload || EXCLUDED.payload`, [t.id]);
@@ -453,9 +454,9 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     await ctx.db.query("UPDATE turmas_fin SET programa = 'Programa Apagado' WHERE id = $1", [t.id]);
     expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}`)).json().turma.programaDocumentos.origem).toBe("curso");
     // Campos em branco num programa novo saem em branco (nunca com os valores do PESSOAS 2030).
-    const curto = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { nome: "Programa Curto", tipologia: "9.99. Só Tipologia", tipologiaAcao: "AC-99 Ação Curta" } });
+    const curto = await pedido(ctx, "financiada", "POST", "/v1/catalog/programas", { regime: "fin", payload: { nome: "Programa Curto", tipologia: "9.99. Só Tipologia", tipologiaAcao: "AC-99 Ação Curta" } });
     expect(curto.statusCode, curto.body).toBe(200);
-    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Curto" });
+    await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Curto" });
     const [curtoFicha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
     expect(curtoFicha).toContain("9.99. Só Tipologia");
     expect(curtoFicha).not.toContain(CANDIDATURA_FIN_OMISSAO.prioridade);
@@ -464,7 +465,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     // A folha (modelo da candidatura) não leva a linha «Tipologia»: confere-se pela Tipologia de Ação.
     expect(curtoFolha).toContain("AC-99 Ação Curta");
     expect(curtoFolha).not.toContain(CANDIDATURA_FIN_OMISSAO.tipologiaIntervencao);
-    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Novo" });
+    await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "Programa Novo" });
     try {
       const [ficha] = await paginas((await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${t.ana}/ficha-inscricao`)).rawPayload);
       expect(ficha).toContain("1.09. Formação de Teste");
@@ -480,7 +481,7 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       }
     } finally {
       await apagarLogoEntidade(ctx.db);
-      await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
+      await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
     }
 
     // ZIP do dossiê: as fichas no tópico 5, as folhas e os planos no 6 (modelo da candidatura).
@@ -545,12 +546,12 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
   it("logótipos do rodapé: DGERT e o do programa (carregados no backoffice) com o da UE; listagem de formandos nas duas", async () => {
     const ctx = await arrancar();
     const t = await turmaFin(ctx);
-    const prog = await pedido(ctx, "secretaria", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...CANDIDATURA_FIN_OMISSAO, nome: unico("Programa Logo") } });
+    const prog = await pedido(ctx, "financiada", "POST", "/v1/catalog/programas", { regime: "fin", payload: { ...CANDIDATURA_FIN_OMISSAO, nome: unico("Programa Logo") } });
     expect(prog.statusCode, prog.body).toBe(200);
     const progId = prog.json().item.id as number;
-    await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: prog.json().item.nome });
+    await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: prog.json().item.nome });
 
-    const enviar = (perfil: "admin" | "secretaria" | "formador", url: string, bytes: Buffer, nome = "logo.png") => {
+    const enviar = (perfil: "admin" | "secretaria" | "financiada" | "formador", url: string, bytes: Buffer, nome = "logo.png") => {
       const b = "----gesforma";
       const payload = Buffer.concat([
         Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="ficheiro"; filename="${nome}"\r\nContent-Type: image/png\r\n\r\n`),
@@ -560,15 +561,15 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
     };
     // Programa: a equipa carrega; o formador não; um ficheiro que não é imagem é recusado.
     expect((await enviar("formador", `/v1/catalogos/programas/${progId}/logo`, png(7, 3))).statusCode).toBe(403);
-    expect((await enviar("secretaria", `/v1/catalogos/programas/${progId}/logo`, Buffer.from("%PDF-1.4"))).statusCode).toBe(400);
-    const up = await enviar("secretaria", `/v1/catalogos/programas/${progId}/logo`, png(7, 3));
+    expect((await enviar("financiada", `/v1/catalogos/programas/${progId}/logo`, Buffer.from("%PDF-1.4"))).statusCode).toBe(400);
+    const up = await enviar("financiada", `/v1/catalogos/programas/${progId}/logo`, png(7, 3));
     expect(up.statusCode, up.body).toBe(200);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/catalogos/programas/${progId}/logo`)).json().logo.mime).toBe("image/png");
+    expect((await pedido(ctx, "financiada", "GET", `/v1/catalogos/programas/${progId}/logo`)).json().logo.mime).toBe("image/png");
     // Pedido anónimo com IP próprio: o limite sem sessão (por IP) conta todos os pedidos deste ficheiro.
     const publico = await ctx.app.inject({ method: "GET", url: `/v1/public/logos/programa/${progId}`, headers: { "x-gesforma-client": "web" }, remoteAddress: "10.77.0.1" });
     expect(publico.headers["content-type"]).toBe("image/png");
-    // DGERT: só a administração carrega.
-    expect((await enviar("secretaria", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(403);
+    // DGERT: a administração e as coordenações carregam (configurações); o formador não.
+    expect((await enviar("formador", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(403);
     expect((await enviar("admin", "/v1/configuracoes/logo-dgert", png(9, 4))).statusCode).toBe(200);
     try {
       const comLogos = (raw: string) => /\/Width 7\s*\/Height 3|\/Height 3\s*\/Width 7/.test(raw)
@@ -602,13 +603,13 @@ describe("documentos da Financiada: PDF no modelo da candidatura", () => {
       expect((await pedido(ctx, "formador", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).statusCode).toBe(403);
 
       // Programa sem logótipo: o rodapé fica com a DGERT e a UE.
-      expect((await pedido(ctx, "secretaria", "DELETE", `/v1/catalogos/programas/${progId}/logo`)).statusCode).toBe(200);
+      expect((await pedido(ctx, "financiada", "DELETE", `/v1/catalogos/programas/${progId}/logo`)).statusCode).toBe(200);
       const sem = (await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${t.id}/relatorio-formandos`)).rawPayload.toString("latin1");
       expect(sem).not.toMatch(/\/Width 7\s*\/Height 3|\/Height 3\s*\/Width 7/);
       expect(sem).toMatch(/\/Width 350/);
     } finally {
       await pedido(ctx, "admin", "DELETE", "/v1/configuracoes/logo-dgert");
-      await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
+      await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${t.id}`, { programa: "" });
     }
 
     // Gold: a mesma listagem, sem rodapé de financiamento, com o pagamento e o método.

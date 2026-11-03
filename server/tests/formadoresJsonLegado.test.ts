@@ -9,7 +9,7 @@ describe("formadores com jsonb legado nas turmas", () => {
   it("lista e ficha da Financiada respondem 200", async () => {
     const ctx = await arrancar();
     const nome = `Formador Legado ${Date.now()}`;
-    const criado = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome, regimes: ["gold", "fin"] });
+    const criado = await pedido(ctx, "admin", "POST", "/v1/formadores", { nome, regimes: ["gold", "fin"] });
     expect(criado.statusCode, criado.body).toBe(200);
     const id = (criado.json() as { formador: { id: number } }).formador.id;
 
@@ -21,10 +21,10 @@ describe("formadores com jsonb legado nas turmas", () => {
     await ctx.db.query(`UPDATE turmas_gold SET formadores = 'null'::jsonb WHERE id = (SELECT min(id) FROM turmas_gold)`);
 
     for (const regime of ["fin", "gold"]) {
-      const r = await pedido(ctx, "secretaria", "GET", `/v1/formadores?regime=${regime}`);
+      const r = await pedido(ctx, regime === "gold" ? "secretaria" : "financiada", "GET", `/v1/formadores?regime=${regime}`);
       expect(r.statusCode, `${regime}: ${r.body}`).toBe(200);
     }
-    const ficha = await pedido(ctx, "secretaria", "GET", `/v1/formadores/${id}`);
+    const ficha = await pedido(ctx, "financiada", "GET", `/v1/formadores/${id}`);
     expect(ficha.statusCode, ficha.body).toBe(200);
     expect((ficha.json() as { turmas: { id: number; valorHora: number }[] }).turmas.find(x => x.id === turmaId)?.valorHora).toBe(0);
 
@@ -34,7 +34,7 @@ describe("formadores com jsonb legado nas turmas", () => {
     const r = await ctx.db.query<{ f: string; v: string }>(
       "SELECT jsonb_typeof(formadores) AS f, jsonb_typeof(valores_hora_formador) AS v FROM turmas_fin WHERE id = $1", [turmaId]);
     expect(r.rows[0]).toEqual({ f: "array", v: "object" });
-    const depois = await pedido(ctx, "secretaria", "GET", `/v1/formadores/${id}`);
+    const depois = await pedido(ctx, "financiada", "GET", `/v1/formadores/${id}`);
     expect((depois.json() as { turmas: { id: number; valorHora: number }[] }).turmas.find(x => x.id === turmaId)?.valorHora).toBe(30);
   });
 });

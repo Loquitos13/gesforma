@@ -362,10 +362,10 @@ describe("financiada: só documentos, a secretaria coloca na turma", () => {
   it("sem escolha de turma na ligação; a validação exige a turma de destino e cria a ficha", async () => {
     const ctx = await arrancar();
     const curso = unico("Curso Fin");
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", {
+    expect((await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", {
       ufcdCod: unico("U").slice(0, 18), ufcd: curso, nomeComercial: curso, regime: "Presencial", horas: 25,
     })).statusCode).toBe(200);
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
       dataInicio: "2030-06-03", nome: unico("TF"), curso, local: "Porto", horario: "Laboral Manhã", alunosTotal: 5, estado: "A montar",
       cronograma: [{ id: unico("s"), data: "2030-06-03", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] }],
     });
@@ -405,10 +405,10 @@ describe("financiada: só documentos, a secretaria coloca na turma", () => {
     }
     expect((await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/concluir` })).statusCode).toBe(200);
 
-    const sem = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, {});
+    const sem = await pedido(ctx, "financiada", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, {});
     expect(sem.statusCode).toBe(400);
     expect(sem.json().error).toMatch(/turma/i);
-    const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
+    const ok = await pedido(ctx, "financiada", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
     expect(ok.statusCode, ok.body).toBe(200);
     const ficha = await ctx.db.query<{ turma_id: number; user_id: string | null }>("SELECT turma_id, user_id::text AS user_id FROM formandos_fin WHERE lower(email) = $1", [email]);
     expect(Number(ficha.rows[0]?.turma_id)).toBe(turmaId);

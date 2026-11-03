@@ -5,7 +5,7 @@ import { arrancar, pedido } from "./helpers.js";
 describe("páginas livres do site", () => {
   it("criar, publicar, ler no site, recusar endereços reservados e apagar", async () => {
     const ctx = await arrancar();
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/site/paginas-livres", { titulo: "Sobre nós", endereco: "sobre-nos" })).statusCode).toBe(403);
+    expect((await pedido(ctx, "comercial", "POST", "/v1/site/paginas-livres", { titulo: "Sobre nós", endereco: "sobre-nos" })).statusCode).toBe(403);
     const r = await pedido(ctx, "admin", "POST", "/v1/site/paginas-livres", { titulo: "Sobre nós", endereco: "sobre-nos" });
     expect(r.statusCode, r.body).toBe(200);
     expect(r.json()).toMatchObject({ pagina: "livre-sobre-nos" });

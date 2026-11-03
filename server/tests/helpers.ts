@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { FastifyInstance } from "fastify";
 
-export type Perfil = "admin" | "secretaria" | "comercial" | "financiada" | "formador" | "formando";
+export type Perfil = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando";
 
 export type Ctx = {
   app: FastifyInstance;
@@ -48,7 +48,7 @@ export function arrancar(): Promise<Ctx> {
     await seed(db);
     const app = await buildApp(db);
     await app.ready();
-    const perfis: Perfil[] = ["admin", "secretaria", "comercial", "financiada", "formador", "formando"];
+    const perfis: Perfil[] = ["admin", "secretaria", "comercial", "financiada", "contabilidade", "formador", "formando"];
     const cookie = {} as Record<Perfil, string>;
     const userId = {} as Record<Perfil, string>;
     for (const role of perfis) {

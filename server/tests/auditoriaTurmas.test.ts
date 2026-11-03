@@ -18,14 +18,14 @@ async function fichaDoFormador(ctx: Ctx) {
   // Uma conta liga-se a uma só ficha: a ficha do teste anterior deixa de ser desta conta.
   await ctx.db.query("UPDATE formadores SET user_id = NULL, email = '' WHERE user_id = $1", [ctx.userId.formador]);
   const nome = unico("Formador Eu");
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome, email: conta.rows[0]!.email, regimes: ["gold", "fin"] });
+  const r = await pedido(ctx, "admin", "POST", "/v1/formadores", { nome, email: conta.rows[0]!.email, regimes: ["gold", "fin"] });
   expect(r.statusCode, r.body).toBe(200);
   return nome;
 }
 
 async function outroFormador(ctx: Ctx) {
   const nome = unico("Outro Formador");
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome, email: `outro.${Date.now()}.${++seq}@exemplo.pt`, regimes: ["gold", "fin"] });
+  const r = await pedido(ctx, "admin", "POST", "/v1/formadores", { nome, email: `outro.${Date.now()}.${++seq}@exemplo.pt`, regimes: ["gold", "fin"] });
   expect(r.statusCode, r.body).toBe(200);
   return { nome, id: Number(r.json().formador?.id ?? r.json().id) };
 }
@@ -33,7 +33,7 @@ async function outroFormador(ctx: Ctx) {
 async function turma(ctx: Ctx, regime: "gold" | "fin", nome: string, cronograma: unknown[]) {
   const r = regime === "gold"
     ? await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-06-01", nome, curso: "Curso Sem Ficha", vagas: 10, cronograma })
-    : await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome, curso: "UFCD Teste", horas: 8, cronograma });
+    : await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome, curso: "UFCD Teste", horas: 8, cronograma });
   expect(r.statusCode, r.body).toBe(200);
   return r.json().turma.id as number;
 }
@@ -161,16 +161,16 @@ describe("PDFs gerados do dossiê no Drive", () => {
       "SELECT count(*)::int AS n FROM drive_files WHERE turma = $1 AND label = 'listagem-formandos'", [nome])).rows[0]!.n;
     const url = `/v1/turmas/fin/${id}/dossie/listagem-formandos`;
 
-    expect((await pedido(ctx, "secretaria", "GET", url)).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "GET", url)).statusCode).toBe(200);
     const primeiro = await ligado();
     expect(primeiro).toBeTruthy();
-    expect((await pedido(ctx, "secretaria", "GET", url)).statusCode).toBe(200);
+    expect((await pedido(ctx, "admin", "GET", url)).statusCode).toBe(200);
     expect(await ligado()).toBe(primeiro);
     expect(await quantos()).toBe(1);
 
     // O local entra no cabeçalho: o PDF muda, guarda-se um novo e o anterior sai.
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${id}`, { local: "Porto" })).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "GET", url)).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${id}`, { local: "Porto" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "GET", url)).statusCode).toBe(200);
     expect(await ligado()).not.toBe(primeiro);
     expect(await quantos()).toBe(1);
   });
@@ -193,10 +193,10 @@ describe("elegibilidade nos PDFs do dossiê", () => {
   it("o comprovativo de entrega usa a regra e os mínimos do cálculo dos resultados", async () => {
     const ctx = await arrancar();
     const id = await turma(ctx, "fin", unico("FIN-REGRA"), [sessao("e1", "2099-10-07", [])]);
-    const res = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${id}/resultados`);
+    const res = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${id}/resultados`);
     expect(res.statusCode, res.body).toBe(200);
     const { regras } = res.json() as { regras: { assiduidadeMinFin: number; elearningMin: number } };
-    const pdf = await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${id}/dossie/entrega-certificados`);
+    const pdf = await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${id}/dossie/entrega-certificados`);
     expect(pdf.statusCode).toBe(200);
     // Texto como um leitor de PDF o extrai; as linhas juntam-se para ler a frase mesmo quando parte em duas.
     const pdfjs = await import("pdfjs-dist/legacy/build/pdf.mjs");

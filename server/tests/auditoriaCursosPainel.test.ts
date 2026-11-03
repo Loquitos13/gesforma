@@ -91,7 +91,8 @@ describe("inquéritos: Gold e Financiada separadas", () => {
     expect((await pedido(ctx, "comercial", "GET", `/v1/inqueritos/${fin}/resultados`)).statusCode).toBe(403);
     expect((await pedido(ctx, "financiada", "GET", `/v1/inqueritos/${fin}/resultados`)).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "GET", `/v1/inqueritos/${gold}/resultados`)).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/inqueritos/${fin}/resultados`)).statusCode).toBe(200);
+    // A coordenação Gold não entra na Financiada.
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/inqueritos/${fin}/resultados`)).statusCode).toBe(403);
   });
 });
 
@@ -202,7 +203,7 @@ describe("painel: comparação com o mesmo intervalo do mês anterior", () => {
     await lead("2026-10-05 10:00");
     await lead("2026-09-10 10:00");
     await lead("2026-09-25 10:00");
-    const r = await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso)}&de=2026-10-01&ate=2026-10-19`);
+    const r = await pedido(ctx, "admin", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso)}&de=2026-10-01&ate=2026-10-19`);
     expect(r.statusCode).toBe(200);
     const p = r.json() as { periodo: { anterior: { de: string; ate: string } }; kpis: { id: string; valor: number; anterior: number }[] };
     expect(p.periodo.anterior).toEqual({ de: "2026-09-01", ate: "2026-09-19" });
@@ -216,7 +217,7 @@ describe("painel: turmas a decorrer como na lista de turmas", () => {
     const curso = await cursoGold(ctx);
     await turmaGold(ctx, curso.nome, [{ data: "2020-01-10" }, { data: "2099-01-10" }], "2020-01-10");
     await turmaGold(ctx, curso.nome, [{ data: "2020-01-10" }], "2020-01-10");
-    const p = (await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso.nome)}`)).json() as { kpis: { id: string; valor: number }[] };
+    const p = (await pedido(ctx, "admin", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso.nome)}`)).json() as { kpis: { id: string; valor: number }[] };
     const lista = (await pedido(ctx, "secretaria", "GET", `/v1/turmas?regime=gold&curso=${encodeURIComponent(curso.nome)}`)).json() as { resumo: { porFase: Record<string, number> } };
     expect(lista.resumo.porFase).toMatchObject({ decorrer: 1, por_fechar: 1 });
     expect(p.kpis.find(k => k.id === "turmas")!.valor).toBe(1);
@@ -237,7 +238,7 @@ describe("datas em hora de Lisboa", () => {
     await formando("2026-08-31 23:10"); // UTC → 1 de setembro em Lisboa
     await formando("2026-08-15"); // só a data: é o dia escrito
     await formando("2026-07-10 10:00");
-    const r = await pedido(ctx, "secretaria", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso)}&de=2026-08-01&ate=2026-08-31`);
+    const r = await pedido(ctx, "admin", "GET", `/v1/painel/gold?curso=${encodeURIComponent(curso)}&de=2026-08-01&ate=2026-08-31`);
     expect(r.statusCode).toBe(200);
     const p = r.json() as { kpis: { id: string; valor: number; anterior: number }[] };
     expect(p.kpis.find(k => k.id === "formandos")).toMatchObject({ valor: 2, anterior: 1 });

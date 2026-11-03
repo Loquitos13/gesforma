@@ -93,7 +93,8 @@ describe("SEO do site", () => {
       bingVerificacao: "BING987",
       inicioTitulo: "Formação certificada em Gaia e Lisboa",
     };
-    expect((await pedido(ctx, "secretaria", "PUT", "/v1/settings/seo", { values: valores })).statusCode).toBe(403);
+    // A administração e as coordenações configuram o SEO; o comercial não.
+    expect((await pedido(ctx, "comercial", "PUT", "/v1/settings/seo", { values: valores })).statusCode).toBe(403);
     expect((await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: valores })).statusCode).toBe(200);
     const r = await pagina(ctx, "/");
     expect(r.body).toContain('<meta name="google-site-verification" content="abc123XYZ_-" />');

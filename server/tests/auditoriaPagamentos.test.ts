@@ -32,8 +32,8 @@ describe("registo manual de pagamentos sem duplicados", () => {
     const ctx = await arrancar();
     const corpo = { nome: "Duplo Clique", valor: 80, metodo: "Numerário", email: "duplo@exemplo.pt", estado: "Pago", chave: "form-abc-12345678" };
     const [a, b] = await Promise.all([
-      pedido(ctx, "secretaria", "POST", "/v1/pagamentos", corpo),
-      pedido(ctx, "secretaria", "POST", "/v1/pagamentos", corpo),
+      pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", corpo),
+      pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", corpo),
     ]);
     expect(a.statusCode, a.body).toBe(200);
     expect(b.statusCode, b.body).toBe(200);
@@ -44,7 +44,7 @@ describe("registo manual de pagamentos sem duplicados", () => {
     const semChave = { nome: "Cabecalho", valor: 15, metodo: "Numerário", email: "cab@exemplo.pt", estado: "Pendente" };
     const h = (k: string) => ctx.app.inject({
       method: "POST", url: "/v1/pagamentos", payload: semChave,
-      headers: { "x-gesforma-client": "web", cookie: ctx.cookie.secretaria, "idempotency-key": k },
+      headers: { "x-gesforma-client": "web", cookie: ctx.cookie.contabilidade, "idempotency-key": k },
     });
     const h1 = await h("cabecalho-0001");
     const h2 = await h("cabecalho-0001");
@@ -55,15 +55,15 @@ describe("registo manual de pagamentos sem duplicados", () => {
   it("sem chave, um pagamento igual registado há instantes é recusado; ficha já paga também", async () => {
     const ctx = await arrancar();
     const corpo = { nome: "Sem Chave", valor: 42.5, metodo: "Numerário", email: "semchave@exemplo.pt", estado: "Pendente" };
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", corpo)).statusCode).toBe(200);
-    const dup = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", corpo);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", corpo)).statusCode).toBe(200);
+    const dup = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", corpo);
     expect(dup.statusCode).toBe(409);
     expect(dup.json().error).toMatch(/igual/);
     // Outro valor já é outro pagamento.
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...corpo, valor: 43 })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...corpo, valor: 43 })).statusCode).toBe(200);
 
     const f = await criarGold(ctx, { nome: "Rosa", apelido: "Paga", email: "rosa.paga@exemplo.pt", curso: "Curso Dup", valor: 100, pago: true, metodo: "Numerário" });
-    const outro = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { nome: "Rosa Paga", valor: 100, metodo: "Numerário", estado: "Pago", formandoId: f, chave: "ficha-paga-0001" });
+    const outro = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "Rosa Paga", valor: 100, metodo: "Numerário", estado: "Pago", formandoId: f, chave: "ficha-paga-0001" });
     expect(outro.statusCode).toBe(409);
     expect(outro.json().error).toMatch(/já está paga/);
   });
@@ -71,11 +71,11 @@ describe("registo manual de pagamentos sem duplicados", () => {
   it("valida o pedido manual: email, data e cêntimos", async () => {
     const ctx = await arrancar();
     const base = { nome: "Validar", valor: 10, metodo: "Numerário", estado: "Pendente" };
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...base, email: "não é email" })).statusCode).toBe(400);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...base, data: "amanhã" })).statusCode).toBe(400);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...base, valor: 10.555 })).statusCode).toBe(400);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...base, chave: "x" })).statusCode).toBe(400);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { ...base, data: "2026-10-01", email: "ok@exemplo.pt" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...base, email: "não é email" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...base, data: "amanhã" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...base, valor: 10.555 })).statusCode).toBe(400);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...base, chave: "x" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { ...base, data: "2026-10-01", email: "ok@exemplo.pt" })).statusCode).toBe(200);
   });
 });
 
@@ -85,7 +85,7 @@ describe("webhook e confirmação atómicos; ficha «Pago» acompanha os pagamen
     await ligarWebhook(ctx);
     // Ficha sem email: o pagamento ligado à ficha marca-a paga na mesma (antes só acontecia com email).
     const f = await criarGold(ctx, { nome: "Tiago", apelido: "Semmail", email: "", curso: "Curso Webhook", valor: 60 });
-    const r = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { nome: "Tiago Semmail", valor: 60, metodo: "Transferência bancária", estado: "Pendente", formandoId: f });
+    const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "Tiago Semmail", valor: 60, metodo: "Transferência bancária", estado: "Pendente", formandoId: f });
     expect(r.statusCode, r.body).toBe(200);
     const id = r.json().pagamento.id as string;
 
@@ -111,9 +111,9 @@ describe("webhook e confirmação atómicos; ficha «Pago» acompanha os pagamen
   it("cancelado não volta a Pago pelo webhook", async () => {
     const ctx = await arrancar();
     await ligarWebhook(ctx);
-    const r = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { nome: "Cancelada", valor: 20, metodo: "Numerário", estado: "Pendente", email: "cancelada@exemplo.pt" });
+    const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "Cancelada", valor: 20, metodo: "Numerário", estado: "Pendente", email: "cancelada@exemplo.pt" });
     const id = r.json().pagamento.id as string;
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${id}`, { estado: "Cancelado" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${id}`, { estado: "Cancelado" })).statusCode).toBe(200);
     expect((await webhook(ctx, id)).statusCode).toBe(409);
   });
 
@@ -137,7 +137,7 @@ describe("webhook e confirmação atómicos; ficha «Pago» acompanha os pagamen
 describe("recibo emitido não muda", () => {
   it("os dados ficam gravados na emissão e a base recusa alterá-los", async () => {
     const ctx = await arrancar();
-    const r = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { nome: "Recibo Fixo", valor: 70, metodo: "Numerário", estado: "Pago", email: "fixo@exemplo.pt" });
+    const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "Recibo Fixo", valor: 70, metodo: "Numerário", estado: "Pago", email: "fixo@exemplo.pt" });
     const id = r.json().pagamento.id as string;
     const em = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${id}/recibo`);
     expect(em.statusCode, em.body).toBe(200);

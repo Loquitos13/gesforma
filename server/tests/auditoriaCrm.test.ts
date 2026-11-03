@@ -143,7 +143,7 @@ describe("CRM da Financiada", () => {
     expect(r.rows.map(x => x.formando_regime)).toEqual(["fin", "fin"]);
 
     // A gestão escolhe o regime do ecrã; o comercial fica sempre na Gold.
-    const adm = await pedido(ctx, "secretaria", "POST", `/v1/crm/clientes/${cliente}/propostas`, { curso: "X", regime: "fin" });
+    const adm = await pedido(ctx, "financiada", "POST", `/v1/crm/clientes/${cliente}/propostas`, { curso: "X", regime: "fin" });
     expect((await pedido(ctx, "financiada", "GET", `/v1/crm/propostas/${adm.json().proposta.id}`)).statusCode).toBe(200);
     const com = await pedido(ctx, "comercial", "POST", `/v1/crm/clientes/${cliente}/propostas`, { curso: "Y", regime: "fin" });
     expect((await pedido(ctx, "comercial", "GET", `/v1/crm/propostas/${com.json().proposta.id}`)).json().proposta.regime).toBe("gold");

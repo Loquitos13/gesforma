@@ -86,7 +86,8 @@ describe("transferir formando de turma", () => {
   it("Gold e Financiada: o formando passa para a turma de destino", async () => {
     const ctx = await arrancar();
     const nova = async (regime: "gold" | "fin") => {
-      const r = await pedido(ctx, "secretaria", "POST", `/v1/turmas-${regime}`, {
+      // Cada coordenação na sua linha.
+      const r = await pedido(ctx, regime === "gold" ? "secretaria" : "financiada", "POST", `/v1/turmas-${regime}`, {
         dataInicio: "2099-04-06", nome: unico(`TT-${regime}`), curso: regime === "gold" ? "Curso Transferência" : "UFCD Transferência", capacidade: 10,
       });
       expect(r.statusCode, r.body).toBe(200);

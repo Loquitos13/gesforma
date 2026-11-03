@@ -9,7 +9,7 @@ const comDocs = (falta: string[] = []) => Object.fromEntries(DOCS.map(k => [k, {
 describe("Financiada: não se associa à acção sem os documentos obrigatórios", () => {
   it("inscrever na turma, colocar depois e a candidatura «Colocado na turma» recusam sem documentos", async () => {
     const ctx = await arrancar();
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("DT"), curso: "UFCD Docs", capacidade: 10 });
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("DT"), curso: "UFCD Docs", capacidade: 10 });
     expect(t.statusCode, t.body).toBe(200);
     const turmaId = t.json().turma.id as number;
     const email = () => `dt.${Date.now()}.${++seq}@exemplo.pt`;
@@ -27,7 +27,7 @@ describe("Financiada: não se associa à acção sem os documentos obrigatórios
     expect((await pedido(ctx, "financiada", "PATCH", `/v1/formandos-fin/${id}`, { turmaId })).statusCode).toBe(409);
     expect((await pedido(ctx, "financiada", "PATCH", `/v1/formandos-fin/${id}`, { ...comDocs(), turmaId })).statusCode).toBe(200);
 
-    const turma = (await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${turmaId}`)).json().turma.nome as string;
+    const turma = (await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${turmaId}`)).json().turma.nome as string;
     const cand = { nome: "Eva", email: email(), curso: "UFCD Docs", turma, estado: "Colocado na turma", docs: { cc: true, ch: true, cu: true, ci: true } };
     expect((await pedido(ctx, "financiada", "POST", "/v1/inscricoes-fin", cand)).statusCode).toBe(409);
     expect((await pedido(ctx, "financiada", "POST", "/v1/inscricoes-fin", { ...cand, docs: { ...cand.docs, ce: true } })).statusCode).toBe(200);

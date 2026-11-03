@@ -82,9 +82,9 @@ describe("comercial: nada da Financiada", () => {
   it("uma pré-inscrição Fin não passa a um comercial", async () => {
     const ctx = await arrancar();
     const fin = await lead(ctx, "fin", null);
-    const r = await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${fin}`, { comercialId: ctx.userId.comercial });
+    const r = await pedido(ctx, "admin", "PATCH", `/v1/preinscricoes/${fin}`, { comercialId: ctx.userId.comercial });
     expect(r.statusCode, r.body).toBe(409);
-    const ok = await pedido(ctx, "secretaria", "PATCH", `/v1/preinscricoes/${fin}`, { comercialId: ctx.userId.financiada });
+    const ok = await pedido(ctx, "admin", "PATCH", `/v1/preinscricoes/${fin}`, { comercialId: ctx.userId.financiada });
     expect(ok.statusCode, ok.body).toBe(200);
     const lote = await pedido(ctx, "secretaria", "POST", "/v1/crm/lote", { ids: [fin], acao: "atribuir", comercialId: ctx.userId.comercial });
     expect(lote.statusCode, lote.body).toBe(200);
@@ -122,8 +122,11 @@ describe("ficha do formador por regime", () => {
     const corpo = fin.json() as { turmas: { regime: string }[]; sessoes: { regime: string }[] };
     expect(corpo.turmas.map(t => t.regime)).toEqual(["fin"]);
     expect(corpo.sessoes.map(s => s.regime)).toEqual(["fin"]);
-    const sec = (await pedido(ctx, "secretaria", "GET", `/v1/formadores/${ambos}`)).json() as { turmas: unknown[] };
-    expect(sec.turmas).toHaveLength(2);
+    // A administração vê as turmas das duas linhas; a coordenação Gold só as da Gold.
+    const adm = (await pedido(ctx, "admin", "GET", `/v1/formadores/${ambos}`)).json() as { turmas: unknown[] };
+    expect(adm.turmas).toHaveLength(2);
+    const sec = (await pedido(ctx, "secretaria", "GET", `/v1/formadores/${ambos}`)).json() as { turmas: { regime: string }[] };
+    expect(sec.turmas.map(t => t.regime)).toEqual(["gold"]);
   });
 });
 

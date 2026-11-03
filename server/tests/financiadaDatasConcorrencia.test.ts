@@ -48,7 +48,7 @@ describe("datas dos documentos: dd-mm-aaaa", () => {
 
   it("despesas exportadas com as datas em dd-mm-aaaa", async () => {
     const ctx = await arrancar();
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("TF Datas"), curso: "UFCD Datas", capacidade: 5 });
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("TF Datas"), curso: "UFCD Datas", capacidade: 5 });
     expect(t.statusCode, t.body).toBe(200);
     const turmaId = t.json().turma.id as number;
     const d = await pedido(ctx, "financiada", "POST", "/v1/despesas", { turmaId, dados: { descricao: "Almoços", dataDocDespesa: "2026-10-01", dataDocPagamento: "2026-10-15" } });
@@ -64,7 +64,7 @@ describe("datas dos documentos: dd-mm-aaaa", () => {
 });
 
 async function formandoFin(ctx: Ctx) {
-  const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("TF Conc"), curso: "UFCD Conc", capacidade: 5 });
+  const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: unico("TF Conc"), curso: "UFCD Conc", capacidade: 5 });
   expect(t.statusCode, t.body).toBe(200);
   const f = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK,
     nome: "Ana", apelido: "Silva", email: `conc.${Date.now()}.${++seq}@exemplo.pt`, telf: "912 345 678", turmaId: t.json().turma.id,
@@ -80,7 +80,7 @@ describe("dados para o financiamento: gravações ao mesmo tempo", () => {
     const url = `/v1/formandos-fin/${id}/financiamento`;
     const [a, b, c] = await Promise.all([
       pedido(ctx, "financiada", "PATCH", url, { niss: "11122233344" }),
-      pedido(ctx, "secretaria", "PATCH", url, { passaporte: "AB9988776" }),
+      pedido(ctx, "financiada", "PATCH", url, { passaporte: "AB9988776" }),
       pedido(ctx, "financiada", "PATCH", url, { dataNascimento: "1990-04-15", genero: "2 - Mulheres" }),
     ]);
     for (const r of [a, b, c]) expect(r.statusCode, r.body).toBe(200);
@@ -126,16 +126,17 @@ describe("pedagogia da turma: o formador fica fora do dossiê", () => {
     const conta = await ctx.db.query<{ email: string }>("SELECT email FROM users WHERE id = $1", [ctx.userId.formador]);
     await ctx.db.query("UPDATE formadores SET user_id = NULL, email = '' WHERE user_id = $1", [ctx.userId.formador]);
     const eu = unico("Formador Eu");
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: eu, email: conta.rows[0]!.email, regimes: ["gold", "fin"] })).statusCode).toBe(200);
+    // Formador nos dois regimes: só a administração trabalha nas duas linhas.
+    expect((await pedido(ctx, "admin", "POST", "/v1/formadores", { nome: eu, email: conta.rows[0]!.email, regimes: ["gold", "fin"] })).statusCode).toBe(200);
     const cronograma = [{ id: "s1", data: "2099-06-01", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [eu] }];
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: unico("TF Formador"), curso: "UFCD F", capacidade: 5, cronograma });
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: unico("TF Formador"), curso: "UFCD F", capacidade: 5, cronograma });
     expect(t.statusCode, t.body).toBe(200);
     const url = `/v1/turmas/fin/${t.json().turma.id}/pedagogia`;
     const doFormador = await pedido(ctx, "formador", "GET", url);
     expect(doFormador.statusCode, doFormador.body).toBe(200);
     expect(doFormador.json()).not.toHaveProperty("dtp");
     expect(doFormador.json().sessoes).toBeDefined();
-    const daEquipa = (await pedido(ctx, "secretaria", "GET", url)).json();
+    const daEquipa = (await pedido(ctx, "financiada", "GET", url)).json();
     expect(daEquipa.dtp.items.length).toBeGreaterThan(0);
   });
 });

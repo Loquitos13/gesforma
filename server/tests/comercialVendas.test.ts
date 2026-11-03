@@ -257,7 +257,7 @@ describe("servidor: o que o comercial usa continua a funcionar", () => {
 
   it("painel Gold do comercial: só blocos de vendas", async () => {
     const com = (await pedido(ctx, "comercial", "GET", "/v1/painel/gold")).json();
-    const sec = (await pedido(ctx, "secretaria", "GET", "/v1/painel/gold")).json();
+    const sec = (await pedido(ctx, "admin", "GET", "/v1/painel/gold")).json();
     expect(com.kpis.map((k: { id: string }) => k.id)).toEqual(["pre", "contactar", "formandos", "conversao", "receita"]);
     expect(sec.kpis.map((k: { id: string }) => k.id)).toContain("turmas");
     expect(com.aTratar.map((t: { id: string }) => t.id)).toEqual(["contactar", "documentos", "secretaria"]);

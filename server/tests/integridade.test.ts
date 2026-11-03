@@ -85,13 +85,13 @@ describe("pagamentos", () => {
     const email = "pag@exemplo.pt";
     await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "P", email, curso: "Curso A" });
     await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "P", email, curso: "Curso B" });
-    const res = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", { nome: "P", valor: 10, curso: "Curso A", email, estado: "Pago" });
+    const res = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "P", valor: 10, curso: "Curso A", email, estado: "Pago" });
     expect(res.statusCode).toBe(200);
     const rows = await ctx.db.query<{ curso: string; pago: boolean }>("SELECT curso, pago FROM formandos_gold WHERE email = $1 ORDER BY curso", [email]);
     expect(rows.rows.map(r => [r.curso, r.pago])).toEqual([["Curso A", true], ["Curso B", false]]);
     const id = res.json().pagamento.id as string;
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${id}`, { estado: "Pendente" })).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "DELETE", `/v1/pagamentos/${id}`)).statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/pagamentos/${id}`, { estado: "Reembolsado" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${id}`, { estado: "Pendente" })).statusCode).toBe(409);
+    expect((await pedido(ctx, "contabilidade", "DELETE", `/v1/pagamentos/${id}`)).statusCode).toBe(409);
+    expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${id}`, { estado: "Reembolsado" })).statusCode).toBe(200);
   });
 });

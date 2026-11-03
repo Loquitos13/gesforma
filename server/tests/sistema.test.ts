@@ -7,7 +7,7 @@ type LinhaPag = { id: string; situacao: string; estado: string; lead_id: number 
 
 async function novoPagamentoComComprovativo(email: string) {
   const ctx = await arrancar();
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/pagamentos", {
+  const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", {
     nome: "Rita Teste", valor: 125, metodo: "Transferência bancária", curso: "Curso Sistema", email, estado: "Pendente",
   });
   expect(r.statusCode).toBe(200);
@@ -37,15 +37,15 @@ describe("Pagamentos", () => {
     expect(linha.lead_id).toBe(leadId);
     expect(lista.json().indicadores).toHaveProperty("porReceber");
 
-    const semMotivo = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pagId}/recusar`, {});
+    const semMotivo = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/recusar`, {});
     expect(semMotivo.statusCode).toBe(400);
-    const recusa = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pagId}/recusar`, { motivo: "Valor não corresponde" });
+    const recusa = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/recusar`, { motivo: "Valor não corresponde" });
     expect(recusa.statusCode).toBe(200);
     expect(recusa.json().detalhe.situacao).toBe("recusado");
     const doc = await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricao_docs WHERE preinscricao_id = $1", [leadId]);
     expect(doc.rows[0]!.estado).toBe("recusado");
 
-    const conf = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pagId}/confirmar`);
+    const conf = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/confirmar`);
     expect(conf.statusCode).toBe(200);
     expect(conf.json().pagamento.estado).toBe("Pago");
     const row = await ctx.db.query<{ pago_em: string | null; recusado_em: string | null }>("SELECT pago_em, recusado_em FROM pagamentos WHERE id = $1", [pagId]);
@@ -54,7 +54,7 @@ describe("Pagamentos", () => {
     const lead = await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [leadId]);
     expect(lead.rows[0]!.estado).toBe("Pago");
 
-    const outra = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pagId}/confirmar`);
+    const outra = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/confirmar`);
     expect(outra.statusCode).toBe(409);
     lista = await pedido(ctx, "secretaria", "GET", "/v1/pagamentos?situacao=pago");
     linha = (lista.json() as Pagina<LinhaPag>).linhas.find(l => l.id === pagId)!;

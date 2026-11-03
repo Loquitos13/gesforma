@@ -99,13 +99,13 @@ describe("#7 gravações concorrentes do cronograma", () => {
 
   it("Financiada: o mesmo 409 e as sessões com dados continuam protegidas", async () => {
     const ctx = await arrancar();
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
       dataInicio: "2099-06-01", nome: unico("TPonyF"), curso: "UFCD Sem Ficha", cronograma: [sessao("f1", "2099-06-01"), sessao("f2", "2099-06-02")],
     });
     expect(t.statusCode, t.body).toBe(200);
     const { id, versao } = t.json<{ turma: { id: number; versao: string } }>().turma;
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${id}`, { cronograma: [sessao("f1", "2099-06-03"), sessao("f2", "2099-06-02")], versao })).statusCode).toBe(200);
-    const velha = await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-fin/${id}`, { cronograma: [sessao("f1", "2099-06-04")], versao });
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${id}`, { cronograma: [sessao("f1", "2099-06-03"), sessao("f2", "2099-06-02")], versao })).statusCode).toBe(200);
+    const velha = await pedido(ctx, "financiada", "PATCH", `/v1/turmas-fin/${id}`, { cronograma: [sessao("f1", "2099-06-04")], versao });
     expect(velha.statusCode).toBe(409);
     expect(velha.json().error).toBe(ERRO);
   });
@@ -199,7 +199,7 @@ describe("#10 partilhas da Drive de quem sai da equipa", () => {
 
   it("o ZIP do dossiê não se partilha: fora da secretaria descarrega-se", async () => {
     const ctx = await arrancar();
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: unico("TPonyZ"), curso: "UFCD Sem Ficha" });
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: unico("TPonyZ"), curso: "UFCD Sem Ficha" });
     expect(t.statusCode, t.body).toBe(200);
     const { id } = t.json<{ turma: { id: number } }>().turma;
     await ligarDrive(ctx);

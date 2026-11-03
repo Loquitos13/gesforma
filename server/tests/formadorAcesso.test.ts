@@ -234,13 +234,13 @@ describe("PDFs gerados do dossiê", () => {
   it("gerar de novo substitui a cópia anterior em vez de acumular", async () => {
     const ctx = await arrancar();
     const nome = unico("FIN-PDF");
-    const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+    const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
       dataInicio: "2099-10-05", nome, curso: "UFCD Teste", horas: 3,
       cronograma: [{ id: "f1", data: "2099-10-05", horaInicio: "19:00", horaFim: "22:00", modalidade: "presencial", formadores: [] }],
     });
     expect(t.statusCode, t.body).toBe(200);
     const id = t.json().turma.id as number;
-    for (let i = 0; i < 2; i++) expect((await pedido(ctx, "secretaria", "GET", `/v1/turmas/fin/${id}/relatorio-final`)).statusCode).toBe(200);
+    for (let i = 0; i < 2; i++) expect((await pedido(ctx, "financiada", "GET", `/v1/turmas/fin/${id}/relatorio-final`)).statusCode).toBe(200);
     const n = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM drive_files WHERE turma = $1 AND label = 'relatorio'", [nome]);
     expect(n.rows[0]!.n).toBe(1);
   });

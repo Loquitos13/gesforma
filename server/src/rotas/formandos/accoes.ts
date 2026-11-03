@@ -176,7 +176,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
       }),
     }, req);
     if (!v || !equipa(req, reply, "gold")) return;
-    if (!pode(req.actor!.role, "pagamentos.confirmar")) return reply.code(403).send({ error: "Só a secretaria regista pagamentos." });
+    if (!pode(req.actor!.role, "pagamentos.registarFicha")) return reply.code(403).send({ error: "Só a coordenação Gold regista pagamentos na ficha." });
     const id = v.params.id;
     const f = await dadosBasicos(db, "gold", id);
     if (!f) return reply.code(404).send({ error: "formando inexistente" });

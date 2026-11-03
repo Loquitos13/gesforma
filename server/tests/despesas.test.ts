@@ -5,7 +5,7 @@ import { numeroPt } from "../../src/partilhado/ui/formatos.js";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
 async function turmaFin(ctx: Ctx) {
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: `TF Despesas ${Date.now()}-${Math.random()}`, curso: "UFCD Despesas", capacidade: 5 });
+  const r = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-02-02", nome: `TF Despesas ${Date.now()}-${Math.random()}`, curso: "UFCD Despesas", capacidade: 5 });
   expect(r.statusCode, r.body).toBe(200);
   return r.json().turma.id as number;
 }

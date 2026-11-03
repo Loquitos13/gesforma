@@ -120,7 +120,7 @@ describe("lembretes dos documentos em falta", () => {
     expect(para(fin.email)).toHaveLength(2);
 
     // A ficha mostra os lembretes: enviados, último e próximo.
-    const dossie = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${fin.id}`)).json();
+    const dossie = (await pedido(ctx, "financiada", "GET", `/v1/crm/leads/${fin.id}`)).json();
     expect(dossie.lembretes).toMatchObject({ enviados: 2, maximo: 10 });
     expect(dossie.lembretes.ultimoEm).toBeTruthy();
     expect(dossie.lembretes.proximoEm).toBeTruthy();
@@ -205,7 +205,7 @@ describe("documento recusado", () => {
       [id, email, token]);
     await ctx.db.query(
       "INSERT INTO formando_docs (regime, formando_id, doc_id, file_name, estado) VALUES ('fin', $1, 'cc', 'cc.pdf', 'pendente')", [id]);
-    const r = await pedido(ctx, "secretaria", "POST", `/v1/formandos/fin/${id}/documentos/cc/recusar`, { observacao: "Documento caducado" });
+    const r = await pedido(ctx, "financiada", "POST", `/v1/formandos/fin/${id}/documentos/cc/recusar`, { observacao: "Documento caducado" });
     expect(r.statusCode, r.body).toBe(200);
     expect(para(email)).toHaveLength(1);
     expect(`${para(email)[0]!.text}`).toContain("Documento caducado");

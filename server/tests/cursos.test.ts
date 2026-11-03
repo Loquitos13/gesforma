@@ -71,7 +71,8 @@ describe("cursos, catálogos, listas e blog", () => {
     expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", base)).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", base)).statusCode).toBe(409);
     expect((await pedido(ctx, "secretaria", "POST", "/v1/blog", { ...base, slug: "Slug Mau!" })).statusCode).toBe(400);
-    expect((await pedido(ctx, "financiada", "POST", "/v1/blog", { ...base, slug: "outra" })).statusCode).toBe(403);
+    // As duas coordenações escrevem no blog; o comercial não.
+    expect((await pedido(ctx, "financiada", "POST", "/v1/blog", { ...base, slug: "outra" })).statusCode).toBe(200);
     expect((await pedido(ctx, "comercial", "POST", "/v1/blog", { ...base, slug: "do-comercial" })).statusCode).toBe(403);
     const lista = (await pedido(ctx, "secretaria", "GET", "/v1/blog?q=teste")).json() as { posts: { slug: string }[] };
     expect(lista.posts.map(p => p.slug)).toContain("noticia-teste-unica");

@@ -176,15 +176,17 @@ describe("Gold e Financiada nunca se misturam", () => {
     const ctx = await arrancar();
     const marca = `Pesqreg${Date.now().toString(36).replace(/[0-9]/g, "x")}`;
     expect((await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", { dataInicio: "2099-06-01", nome: `${marca} G`, curso: "Curso Sem Ficha", vagas: 10 })).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: `${marca} F`, curso: "UFCD X", capacidade: 5 })).statusCode).toBe(200);
-    const vistas = async (perfil: "comercial" | "financiada" | "secretaria") => {
+    expect((await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", { dataInicio: "2099-06-01", nome: `${marca} F`, curso: "UFCD X", capacidade: 5 })).statusCode).toBe(200);
+    const vistas = async (perfil: "comercial" | "financiada" | "secretaria" | "admin") => {
       const r = await pedido(ctx, perfil, "GET", `/v1/search?q=${marca}`);
       return r.json<{ groups: { items: { view: string }[] }[] }>().groups.flatMap(g => g.items.map(i => i.view)).sort();
     };
     // O comercial só encontra pré-inscrições (não abre turmas).
     expect(await vistas("comercial")).toEqual([]);
     expect(await vistas("financiada")).toEqual(["fin-cockpit-turma"]);
-    expect(await vistas("secretaria")).toEqual(["fin-cockpit-turma", "gold-cockpit-turma"]);
+    // Cada coordenação só na sua linha; a administração vê as duas.
+    expect(await vistas("secretaria")).toEqual(["gold-cockpit-turma"]);
+    expect(await vistas("admin")).toEqual(["fin-cockpit-turma", "gold-cockpit-turma"]);
   });
 });
 
@@ -192,7 +194,7 @@ describe("formadores: o comercial já não lhes mexe", () => {
   it("o comercial só vende: não altera a disponibilidade nem nada dos formadores", async () => {
     const ctx = await arrancar();
     const criar = async (regimes: string[]) => {
-      const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", { nome: `Disp ${Date.now()} ${regimes}`, regimes, nif: "123456789", custoHora: 30 });
+      const r = await pedido(ctx, "admin", "POST", "/v1/formadores", { nome: `Disp ${Date.now()} ${regimes}`, regimes, nif: "123456789", custoHora: 30 });
       expect(r.statusCode, r.body).toBe(200);
       return r.json<{ formador: { id: number } }>().formador.id;
     };

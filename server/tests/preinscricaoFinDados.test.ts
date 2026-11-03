@@ -34,10 +34,10 @@ const IBAN = "PT50000201231234567890154";
 
 async function cursoFin(ctx: Ctx) {
   const curso = unico("Curso Fin Dados");
-  expect((await pedido(ctx, "secretaria", "POST", "/v1/cursos-fin", {
+  expect((await pedido(ctx, "financiada", "POST", "/v1/cursos-fin", {
     ufcdCod: unico("U").slice(0, 18), ufcd: curso, nomeComercial: curso, regime: "Presencial", horas: 25,
   })).statusCode).toBe(200);
-  const t = await pedido(ctx, "secretaria", "POST", "/v1/turmas-fin", {
+  const t = await pedido(ctx, "financiada", "POST", "/v1/turmas-fin", {
     dataInicio: "2030-06-03", nome: unico("TF"), curso, local: "Porto", horario: "Laboral Manhã", alunosTotal: 5, estado: "A montar",
     cronograma: [{ id: unico("s"), data: "2030-06-03", horaInicio: "09:00", horaFim: "13:00", modalidade: "presencial", formadores: [] }],
   });
@@ -289,7 +289,7 @@ describe("validação: os dados passam para a ficha do formando", () => {
     expect((await passo(ctx, token, "termos", { termos: true, dados: true })).statusCode).toBe(200);
 
     // Dossiê da secretaria: sensíveis mascarados.
-    const dossie = await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`);
+    const dossie = await pedido(ctx, "financiada", "GET", `/v1/crm/leads/${id}`);
     expect(dossie.statusCode).toBe(200);
     const df = dossie.json().dadosFin;
     expect(df).toMatchObject({
@@ -322,13 +322,13 @@ describe("validação: os dados passam para a ficha do formando", () => {
     await ctx.db.query(`INSERT INTO oauth_accounts (provider, email, access_token, refresh_token, expiry)
       VALUES ('google', 'drive@exemplo.pt', 'x', 'AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA', now())
       ON CONFLICT (provider) DO UPDATE SET refresh_token = EXCLUDED.refresh_token`);
-    const ok = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
+    const ok = await pedido(ctx, "financiada", "POST", `/v1/crm/leads/${id}/validar-preinscricao`, { turmaId });
     expect(ok.statusCode, ok.body).toBe(200);
     await ctx.db.query("DELETE FROM oauth_accounts WHERE provider = 'google'");
 
     const ficha = await ctx.db.query<{ id: number }>("SELECT id FROM formandos_fin WHERE lower(email) = $1", [email]);
     const formandoId = Number(ficha.rows[0]!.id);
-    const fin = await pedido(ctx, "secretaria", "GET", `/v1/formandos-fin/${formandoId}/financiamento`);
+    const fin = await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${formandoId}/financiamento`);
     expect(fin.statusCode, fin.body).toBe(200);
     expect(fin.json().dados).toMatchObject({
       nif: NIF, niss: NISS, dataNascimento: "1990-05-17", codigoPostal: "4000-123",
@@ -358,7 +358,7 @@ describe("validação: os dados passam para a ficha do formando", () => {
     expect((await passo(ctx, token, "morada", MORADA)).statusCode).toBe(200);
     expect((await passo(ctx, token, "identificacao", IDENT)).statusCode).toBe(200);
     // Ficha já criada pela secretaria com género e NISS próprios.
-    const nova = await pedido(ctx, "secretaria", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK,
+    const nova = await pedido(ctx, "financiada", "POST", "/v1/formandos-fin", { ...DOCS_TURMA_OK,
       nome: "Maria", apelido: "Santos", email, curso, turmaId, estado: "Elegível",
     });
     let formandoId = 0;
@@ -370,12 +370,12 @@ describe("validação: os dados passam para a ficha do formando", () => {
       formandoId = Number(f.rows[0]?.id ?? 0);
     }
     expect(formandoId, nova.body).toBeGreaterThan(0);
-    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/formandos-fin/${formandoId}/financiamento`, { genero: "1 - Homens", niss: "99999999999" })).statusCode).toBe(200);
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/formandos-fin/${formandoId}/financiamento`, { genero: "1 - Homens", niss: "99999999999" })).statusCode).toBe(200);
     const levados = await levarDadosPessoaisParaFicha(ctx.db, await linha(ctx, id), formandoId);
     expect(levados).not.toContain("genero");
     expect(levados).not.toContain("niss");
     expect(levados).toContain("nif");
-    const dados = (await pedido(ctx, "secretaria", "GET", `/v1/formandos-fin/${formandoId}/financiamento`)).json().dados;
+    const dados = (await pedido(ctx, "financiada", "GET", `/v1/formandos-fin/${formandoId}/financiamento`)).json().dados;
     expect(dados).toMatchObject({ genero: "1 - Homens", niss: "99999999999", nif: NIF });
   });
 });
@@ -390,11 +390,11 @@ describe("backoffice: género, nascimento, nacionalidade e habilitações postos
     const id = await preinscricaoDoEmail(ctx, email);
     const url = `/v1/crm/leads/${id}/dados-fin`;
 
-    const vazio = await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`);
+    const vazio = await pedido(ctx, "financiada", "GET", `/v1/crm/leads/${id}`);
     expect(vazio.json().dadosFin.perfil).toEqual({ genero: "", dataNascimento: "", nacionalidade: "", habilitacoes: "" });
 
     expect((await pedido(ctx, "comercial", "POST", url, { genero: "1 - Homens" })).statusCode).toBe(403);
-    const mau = await pedido(ctx, "secretaria", "POST", url, { dataNascimento: "2030-01-01", habilitacoes: "Doutoramento falso" });
+    const mau = await pedido(ctx, "financiada", "POST", url, { dataNascimento: "2030-01-01", habilitacoes: "Doutoramento falso" });
     expect(mau.statusCode).toBe(400);
     expect(Object.keys(mau.json().campos).sort()).toEqual(["dataNascimento", "habilitacoes"]);
 
@@ -404,7 +404,7 @@ describe("backoffice: género, nascimento, nacionalidade e habilitações postos
     expect(ok.json().dadosFin.genero).toBe("Masculino");
 
     // Só os campos enviados mudam; vazio apaga.
-    const parcial = await pedido(ctx, "secretaria", "POST", url, { habilitacoes: "9.º Ano", genero: "" });
+    const parcial = await pedido(ctx, "financiada", "POST", url, { habilitacoes: "9.º Ano", genero: "" });
     expect(parcial.json().dadosFin.perfil).toEqual({ genero: "", dataNascimento: "1985-03-02", nacionalidade: "191 - Portugal", habilitacoes: "9.º Ano" });
     // Nunca em claro na base de dados.
     expect(JSON.stringify(await linha(ctx, id))).not.toContain("1985-03-02");

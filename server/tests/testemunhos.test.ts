@@ -18,8 +18,8 @@ describe("testemunhos dos formandos", () => {
     expect(g.json().testemunho).toMatchObject({ nome: "Ana S.", estado: "pendente", estrelas: 5 });
     expect(await publicos(ctx)).toEqual([]);
 
-    // Só o admin revê (a secretaria e o comercial não).
-    expect((await pedido(ctx, "secretaria", "GET", "/v1/testemunhos")).statusCode).toBe(403);
+    // A administração e as coordenações reveem (o comercial não).
+    expect((await pedido(ctx, "comercial", "GET", "/v1/testemunhos")).statusCode).toBe(403);
     const lista = (await pedido(ctx, "admin", "GET", "/v1/testemunhos?estado=pendente")).json().testemunhos;
     expect(lista).toHaveLength(1);
     const id = lista[0].id as number;

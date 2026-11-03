@@ -212,7 +212,9 @@ describe("#11 PDFs de contratos assinados com a visibilidade do contrato", () =>
     expect(await ve("financiada", "k-fin")).toBe(true);
     expect(await ve("financiada", "k-alheio")).toBe(false);
     expect(await ve("formador", "k-meu")).toBe(false);
-    for (const id of ["k-meu", "k-alheio", "k-fin", "k-antigo"]) expect(await ve("secretaria", id)).toBe(true);
+    // A coordenação Gold vê os da Gold, não os da Financiada.
+    for (const id of ["k-meu", "k-alheio", "k-antigo"]) expect(await ve("secretaria", id)).toBe(true);
+    expect(await ve("secretaria", "k-fin")).toBe(false);
     expect((await pedido(ctx, "comercial", "GET", "/v1/drive/files/k-alheio/content")).statusCode).toBe(404);
 
     const lista = async (perfil: "comercial" | "financiada" | "secretaria") =>

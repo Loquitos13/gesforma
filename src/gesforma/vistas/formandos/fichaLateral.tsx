@@ -107,7 +107,7 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
             <Botao tamanho="sm" variante="primario" aCarregar={pedir.aCorrer} disabled={!p.temIban || !ficha.email} onClick={() => pedir.correr()}>
               {p.pedidoEm ? "Pedir de novo" : "Pedir pagamento"}
             </Botao>
-            {pode("pagamentos.confirmar") && <Botao tamanho="sm" onClick={() => setRegistar(true)}>Registar pagamento</Botao>}
+            {pode("pagamentos.registarFicha") && <Botao tamanho="sm" onClick={() => setRegistar(true)}>Registar pagamento</Botao>}
           </div>
           <p className="m-0 text-xs text-tinta-suave">
             {p.temIban ? "Envia um email com o valor e o IBAN da ENA; a pessoa responde com o comprovativo." : "Falta o IBAN da entidade em Configurações › Entidade."}
@@ -115,7 +115,7 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
         </div>
       )}
       {pagoMov && pode("pagamentos.ver") && (
-        <div className="mt-3"><ReciboPagamento pagamentoId={pagoMov.id} email={ficha.email} podeEmitir={pode("pagamentos.confirmar")} /></div>
+        <div className="mt-3"><ReciboPagamento pagamentoId={pagoMov.id} email={ficha.email} podeEmitir={pode("pagamentos.ver")} /></div>
       )}
       <RegistarPagamento aberto={registar} onFechar={() => setRegistar(false)} ficha={ficha} />
     </Cartao>

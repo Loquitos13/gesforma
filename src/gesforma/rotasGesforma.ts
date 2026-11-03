@@ -1,6 +1,7 @@
 export type Vista =
   | "painel" | "gold-painel" | "fin-painel" | "gold-preinscricoes" | "fin-preinscricoes" | "gold-equipa" | "fin-equipa"
   | "gold-crm-clientes" | "gold-crm-parceiros" | "gold-crm-contratos" | "fin-crm-clientes" | "fin-crm-parceiros" | "fin-crm-contratos"
+  | "gold-whatsapp" | "fin-whatsapp"
   | "formador-turmas" | "formador-calendario" | "formador-perfil"
   | "gold-formandos-turmas" | "gold-formandos-gold" | "gold-formando-ficha" | "fin-formando-ficha" | "formador-ficha"
   | "gold-campanhas" | "gold-cursos" | "gold-horarios" | "gold-locais" | "gold-areas-tematicas"
@@ -42,6 +43,8 @@ const CAMINHOS: Record<Vista, string> = {
   "fin-crm-parceiros": "/gesforma/financiada/parceiros",
   "gold-crm-contratos": "/gesforma/gold/contratos",
   "fin-crm-contratos": "/gesforma/financiada/contratos",
+  "gold-whatsapp": "/gesforma/gold/whatsapp",
+  "fin-whatsapp": "/gesforma/financiada/whatsapp",
   "gold-equipa": "/gesforma/gold/equipa",
   "fin-equipa": "/gesforma/financiada/equipa",
   equipa: "/gesforma/equipa",

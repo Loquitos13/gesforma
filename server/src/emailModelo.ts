@@ -84,6 +84,7 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
     faturacao_morada: "Rua das Flores, 10, Porto", faturacao_codigo_postal: "4000-100", faturacao_email: "contas@empresa.pt",
   },
   lembrete_faturacao: { link: "(página de pagamento)" },
+  aviso_whatsapp_humano: { nome_contacto: "Ana Silva", telefone: "+351 910000000", mensagem: "Gostava de falar com um operador.", link: "(conversa no GesForma)" },
   pedido_contacto: { sobre_curso: " sobre Formação de Formadores - CCP" },
   pedido_proposta: {
     nome_contacto: "Ana Silva", empresa: "Empresa, Lda.", email_contacto: "ana@empresa.pt", telefone: "910000000",

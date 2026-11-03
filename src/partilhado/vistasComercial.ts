@@ -9,7 +9,7 @@
  */
 export const VISTAS_COMERCIAL = [
   "painel", "gold-painel",
-  "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos",
+  "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos", "gold-whatsapp",
   "equipa", "gold-equipa",
   "gold-campanhas",
   "gold-cronogramas",

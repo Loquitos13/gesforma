@@ -5,8 +5,10 @@ import { mapPreinscricao } from "./ops.js";
 import { criarPreinscricaoPublica, politicaPrivacidade } from "./preinscricaoPublica.js";
 import { filtrarOferta, fmtDataPt, listCursosGoldActivos, listOfertaGold, uniqueOferta, type OfertaTurma } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
+import { avisarWhatsappHumano } from "./avisosEquipa.js";
 import {
-  gravarSessaoWhatsapp, leadsPorTelefoneWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp, wamidJaVisto,
+  gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
+  pedirHumanoWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp, wamidJaVisto,
 } from "./repos/whatsapp.js";
 
 type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consentimento";
@@ -23,14 +25,38 @@ type Dados = {
   turmaId?: number;
 };
 
-const MENU = [
-  "Olá, sou o assistente da ENA Formação.",
-  "Como posso ajudar?",
-  "1 · Pré-inscrição num curso (dados pessoais + curso, local, horário e data)",
-  "2 · Ver o estado do meu pedido",
-  "3 · Lista de cursos",
-  "Escreva o número ou *menu* para voltar aqui.",
-].join("\n");
+/** Uma opção de resposta: botão (até 3) ou linha de lista (até 10) no WhatsApp. O `id` é o que volta quando se toca. */
+export type Opcao = { id: string; titulo: string; descricao?: string };
+/**
+ * Mensagem do bot: texto simples ou texto com opções (botões ou lista no WhatsApp). `simples` é a mesma mensagem só em
+ * texto (opções numeradas): o que fica no histórico, no simulador e o que sai quando as opções não cabem em botões/lista.
+ */
+export type Resposta = string | { texto: string; opcoes: Opcao[]; simples: string; botao?: string; rodape?: string };
+
+export function textoDaResposta(r: Resposta) {
+  return typeof r === "string" ? r : r.simples;
+}
+
+const MENU: Resposta = {
+  texto: "Olá, sou o assistente da ENA Formação.\nComo posso ajudar?",
+  opcoes: [
+    { id: "1", titulo: "Pré-inscrição", descricao: "Dados pessoais + curso, local, horário e data" },
+    { id: "2", titulo: "Estado do meu pedido" },
+    { id: "3", titulo: "Lista de cursos" },
+    { id: "4", titulo: "Falar com a equipa", descricao: "Uma pessoa da ENA responde-lhe aqui" },
+  ],
+  botao: "Ver opções",
+  rodape: "Escreva *menu* para voltar aqui.",
+  simples: [
+    "Olá, sou o assistente da ENA Formação.",
+    "Como posso ajudar?",
+    "1 · Pré-inscrição num curso (dados pessoais + curso, local, horário e data)",
+    "2 · Ver o estado do meu pedido",
+    "3 · Lista de cursos",
+    "4 · Falar com uma pessoa da equipa",
+    "Escreva o número ou *menu* para voltar aqui.",
+  ].join("\n"),
+};
 
 export function digitsPhone(raw: string) {
   const d = raw.replace(/\D/g, "");
@@ -66,8 +92,20 @@ function pickOpcao(text: string, opcoes: string[]) {
     ?? null;
 }
 
-function listaNumerada(titulo: string, items: string[], extra = "") {
+/** Escolha entre opções: no WhatsApp sai em botões ou lista; em texto, numerada. */
+function listaNumerada(titulo: string, items: string[], extra = ""): Resposta {
   if (!items.length) return extra || "Não há opções libertadas. Escreva *menu*.";
+  return {
+    texto: titulo,
+    opcoes: items.map((c, i) => ({ id: String(i + 1), titulo: c })),
+    botao: "Escolher",
+    simples: listaTexto(titulo, items),
+  };
+}
+
+/** Lista só para ler (sem escolha). */
+function listaTexto(titulo: string, items: string[]) {
+  if (!items.length) return "Não há opções libertadas. Escreva *menu*.";
   return [titulo, ...items.map((c, i) => `${i + 1}. ${c}`), "", "Responda com o número."].join("\n");
 }
 
@@ -103,12 +141,32 @@ function textoEstado(lead: ReturnType<typeof mapPreinscricao>) {
 
 async function getSessao(db: Db, telefone: string) {
   const r = await sessaoWhatsapp(db, telefone);
+  const desde = r?.humano_desde ? new Date(r.humano_desde).getTime() : 0;
   return {
     passo: (r?.passo ?? "menu") as Passo,
     dados: parseDados(r?.dados),
     leadId: r?.lead_id ?? null,
+    // Atendimento por uma pessoa: o bot não responde até a conversa voltar ao assistente (ou caducar sem resposta).
+    humano: desde > 0 && Date.now() - desde < HUMANO_EXPIRA_HORAS * 3600_000,
   };
 }
+
+/** A pessoa quer falar com alguém da equipa (opção 4 ou a frase da página: «falar com um operador»). */
+function querPessoa(t: string) {
+  return /\b(operador|operadora|humano|atendente|assistente humano|pessoa real)\b|falar com (algu[eé]m|uma pessoa|a equipa|um colaborador)/i.test(t);
+}
+
+export const RESPOSTA_HUMANO = [
+  "Combinado. Uma pessoa da equipa da ENA vai responder-lhe aqui, nesta conversa (dias úteis, das 9h às 18h).",
+  "Se quiser, escreva já o que precisa, para adiantarmos.",
+  "Para voltar ao assistente automático, escreva *menu*.",
+].join("\n");
+
+const RESPOSTA_HUMANO_BOTAO: Resposta = {
+  texto: RESPOSTA_HUMANO.split("\n").slice(0, 2).join("\n"),
+  opcoes: [{ id: "menu", titulo: "Voltar ao assistente" }],
+  simples: RESPOSTA_HUMANO,
+};
 
 async function saveSessao(db: Db, telefone: string, passo: Passo, dados: Dados, leadId: number | null) {
   await gravarSessaoWhatsapp(db, telefone, passo, dados, leadId);
@@ -128,35 +186,68 @@ async function wamidVisto(db: Db, wamid: string) {
 }
 
 /** Pergunta de consentimento (RGPD) antes de gravar a pré-inscrição: o mesmo texto e a mesma política do formulário do site. */
-async function pedidoConsentimento(db: Db) {
+async function pedidoConsentimento(db: Db): Promise<Resposta> {
   const { texto, url } = await politicaPrivacidade(db);
   const base = texto || "Aceita que a ENA trate os seus dados para gerir esta pré-inscrição e o contactar sobre a formação?";
-  return [base, url ? `Política de privacidade: ${url}` : "", "Responda *sim* para aceitar ou *não* para cancelar."].filter(Boolean).join("\n");
+  return {
+    texto: [base, url ? `Política de privacidade: ${url}` : ""].filter(Boolean).join("\n"),
+    opcoes: [{ id: "sim", titulo: "Sim, aceito" }, { id: "não", titulo: "Não" }],
+    simples: [base, url ? `Política de privacidade: ${url}` : "", "Responda *sim* para aceitar ou *não* para cancelar."].filter(Boolean).join("\n"),
+  };
 }
 
 function isMenuCmd(t: string) {
   return /^(menu|olá|ola|oi|bom dia|boa tarde|boa noite|inicio|início|start|hi|hello)$/i.test(t);
 }
 
-export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: string, wamid = "") {
+/**
+ * Uma mensagem recebida. `rotulo` é o texto do botão ou da linha da lista tocada (o `textRaw` é então o id da opção):
+ * fica no histórico em vez do id.
+ */
+export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: string, wamid = "", nomePerfil = "", rotulo = "") {
   const telefone = digitsPhone(telefoneRaw);
   const text = sanitizeText(textRaw, 500).trim();
   const replies: string[] = [];
+  const mensagens: Resposta[] = [];
 
   if (!telefone || !text) {
-    return { replies: ["Não percebi. Escreva *menu* para recomeçar."], telefone };
+    const r = "Não percebi. Escreva *menu* para recomeçar.";
+    return { replies: [r], mensagens: [r] as Resposta[], telefone };
   }
   if (wamid && await wamidVisto(db, wamid)) {
-    return { replies: [], telefone, duplicado: true };
+    return { replies: [], mensagens, telefone, duplicado: true };
   }
 
-  await logMsg(db, telefone, "in", text, wamid || undefined);
+  await logMsg(db, telefone, "in", sanitizeText(rotulo, 500).trim() || text, wamid || undefined);
+  const perfil = sanitizeHeader(nomePerfil).slice(0, 120);
+  if (perfil) await gravarNomePerfilWhatsapp(db, telefone, perfil).catch(() => undefined);
   const sess = await getSessao(db, telefone);
   let passo = sess.passo;
   let dados = { ...sess.dados };
   let leadId = sess.leadId;
 
-  const say = (m: string) => { replies.push(m); };
+  const say = (m: Resposta) => { replies.push(textoDaResposta(m)); mensagens.push(m); };
+
+  // Em atendimento por uma pessoa o bot fica calado; só *menu* devolve a conversa ao assistente.
+  if (sess.humano) {
+    if (!/^(menu|0)$/i.test(text)) return { replies, mensagens, telefone, passo, leadId, humano: true };
+    await libertarHumanoWhatsapp(db, telefone);
+    say(MENU);
+    for (const r of replies) await logMsg(db, telefone, "out", r);
+    return { replies, mensagens, telefone, passo: "menu" as Passo, leadId };
+  }
+
+  if ((passo === "menu" && text === "4") || querPessoa(text)) {
+    await pedirHumanoWhatsapp(db, telefone);
+    say(RESPOSTA_HUMANO_BOTAO);
+    for (const r of replies) await logMsg(db, telefone, "out", r);
+    const lead = (await leadsPorTelefone(db, telefone))[0];
+    const nome = lead ? `${lead.nome} ${lead.apelido}`.trim() : perfil;
+    await avisarWhatsappHumano(db, { telefone, nome, mensagem: text, regime: lead?.regime === "fin" ? "fin" : "gold" })
+      .catch(err => console.error("[whatsapp] aviso à equipa:", err));
+    if (lead) await logLeadEvent(db, lead.id, undefined, "whatsapp", "Pediu para falar com a equipa no WhatsApp", text).catch(() => undefined);
+    return { replies, mensagens, telefone, passo: "menu" as Passo, leadId: lead?.id ?? leadId, humano: true };
+  }
 
   if (isMenuCmd(text) || text === "0") {
     passo = "menu";
@@ -164,7 +255,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     say(MENU);
     await saveSessao(db, telefone, passo, dados, leadId);
     for (const r of replies) await logMsg(db, telefone, "out", r);
-    return { replies, telefone, passo, leadId };
+    return { replies, mensagens, telefone, passo, leadId };
   }
 
   if (passo === "menu" || (passo as string) === "consulta") {
@@ -184,7 +275,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
       }
     } else if (text === "3" || /curso/i.test(text)) {
       const cursos = await cursosActivos(db);
-      say(listaNumerada("Cursos Gold activos:", cursos.map(c => `${c.nome} · € ${c.preco}`)));
+      say(listaTexto("Cursos Gold activos:", cursos.map(c => `${c.nome} · € ${c.preco}`)).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
       say("Esse valor é o do curso. O local ou o horário podem ter outro preço, e a inscrição fica com o que escolher.");
       passo = "menu";
     } else {
@@ -328,5 +419,5 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
 
   await saveSessao(db, telefone, passo, dados, leadId);
   for (const r of replies) await logMsg(db, telefone, "out", r);
-  return { replies, telefone, passo, leadId };
+  return { replies, mensagens, telefone, passo, leadId };
 }

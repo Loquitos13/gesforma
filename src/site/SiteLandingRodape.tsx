@@ -75,7 +75,7 @@ function WhatsAppAssistant() {
     courses: `${name}, selecionei ${visibleCourses.length} ${visibleCourses.length === 1 ? "opção" : "opções"} com base nas suas respostas.`,
     confirm: chosen ? `Esta é uma boa opção para ${goal.toLowerCase() || "o seu objetivo"}. Quer avançar?` : "",
     handoff: numeroEna
-      ? "Claro. Abra a conversa no seu WhatsApp e um operador da ENA responde-lhe aí. Se preferir, deixe o contacto e ligamos-lhe."
+      ? "Claro. Abra a conversa no seu WhatsApp e uma pessoa da equipa da ENA responde-lhe aí (dias úteis, das 9h às 18h). Se preferir, deixe o contacto e ligamos-lhe."
       : "Claro. Deixe um contacto e um consultor ENA continuará esta conversa consigo.",
   }[step];
 
@@ -137,6 +137,13 @@ function WhatsAppAssistant() {
               <div className="ml-auto max-w-[88%]">
                 <button type="button" onClick={() => transition("name")} className="flex w-full items-center justify-between rounded-xl bg-[#075E54] px-4 py-3 text-left text-sm font-bold text-white shadow-sm">Começar recomendação <Icon name="arrow" className="h-4 w-4" /></button>
                 <button type="button" onClick={() => { setName("Visitante"); setPath("direct"); setFormat("E-learning"); transition("courses"); }} className="mt-2 w-full rounded-xl bg-[#DCF8C6] px-4 py-3 text-left text-sm font-bold text-[#1C3350] shadow-sm">Ir diretamente para cursos online</button>
+                {/* O mesmo assistente no WhatsApp da pessoa: pré-inscrição, estado do pedido ou falar com a equipa. */}
+                {numeroEna && (
+                  <a href={`https://wa.me/${numeroEna}?text=${encodeURIComponent("Olá")}`} target="_blank" rel="noreferrer"
+                    className="mt-2 flex w-full items-center justify-between rounded-xl bg-[#25D366] px-4 py-3 text-left text-sm font-bold text-[#073B35] shadow-sm hover:brightness-95">
+                    <span className="flex items-center gap-2"><Icon name="whatsapp" className="h-5 w-5" />Continuar no WhatsApp</span><Icon name="arrow" className="h-4 w-4" />
+                  </a>
+                )}
               </div>
             )}
 

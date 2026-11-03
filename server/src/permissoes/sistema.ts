@@ -1,4 +1,4 @@
-import { ADMIN, COORDENACAO, SECRETARIA, EQUIPA_E_CONTABILIDADE, TODA_A_EQUIPA, type Regra } from "./perfis.js";
+import { ADMIN, COORDENACAO, EQUIPA, SECRETARIA, EQUIPA_E_CONTABILIDADE, TODA_A_EQUIPA, type Regra } from "./perfis.js";
 
 /** Integrações, utilizadores e configuração do sistema. */
 export const regras: Regra[] = [
@@ -9,7 +9,12 @@ export const regras: Regra[] = [
   ["*", "/v1/crm/whatsapp/config", ADMIN],
   ["*", "/v1/crm/whatsapp/desligar", ADMIN],
   ["*", "/v1/crm/whatsapp/simular", ADMIN],
-  ["GET", "/v1/crm/whatsapp/conversa", SECRETARIA],
+  // Caixa de conversas do WhatsApp: a equipa (comercial e coordenações) lê e responde.
+  ["GET", "/v1/crm/whatsapp/conversa", EQUIPA],
+  ["GET", "/v1/crm/whatsapp/conversas", EQUIPA],
+  ["POST", "/v1/crm/whatsapp/responder", EQUIPA],
+  ["POST", "/v1/crm/whatsapp/devolver", EQUIPA],
+  ["POST", "/v1/crm/whatsapp/assumir", EQUIPA],
   ["*", "/v1/auth/microsoft/config", ADMIN],
   ["*", "/v1/auth/microsoft/disconnect", ADMIN],
   ["*", "/v1/settings/smtp*", ADMIN],

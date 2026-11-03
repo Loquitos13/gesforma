@@ -53,7 +53,7 @@ describe("WhatsApp: o bot não revela pré-inscrições de outros", () => {
 });
 
 describe("WhatsApp: simulador e conversa", () => {
-  it("o simulador é só do admin; a conversa da secretaria", async () => {
+  it("o simulador é só do admin; a conversa de toda a equipa", async () => {
     const ctx = await arrancar();
     const corpo = { telefone: "351919990004", texto: "menu" };
     for (const p of ["secretaria", "comercial", "financiada"] as const) {
@@ -61,8 +61,9 @@ describe("WhatsApp: simulador e conversa", () => {
     }
     expect((await pedido(ctx, "admin", "POST", "/v1/crm/whatsapp/simular", corpo)).statusCode).toBe(200);
     const url = "/v1/crm/whatsapp/conversa?telefone=351919990004";
-    for (const p of ["comercial", "financiada"] as const) expect((await pedido(ctx, p, "GET", url)).statusCode).toBe(403);
-    for (const p of ["admin", "secretaria"] as const) expect((await pedido(ctx, p, "GET", url)).statusCode).toBe(200);
+    // A conversa abre-se na caixa de conversas do WhatsApp: toda a equipa (não a contabilidade nem o formador).
+    for (const p of ["contabilidade", "formador"] as const) expect((await pedido(ctx, p, "GET", url)).statusCode).toBe(403);
+    for (const p of ["admin", "secretaria", "comercial", "financiada"] as const) expect((await pedido(ctx, p, "GET", url)).statusCode).toBe(200);
   });
 });
 

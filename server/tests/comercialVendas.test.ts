@@ -66,7 +66,7 @@ describe("menu do comercial", () => {
     const vistas = menu.flatMap(g => g.items.flatMap(i => [i.view, ...(i.children ?? []).map(c => c.view)]).filter(Boolean));
     expect(menu.map(g => g.group)).toEqual(["Gold", "Sistema"]);
     expect(vistas).toEqual([
-      "gold-painel", "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos",
+      "gold-painel", "gold-preinscricoes", "gold-crm-clientes", "gold-crm-parceiros", "gold-crm-contratos", "gold-whatsapp",
       "gold-equipa", "gold-campanhas", "gold-cronogramas", "emails",
     ]);
   });

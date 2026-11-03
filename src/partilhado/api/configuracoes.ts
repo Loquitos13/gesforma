@@ -84,10 +84,25 @@ export const apiWhatsapp = (signal?: AbortSignal) => api<EstadoWhatsapp>("/v1/cr
 export const apiGravarWhatsapp = (corpo: { token?: string; phoneId?: string }) => enviar.put<EstadoWhatsapp>("/v1/crm/whatsapp/config", corpo);
 export const apiDesligarWhatsapp = () => enviar.post<EstadoWhatsapp>("/v1/crm/whatsapp/desligar");
 
-export const apiWhatsappConversa = (telefone: string) =>
-  api<{ telefone: string; mensagens: { direccao: "in" | "out"; corpo: string; createdAt: string }[] }>(
-    `/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`,
-  );
+export type ConversaWhatsapp = {
+  telefone: string; nome: string; humano: boolean; humanoPor: string; ultima: string; ultimaDireccao: "in" | "out";
+  ultimaEm: string; podeResponder: boolean; porLer: number;
+};
+export type MensagemWhatsapp = { direccao: "in" | "out"; corpo: string; createdAt: string; autor?: string };
+export type DetalheConversaWhatsapp = {
+  telefone: string; humano?: boolean; podeResponder?: boolean; ultimaEntrada?: string | null;
+  leads?: { id: number; nome: string; curso: string; estado: string; regime: "gold" | "fin" }[];
+  mensagens: MensagemWhatsapp[];
+};
+
+export const apiWhatsappConversas = (signal?: AbortSignal) =>
+  api<{ ligado: boolean; conversas: ConversaWhatsapp[] }>("/v1/crm/whatsapp/conversas", { signal });
+export const apiWhatsappConversa = (telefone: string, signal?: AbortSignal) =>
+  api<DetalheConversaWhatsapp>(`/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`, { signal });
+export const apiWhatsappResponder = (telefone: string, texto: string) =>
+  enviar.post<{ ok: true }>("/v1/crm/whatsapp/responder", { telefone, texto });
+export const apiWhatsappDevolver = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/devolver", { telefone });
+export const apiWhatsappAssumir = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/assumir", { telefone });
 export const apiWhatsappSimular = (telefone: string, texto: string) =>
   enviar.post<{ replies: string[]; telefone: string; passo?: string; leadId?: number | null; ligado: boolean }>(
     "/v1/crm/whatsapp/simular", { telefone, texto },

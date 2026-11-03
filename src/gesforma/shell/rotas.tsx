@@ -18,6 +18,7 @@ const PainelGold = carregavel(() => import("../vistas/painel/PainelGold"));
 const PainelFin = carregavel(() => import("../vistas/painel/PainelFin"));
 const Preinscricoes = carregavel(() => import("../vistas/crm/Preinscricoes"));
 const Clientes = carregavel(() => import("../vistas/crm/Clientes"));
+const Whatsapp = carregavel(() => import("../vistas/crm/Whatsapp"));
 const Parceiros = carregavel(() => import("../vistas/crm/Parceiros"));
 const Contratos = carregavel(() => import("../vistas/crm/Contratos"));
 const Equipa = carregavel(() => import("../vistas/equipa/Equipa"));
@@ -62,6 +63,8 @@ export const ROTAS: Record<Vista, Ecra> = {
   "fin-crm-parceiros": Parceiros,
   "gold-crm-contratos": Contratos,
   "fin-crm-contratos": Contratos,
+  "gold-whatsapp": Whatsapp,
+  "fin-whatsapp": Whatsapp,
   "gold-equipa": Equipa,
   "fin-equipa": Equipa,
   equipa: Equipa,

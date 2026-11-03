@@ -4,8 +4,12 @@
  *    (Edição de cursos › Locais) ou, sem ele, o da entidade;
  *  - formador.atribuido: um formador passa a estar na turma (ficha da turma ou cronograma) → email do formador.
  * Sem regra activa não sai nada; cada aviso sai uma só vez (chave de idempotência).
+ *
+ * E, sem regra (sai sempre): o pedido para falar com a equipa no WhatsApp → email da entidade (modelo
+ * «aviso_whatsapp_humano»).
  */
 import { ingestEvent } from "./automations.js";
+import { enviarModelo } from "./emailModelo.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { lerEntidade } from "./regrasConfig.js";
@@ -66,4 +70,27 @@ export async function avisarFormadoresNovos(db: Db, regime: "gold" | "fin", turm
         link: `${origem()}/gesforma`,
       } }).catch(err => console.error("[emails] aviso ao formador:", err));
   }
+}
+
+/** Alguém pediu, no WhatsApp, para falar com uma pessoa: aviso por email à entidade, com a ligação para a conversa. */
+export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: string; mensagem: string; regime: "gold" | "fin" }) {
+  const para = normalizeEmail((await lerEntidade(db)).email);
+  if (!isEmail(para)) return;
+  const vista = p.regime === "fin" ? "financiada" : "gold";
+  const telefone = p.telefone.startsWith("351") ? `+351 ${p.telefone.slice(3)}` : `+${p.telefone}`;
+  const nome = p.nome || telefone;
+  await enviarModelo(db, {
+    tipo: "aviso_whatsapp_humano", area: p.regime, para, nome: "Equipa",
+    vars: { nome_contacto: nome, telefone, mensagem: p.mensagem },
+    link: `${origem()}/gesforma/${vista}/whatsapp?telefone=${encodeURIComponent(p.telefone)}`,
+    reserva: {
+      assunto: "WhatsApp: {{nome_contacto}} quer falar com a equipa",
+      linhas: [
+        "{{nome_contacto}} ({{telefone}}) pediu, no WhatsApp da ENA, para falar com uma pessoa da equipa.",
+        "Última mensagem: {{mensagem}}",
+        "O assistente automático fica em pausa nesta conversa. Responda pela caixa de conversas do GesForma.",
+      ],
+      cta: "Abrir a conversa",
+    },
+  });
 }

@@ -8,7 +8,7 @@ import { eur } from "../partilhado/ui/formatos";
  * Passo de pagamento da ligação pessoal. Só aparece depois de a secretaria validar os documentos
  * e pedir o pagamento. Transferência bancária: a pessoa anexa o comprovativo e a secretaria valida.
  */
-export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnviar }: {
+export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnviar, textos }: {
   nome: string;
   curso: string;
   pagamento: PagamentoPercurso;
@@ -16,6 +16,8 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
   error: string;
   ok: string;
   onEnviar: (ficheiro: File) => Promise<void>;
+  /** Textos editáveis em Sistema › Site › Definições («{curso}» é o nome do curso). */
+  textos?: { intro?: string; ajuda?: string; botao?: string };
 }) {
   const [ficheiro, setFicheiro] = useState<File | null>(null);
   const [substituir, setSubstituir] = useState(false);
@@ -42,7 +44,7 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         <p className="text-[12px] font-semibold uppercase tracking-[0.16em] text-[#c48400]">Pagamento</p>
         <h1 className="mt-2 text-[1.65rem] font-semibold tracking-tight leading-tight">{nome}</h1>
         <p className="mt-2 text-sm leading-relaxed text-[#5c564c]">
-          A secretaria validou os seus documentos de {curso}. Para concluir a inscrição, faça a transferência e anexe o comprovativo.
+          {(textos?.intro || "A secretaria validou os seus documentos de {curso}. Para concluir a inscrição, faça a transferência e anexe o comprovativo.").replace("{curso}", curso)}
         </p>
       </div>
       <dl className="grid gap-3 border-t border-[#efeae1] px-6 py-5 text-sm sm:grid-cols-3 sm:px-8">
@@ -57,14 +59,14 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         </div>
       </dl>
       {/* Enquanto falta o comprovativo, a zona fica em destaque e o ecrã leva lá (o botão do email abre esta página). */}
-      <div ref={zona} id="comprovativo" className={`border-t border-[#efeae1] px-6 py-5 sm:px-8 ${!aguarda ? "bg-[#fff6e0] ring-2 ring-inset ring-[#ffa900]" : ""}`}>
+      <div ref={zona} id="comprovativo" className={`border-t border-[#efeae1] px-6 py-5 sm:px-8 ${!aguarda ? "bg-[#fff6e0] ring-2 ring-inset ring-[color:var(--lig-d,#ffa900)]" : ""}`}>
         <p className="text-sm font-semibold">Comprovativo de pagamento</p>
-        {!aguarda && <p className="mt-1 text-sm text-[#5c564c]">Depois de fazer a transferência, anexe aqui o comprovativo (PDF ou imagem).</p>}
+        {!aguarda && <p className="mt-1 text-sm text-[#5c564c]">{textos?.ajuda || "Depois de fazer a transferência, anexe aqui o comprovativo (PDF ou imagem)."}</p>}
         {aguarda && comp && (
           <div className="mt-2 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
             <p className="truncate text-emerald-800">{comp.nome}</p>
             <p className="mt-1 text-[#5c564c]">Recebido. Quando a secretaria confirmar o pagamento, recebe por email o acesso à área do formando.</p>
-            <button type="button" className="mt-2 text-xs font-semibold underline decoration-[#ffa900] underline-offset-2" onClick={() => setSubstituir(true)}>
+            <button type="button" className="mt-2 text-xs font-semibold underline decoration-[color:var(--lig-d,#ffa900)] underline-offset-2" onClick={() => setSubstituir(true)}>
               Enviar outro ficheiro
             </button>
           </div>
@@ -77,8 +79,8 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         {!aguarda && (
           <form onSubmit={e => void submeter(e)} className="mt-3">
             <CampoFicheiro onFile={setFicheiro} />
-            <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
-              {busy ? "A anexar…" : "Anexar comprovativo"}
+            <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[color:var(--lig-d,#ffa900)] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
+              {busy ? "A anexar…" : textos?.botao || "Anexar comprovativo"}
             </button>
           </form>
         )}

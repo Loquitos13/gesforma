@@ -1,9 +1,10 @@
 import { precoDoLocal } from "../partilhado/precoLocal";
-import { createContext, useCallback, useContext, useEffect, useMemo, useState, type FormEvent, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type CSSProperties, type FormEvent, type ReactNode } from "react";
 import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { SearchSelect } from "../partilhado/FormKit";
 import { ofertaFiltrada, turmaCheia, turmasParaMostrar, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
-import type { Course } from "./SiteLanding";
+import { useSiteTexto, type Course } from "./SiteLanding";
+import { corSegura } from "./editor/estilos";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
 import { ConsentimentoRgpd } from "./ConsentimentoRgpd";
@@ -51,6 +52,8 @@ function norm(value: string) {
 }
 
 function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null; localInicial: string; onClose: () => void }) {
+  // Textos e cores da janela (Sistema › Site › Definições).
+  const txt = useSiteTexto();
   const aberto = Boolean(curso);
   const preinscricao = ePreinscricao(curso?.enrollment);
   // Acesso direto segue o mesmo caminho do pré-pago: dados pessoais iniciais e, a seguir, o pagamento.
@@ -290,34 +293,35 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   ];
 
   return (
-    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo">
+    <div className="fixed inset-0 z-[80] flex items-end justify-center sm:items-center sm:p-6" role="dialog" aria-modal="true" aria-labelledby="inscricao-titulo"
+      style={{ "--insc-p": corSegura(txt("inscCorPrincipal")) ?? "#1C3350", "--insc-d": corSegura(txt("inscCorDestaque")) ?? "#A60000" } as CSSProperties}>
       <button type="button" className="absolute inset-0 bg-[#14263D]/55" aria-label="Fechar" onClick={onClose} />
       <div className="relative flex max-h-[94vh] w-full max-w-3xl flex-col overflow-hidden bg-white shadow-[0_28px_80px_rgba(20,38,61,.28)] sm:max-h-[88vh]">
-        <header className="flex items-start justify-between gap-4 border-b border-[#1C3350]/10 px-5 py-5 sm:px-8">
+        <header className="flex items-start justify-between gap-4 border-b border-[color:var(--insc-p)]/10 px-5 py-5 sm:px-8">
           <div className="min-w-0">
-            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#A60000]">
-              {prepago ? "Check-out" : "Pré-inscrição"}
+            <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[color:var(--insc-d)]">
+              {prepago ? "Check-out" : txt("inscEtiqueta")}
             </p>
-            <h2 id="inscricao-titulo" className="mt-1 font-serif text-2xl leading-tight text-[#1C3350] sm:text-3xl">{curso.title}</h2>
-            <p className="mt-2 text-sm text-[#1C3350]/60">{curso.format} · {curso.duration} · {precoLabel}</p>
+            <h2 id="inscricao-titulo" className="mt-1 font-serif text-2xl leading-tight text-[color:var(--insc-p)] sm:text-3xl">{curso.title}</h2>
+            <p className="mt-2 text-sm text-[color:var(--insc-p)]/60">{curso.format} · {curso.duration} · {precoLabel}</p>
           </div>
-          <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center text-[#1C3350]/50 hover:bg-[#F4F6F8] hover:text-[#1C3350]" aria-label="Fechar">
+          <button type="button" onClick={onClose} className="grid h-10 w-10 shrink-0 place-items-center text-[color:var(--insc-p)]/50 hover:bg-[#F4F6F8] hover:text-[color:var(--insc-p)]" aria-label="Fechar">
             <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M6 6l12 12M18 6 6 18" /></svg>
           </button>
         </header>
         {passo !== "feito" && passos.length > 1 && (
-          <ol className="grid border-b border-[#1C3350]/10 text-xs font-extrabold uppercase tracking-[0.08em]" style={{ gridTemplateColumns: `repeat(${passos.length}, minmax(0, 1fr))` }}>
+          <ol className="grid border-b border-[color:var(--insc-p)]/10 text-xs font-extrabold uppercase tracking-[0.08em]" style={{ gridTemplateColumns: `repeat(${passos.length}, minmax(0, 1fr))` }}>
             {passos.map(([id, rotulo], i) => (
-              <li key={id} className={`px-5 py-3 sm:px-8 ${passo === id ? "bg-[#1C3350] text-white" : "text-[#1C3350]/45"}`}>{i + 1} · {rotulo}</li>
+              <li key={id} className={`px-5 py-3 sm:px-8 ${passo === id ? "bg-[color:var(--insc-p)] text-white" : "text-[color:var(--insc-p)]/45"}`}>{i + 1} · {rotulo}</li>
             ))}
           </ol>
         )}
         <div className="overflow-y-auto px-5 py-6 sm:px-8">
           {passo === "feito" ? (
             <div>
-              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#FFA900]">Pedido recebido</p>
-              <p className="mt-3 text-lg leading-8 text-[#1C3350]/75">
-                {aviso || "A secretaria da ENA entra em contacto consigo."} O pedido ficou associado a {email}.
+              <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#FFA900]">{txt("inscRecebido")}</p>
+              <p className="mt-3 text-lg leading-8 text-[color:var(--insc-p)]/75">
+                {aviso || txt("inscRecebidoTexto")} O pedido ficou associado a {email}.
               </p>
               {(() => {
                 // Os contactos do local escolhido (Edição de cursos › Locais, ou a ficha do curso).
@@ -326,15 +330,15 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                 const mail = ct?.email?.trim() || "";
                 if (!ct || (!tel && !mail)) return null;
                 return (
-                  <div className="mt-5 border-t border-[#1C3350]/10 pt-4 text-sm leading-6 text-[#1C3350]/75">
-                    <p className="font-bold text-[#1C3350]">Para qualquer dúvida contacte{ct.local ? ` ${ct.local}` : ""}:</p>
+                  <div className="mt-5 border-t border-[color:var(--insc-p)]/10 pt-4 text-sm leading-6 text-[color:var(--insc-p)]/75">
+                    <p className="font-bold text-[color:var(--insc-p)]">Para qualquer dúvida contacte{ct.local ? ` ${ct.local}` : ""}:</p>
                     {tel && <p>Telefone: <a className="font-semibold hover:underline" href={`tel:${tel.replace(/[^\d+]/g, "")}`}>{tel}</a></p>}
                     {mail && <p>Email: <a className="font-semibold hover:underline" href={`mailto:${mail}`}>{mail}</a></p>}
                   </div>
                 );
               })()}
               {prepago && (
-                <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">
+                <p className="mt-3 text-sm leading-6 text-[color:var(--insc-p)]/65">
                   Escolheu {metodo}. {notaPagamento} O valor só fica liquidado quando o banco confirma. Neste passo não há cobrança no cartão.
                 </p>
               )}
@@ -342,26 +346,26 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
           ) : passo === "turma" ? (
             <form id="inscricao-form" onSubmit={e => { e.preventDefault(); continuarTurma(); }} className="space-y-6">
               {ofertaEstado === "a-carregar" ? (
-                <p className="text-sm text-[#1C3350]/60">A carregar as datas das turmas.</p>
+                <p className="text-sm text-[color:var(--insc-p)]/60">A carregar as datas das turmas.</p>
               ) : ofertaEstado === "erro" ? (
-                <p className="text-sm text-[#A60000]">Não foi possível carregar as turmas. Feche e volte a abrir o pedido.</p>
+                <p className="text-sm text-[color:var(--insc-d)]">Não foi possível carregar as turmas. Feche e volte a abrir o pedido.</p>
               ) : (
                 <>
                   {/* O local escolhe-se na página do curso; aqui só aparece em resumo (com «Alterar»). */}
                   {local && !trocarLocal ? (
-                    <p className="flex flex-wrap items-center gap-3 text-sm text-[#1C3350]">
-                      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</span>
+                    <p className="flex flex-wrap items-center gap-3 text-sm text-[color:var(--insc-p)]">
+                      <span className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">Local</span>
                       <strong>{local}</strong>
-                      {locaisEscolha.length > 1 && <button type="button" onClick={() => setTrocarLocal(true)} className="font-bold text-[#A60000] underline">Alterar</button>}
+                      {locaisEscolha.length > 1 && <button type="button" onClick={() => setTrocarLocal(true)} className="font-bold text-[color:var(--insc-d)] underline">Alterar</button>}
                     </p>
                   ) : (
                     <fieldset>
-                      <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Local</legend>
-                      <p className="mt-1 text-xs text-[#1C3350]/60">Selecione o local para ver as datas de início e os cronogramas.</p>
+                      <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">Local</legend>
+                      <p className="mt-1 text-xs text-[color:var(--insc-p)]/60">Selecione o local para ver as datas de início e os cronogramas.</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {locaisEscolha.map(l => (
                           <button key={l} type="button" onClick={() => { escolherLocal(l); setTrocarLocal(false); }} aria-pressed={local === l}
-                            className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/20 text-[#1C3350] hover:border-[#1C3350]"}`}>
+                            className={`border px-4 py-2 text-sm font-bold ${local === l ? "border-[color:var(--insc-p)] bg-[color:var(--insc-p)] text-white" : "border-[color:var(--insc-p)]/20 text-[color:var(--insc-p)] hover:border-[color:var(--insc-p)]"}`}>
                             {l}
                           </button>
                         ))}
@@ -369,19 +373,19 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                     </fieldset>
                   )}
                   <fieldset>
-                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Data de início e horário</legend>
-                    {local && datas.length > 0 && !localSemTurmas && <p className="mt-1 text-xs text-[#1C3350]/60">Veja o cronograma, selecione a data pretendida e clique em Continuar.</p>}
+                    <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">{txt("inscTituloDatas")}</legend>
+                    {local && datas.length > 0 && !localSemTurmas && <p className="mt-1 text-xs text-[color:var(--insc-p)]/60">{txt("inscAjudaDatas")}</p>}
                     {!local ? (
-                      <p className="mt-3 text-sm text-[#1C3350]/60">Escolha o local para ver as datas de início.</p>
+                      <p className="mt-3 text-sm text-[color:var(--insc-p)]/60">Escolha o local para ver as datas de início.</p>
                     ) : localSemTurmas || !datas.length ? (
-                      <p className="mt-3 text-sm text-[#1C3350]/70">Ainda não há datas abertas em {local}. Continue e deixe o seu pedido: a secretaria contacta-o quando abrir uma turma.</p>
+                      <p className="mt-3 text-sm text-[color:var(--insc-p)]/70">{txt("inscSemDatas").replace("{local}", local)}</p>
                     ) : (
                       <div className="mt-3 grid gap-2">
                         {datas.map(t => {
                           const vagas = vagasNumero(t);
                           const ativo = t.turmaId === turmaId;
                           return (
-                            <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-5 gap-y-3 border px-5 py-5 sm:min-h-[88px] ${ativo ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
+                            <div key={t.turmaId} className={`flex flex-wrap items-center gap-x-5 gap-y-3 border px-5 py-5 sm:min-h-[88px] ${ativo ? "border-[color:var(--insc-p)] bg-[color:var(--insc-p)] text-white" : "border-[color:var(--insc-p)]/15"} ${vagas <= 0 ? "opacity-50" : ""}`}>
                               <button type="button" disabled={vagas <= 0} onClick={() => escolherTurma(t)} aria-pressed={ativo}
                                 className="flex min-w-0 flex-1 flex-wrap items-center gap-x-5 gap-y-1.5 text-left disabled:cursor-not-allowed">
                                 {t.matricula && (
@@ -390,13 +394,13 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                                 <strong className="text-lg">{fmtDataPt(t.dataInicio)}</strong>
                                 <span className="text-sm opacity-80">{t.horario}</span>
                                 {t.preco != null && <span className="text-base font-bold">{eur(t.preco, true)}</span>}
-                                <span className={turmaCheia(t) ? "text-xs font-bold" : "text-xs opacity-65"}>{vagasPublicas(t)}</span>
+                                <span className={turmaCheia(t) ? "text-xs font-bold" : "text-xs opacity-65"}>{turmaCheia(t) ? txt("inscCheia") : vagasPublicas(t)}</span>
                               </button>
                               {/* O cronograma é o da turma (já traz o nome dela); só existe no site depois de publicado. */}
                               {t.cronogramaPublicado ? (
                                 <a href={`/cronograma/${t.regime || "gold"}/${t.turmaId}`} target="_blank" rel="noreferrer"
-                                  className={`inline-flex shrink-0 items-center gap-2 border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] ${ativo ? "border-white/40 text-white hover:bg-white hover:text-[#1C3350]" : "border-[#A60000] text-[#A60000] hover:bg-[#A60000] hover:text-white"}`}>
-                                  Ver cronograma
+                                  className={`inline-flex shrink-0 items-center gap-2 border px-4 py-2.5 text-xs font-extrabold uppercase tracking-[0.08em] ${ativo ? "border-white/40 text-white hover:bg-white hover:text-[color:var(--insc-p)]" : "border-[color:var(--insc-d)] text-[color:var(--insc-d)] hover:bg-[color:var(--insc-d)] hover:text-white"}`}>
+                                  {txt("inscVerCronograma")}
                                   <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M14 4h6v6M20 4 10 14M18 14v6H4V6h6" /></svg>
                                 </a>
                               ) : (
@@ -413,39 +417,39 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
             </form>
           ) : passo === "pagamento" ? (
             <form id="inscricao-form" onSubmit={e => void enviar(e)} className="space-y-6">
-              <div className="bg-[#F4F6F8] px-4 py-4 text-sm leading-6 text-[#1C3350]/75">
-                <p className="font-semibold text-[#1C3350]">{fin ? dadosFin.nomeCompleto : `${nome} ${apelido}`}</p>
+              <div className="bg-[#F4F6F8] px-4 py-4 text-sm leading-6 text-[color:var(--insc-p)]/75">
+                <p className="font-semibold text-[color:var(--insc-p)]">{fin ? dadosFin.nomeCompleto : `${nome} ${apelido}`}</p>
                 <p>{email} · {telf}</p>
                 {!fin && <p>{concelho} · soube pela via {origem}</p>}
                 <p className="mt-2">{resumoTurma || "Acesso imediato, online"}</p>
-                <p className="mt-3 font-serif text-3xl text-[#1C3350]">{precoLabel}</p>
+                <p className="mt-3 font-serif text-3xl text-[color:var(--insc-p)]">{precoLabel}</p>
               </div>
               <fieldset>
-                <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Forma de pagamento</legend>
-                <p className="mt-2 text-sm leading-6 text-[#1C3350]/65">A ENA envia a referência. O banco é que confirma o pagamento.</p>
+                <legend className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">Forma de pagamento</legend>
+                <p className="mt-2 text-sm leading-6 text-[color:var(--insc-p)]/65">A ENA envia a referência. O banco é que confirma o pagamento.</p>
                 {metodos.estado === "a-carregar" ? (
-                  <p className="mt-3 text-sm text-[#1C3350]/60">A carregar as formas de pagamento.</p>
+                  <p className="mt-3 text-sm text-[color:var(--insc-p)]/60">A carregar as formas de pagamento.</p>
                 ) : metodos.estado === "erro" ? (
-                  <p className="mt-3 text-sm text-[#A60000]">Não foi possível carregar as formas de pagamento.</p>
+                  <p className="mt-3 text-sm text-[color:var(--insc-d)]">Não foi possível carregar as formas de pagamento.</p>
                 ) : metodos.nomes.length === 0 ? (
-                  <p className="mt-3 text-sm leading-6 text-[#1C3350]/70">A secretaria ainda não definiu formas de pagamento em Listas de opções.</p>
+                  <p className="mt-3 text-sm leading-6 text-[color:var(--insc-p)]/70">A secretaria ainda não definiu formas de pagamento em Listas de opções.</p>
                 ) : (
                   <div className="mt-3 grid gap-2">
                     {metodos.nomes.map(item => (
-                      <label key={item} className={`flex cursor-pointer items-center justify-between border px-4 py-3 text-sm font-semibold ${metodo === item ? "border-[#1C3350] bg-[#1C3350] text-white" : "border-[#1C3350]/15"}`}>
+                      <label key={item} className={`flex cursor-pointer items-center justify-between border px-4 py-3 text-sm font-semibold ${metodo === item ? "border-[color:var(--insc-p)] bg-[color:var(--insc-p)] text-white" : "border-[color:var(--insc-p)]/15"}`}>
                         <span>{item}</span>
                         <input type="radio" name="metodo" className="accent-[#FFA900]" checked={metodo === item} onChange={() => setMetodo(item)} />
                       </label>
                     ))}
                   </div>
                 )}
-                {notaPagamento && <p className="mt-3 text-sm leading-6 text-[#1C3350]/60">{notaPagamento}</p>}
+                {notaPagamento && <p className="mt-3 text-sm leading-6 text-[color:var(--insc-p)]/60">{notaPagamento}</p>}
               </fieldset>
             </form>
           ) : (
             <form id="inscricao-form" onSubmit={continuar} className="space-y-8">
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Os seus dados</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">Os seus dados</p>
                 {fin ? (
                 <div className="mt-4 grid gap-4 sm:grid-cols-2">
                   <CamposInscricaoFin valor={dadosFin} onMudar={mudarFin} erros={errosFin} />
@@ -488,14 +492,14 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                 )}
               </div>
               <div>
-                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[#A60000]">Turma</p>
+                <p className="text-[11px] font-extrabold uppercase tracking-[0.14em] text-[color:var(--insc-d)]">Turma</p>
                 {turma ? (
-                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-[#F4F6F8] px-4 py-3 text-sm text-[#1C3350]">
+                  <div className="mt-3 flex flex-wrap items-center justify-between gap-3 bg-[#F4F6F8] px-4 py-3 text-sm text-[color:var(--insc-p)]">
                     <span><strong>{fmtDataPt(turma.dataInicio)}</strong> · {turma.local} · {turma.horario}{turma.preco != null ? ` · ${eur(turma.preco, true)}` : ""}</span>
-                    <button type="button" onClick={() => setPasso("turma")} className="text-sm font-bold text-[#A60000] underline">Alterar</button>
+                    <button type="button" onClick={() => setPasso("turma")} className="text-sm font-bold text-[color:var(--insc-d)] underline">Alterar</button>
                   </div>
                 ) : (
-                  <p className="mt-3 text-sm leading-6 text-[#1C3350]/65">
+                  <p className="mt-3 text-sm leading-6 text-[color:var(--insc-p)]/65">
                     {prepago
                       ? "Não há turma com data marcada. O pedido segue em acesso imediato, online, e o pagamento fica no passo seguinte."
                       : "Ainda não há turma com data. O pedido fica registado na mesma e a secretaria confirma a turma. O email automático sai ao inscrever."}
@@ -503,24 +507,24 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                 )}
                 <ConsentimentoRgpd aceite={consentimento} onMudar={setConsentimento} className="mt-5" />
                 {prepago && ofertaEstado === "pronto" && (
-                  <p className="mt-4 text-sm leading-6 text-[#1C3350]/60">Nada é cobrado neste passo. A forma de pagamento escolhe-se a seguir.</p>
+                  <p className="mt-4 text-sm leading-6 text-[color:var(--insc-p)]/60">Nada é cobrado neste passo. A forma de pagamento escolhe-se a seguir.</p>
                 )}
               </div>
             </form>
           )}
-          {erro && <p className="mt-4 text-sm text-[#A60000]">{erro}</p>}
+          {erro && <p className="mt-4 text-sm text-[color:var(--insc-d)]">{erro}</p>}
         </div>
-        <footer className="flex flex-col-reverse gap-2 border-t border-[#1C3350]/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-8">
+        <footer className="flex flex-col-reverse gap-2 border-t border-[color:var(--insc-p)]/10 px-5 py-4 sm:flex-row sm:justify-end sm:px-8">
           {passo === "pagamento" && (
-            <button type="button" onClick={() => { setErro(""); setPasso("dados"); }} className="px-5 py-3 text-sm font-bold text-[#1C3350]/70">Voltar aos dados</button>
+            <button type="button" onClick={() => { setErro(""); setPasso("dados"); }} className="px-5 py-3 text-sm font-bold text-[color:var(--insc-p)]/70">Voltar aos dados</button>
           )}
           {passo === "dados" && doCurso.length > 0 && (
-            <button type="button" onClick={() => { setErro(""); setPasso("turma"); }} className="px-5 py-3 text-sm font-bold text-[#1C3350]/70">Voltar à data</button>
+            <button type="button" onClick={() => { setErro(""); setPasso("turma"); }} className="px-5 py-3 text-sm font-bold text-[color:var(--insc-p)]/70">Voltar à data</button>
           )}
           {passo === "feito" ? (
-            <button type="button" onClick={onClose} className="bg-[#1C3350] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
+            <button type="button" onClick={onClose} className="bg-[color:var(--insc-p)] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white">Fechar</button>
           ) : (
-            <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[#A60000] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
+            <button type="submit" form="inscricao-form" disabled={busy || pagamentoBloqueado} className="bg-[color:var(--insc-d)] px-6 py-3 text-sm font-extrabold uppercase tracking-[0.08em] text-white hover:bg-[#8B0000] disabled:opacity-40">
               {busy ? "A enviar…" : passo === "turma" ? "Continuar para os dados" : passo === "pagamento" ? "Confirmar pedido" : prepago ? "Continuar para o pagamento" : "Inscrever-me"}
             </button>
           )}
@@ -535,12 +539,12 @@ function vagasNumero(t: OfertaTurma) {
   return t.vagasMostradas ?? t.vagasLivres;
 }
 
-const inputCls = "w-full border border-[#1C3350]/15 bg-white px-3 py-2.5 text-sm text-[#1C3350] outline-none focus:border-[#1C3350]";
+const inputCls = "w-full border border-[color:var(--insc-p)]/15 bg-white px-3 py-2.5 text-sm text-[color:var(--insc-p)] outline-none focus:border-[color:var(--insc-p)]";
 
 function Campo({ label, children }: { label: string; children: ReactNode }) {
   return (
     <label className="block">
-      <span className="mb-1.5 block text-xs font-bold text-[#1C3350]/70">{label}</span>
+      <span className="mb-1.5 block text-xs font-bold text-[color:var(--insc-p)]/70">{label}</span>
       {children}
     </label>
   );

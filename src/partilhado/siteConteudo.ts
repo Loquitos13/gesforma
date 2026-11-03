@@ -1,4 +1,21 @@
 export const SITE_OMISSAO = {
+  // Janela de pré-inscrição (Sistema › Site › Definições).
+  inscCorPrincipal: "#1C3350",
+  inscCorDestaque: "#A60000",
+  inscEtiqueta: "Pré-inscrição",
+  inscTituloDatas: "Data de início e horário",
+  inscAjudaDatas: "Veja o cronograma, selecione a data pretendida e clique em Continuar.",
+  inscSemDatas: "Ainda não há datas abertas em {local}. Continue e deixe o seu pedido: a secretaria contacta-o quando abrir uma turma.",
+  inscVerCronograma: "Ver cronograma",
+  inscCheia: "Novas datas em breve",
+  inscRecebido: "Pedido recebido",
+  inscRecebidoTexto: "A secretaria da ENA entra em contacto consigo.",
+  // Páginas da ligação pessoal (documentos e pagamento).
+  ligCorDestaque: "#ffa900",
+  ligCorFundo: "#f4f1ea",
+  ligPagamentoTexto: "A secretaria validou os seus documentos de {curso}. Para concluir a inscrição, faça a transferência e anexe o comprovativo.",
+  ligComprovativoAjuda: "Depois de fazer a transferência, anexe aqui o comprovativo (PDF ou imagem).",
+  ligBotaoComprovativo: "Anexar comprovativo",
   tituloSeparador: "ENA | Escola de Negócios e Administração",
   marcaLinha1: "Escola de",
   marcaLinha2: "Negócios e Administração",

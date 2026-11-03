@@ -22,7 +22,7 @@ export function CartaoTurma({
   const [cronograma, setCronograma] = useState(false);
   const temPlano = (turma.plano ?? []).some(s => s.data);
   const anel = escolhida
-    ? "bg-[#fff6e4] ring-[#ffa900] shadow-[0_0_0_3px_rgba(255,169,0,0.18)]"
+    ? "bg-[#fff6e4] ring-[color:var(--lig-d,#ffa900)] shadow-[0_0_0_3px_rgba(255,169,0,0.18)]"
     : "bg-white ring-[#e7e1d6]";
   return (
     <li className={`rounded-xl ring-2 ${anel} ${busy ? "opacity-60" : ""}`}>
@@ -36,10 +36,10 @@ export function CartaoTurma({
           if (busy) return;
           if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onEscolher(); }
         }}
-        className={`cursor-pointer rounded-t-xl px-4 pt-3 outline-none ${escolhida ? "" : "hover:bg-[#faf8f4]"} focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[#ffa900]`}
+        className={`cursor-pointer rounded-t-xl px-4 pt-3 outline-none ${escolhida ? "" : "hover:bg-[#faf8f4]"} focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-[color:var(--lig-d,#ffa900)]`}
       >
         <span className="flex items-start gap-3">
-          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${escolhida ? "border-[#ffa900] bg-[#ffa900] text-[#1b2330]" : "border-[#d4cbbd] bg-white"}`} aria-hidden>
+          <span className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 ${escolhida ? "border-[color:var(--lig-d,#ffa900)] bg-[color:var(--lig-d,#ffa900)] text-[#1b2330]" : "border-[#d4cbbd] bg-white"}`} aria-hidden>
             {escolhida && (
               <svg viewBox="0 0 20 20" fill="currentColor" className="h-3.5 w-3.5">
                 <path fillRule="evenodd" d="M16.7 5.3a1 1 0 010 1.4l-7.2 7.2a1 1 0 01-1.4 0L3.3 9.1a1 1 0 011.4-1.4l3.1 3.1 6.5-6.5a1 1 0 011.4 0z" clipRule="evenodd" />

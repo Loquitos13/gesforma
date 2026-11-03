@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEvent } from "react";
+import { useSiteTextoState } from "./SiteLanding";
+import { corSegura } from "./editor/estilos";
 import {
   ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
   type DadosFinLigacao, type PagamentoPercurso, type TurmaPercurso,
@@ -29,6 +31,8 @@ const TITULO_FECHO: Record<string, string> = {
 };
 
 export function PublicDocumentos({ token }: { token: string }) {
+  // Textos e cores da ligação pessoal (Sistema › Site › Definições).
+  const txt = useSiteTextoState().ler;
   const [nome, setNome] = useState("");
   const [curso, setCurso] = useState("");
   const [tipos, setTipos] = useState<TipoDoc[]>([]);
@@ -252,7 +256,8 @@ export function PublicDocumentos({ token }: { token: string }) {
   const espera = estado === "ready" && percursoConcluido && !encerrada && emFalta.length === 0 && !pagar;
 
   return (
-    <div className="min-h-screen bg-[#f4f1ea] text-[#1b2330]">
+    <div className="min-h-screen bg-[color:var(--lig-f,#f4f1ea)] text-[#1b2330]"
+      style={{ "--lig-d": corSegura(txt("ligCorDestaque")) ?? "#ffa900", "--lig-f": corSegura(txt("ligCorFundo")) ?? "#f4f1ea" } as CSSProperties}>
       <header className="bg-white border-b border-[#e7e1d6]">
         <div className="mx-auto flex max-w-3xl items-center justify-between px-5 py-4">
           <img
@@ -288,7 +293,8 @@ export function PublicDocumentos({ token }: { token: string }) {
         )}
 
         {pagar && pagamento && (
-          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo} />
+          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo}
+            textos={{ intro: txt("ligPagamentoTexto"), ajuda: txt("ligComprovativoAjuda"), botao: txt("ligBotaoComprovativo") }} />
         )}
 
         {espera && (
@@ -340,7 +346,7 @@ export function PublicDocumentos({ token }: { token: string }) {
               {pedeCronograma && (
                 <div className="mt-3 h-1 overflow-hidden rounded-full bg-[#efeae1]" aria-hidden>
                   <div
-                    className="h-full rounded-full bg-[#ffa900] transition-[width] duration-500 ease-out"
+                    className="h-full rounded-full bg-[color:var(--lig-d,#ffa900)] transition-[width] duration-500 ease-out"
                     style={{ width: `${percentagemPasso}%` }}
                   />
                 </div>
@@ -378,7 +384,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                   </div>
                   <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-[#efeae1]">
                     <div
-                      className="h-full rounded-full bg-[#ffa900] transition-[width] duration-700 ease-out"
+                      className="h-full rounded-full bg-[color:var(--lig-d,#ffa900)] transition-[width] duration-700 ease-out"
                       style={{ width: `${percentagemDocs}%` }}
                     />
                   </div>
@@ -407,7 +413,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                           {ok && <p className="mt-1 text-xs text-[#5c564c]">Já validado pela secretaria: não precisa de o enviar outra vez.</p>}
                           {!aberto && !ok && (
                             // Qualquer documento abre-se a qualquer momento: um que falhe não impede os outros.
-                            <button type="button" className="mt-2 text-xs font-semibold underline decoration-[#ffa900] underline-offset-2" onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); }}>
+                            <button type="button" className="mt-2 text-xs font-semibold underline decoration-[color:var(--lig-d,#ffa900)] underline-offset-2" onClick={() => { setFoco(t.id); setFicheiro(null); setError(""); }}>
                               {anexo ? "Substituir" : t.modelo ? "Ler e aceitar" : "Anexar"}
                             </button>
                           )}
@@ -430,7 +436,7 @@ export function PublicDocumentos({ token }: { token: string }) {
                           <form onSubmit={e => void enviar(t.id, t.label, e)} className="px-6 pb-5 sm:px-8">
                             <CampoFicheiro onFile={setFicheiro} />
                             {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
-                            <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[#ffa900] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
+                            <button type="submit" disabled={busy || !ficheiro} className="mt-4 w-full rounded-lg bg-[color:var(--lig-d,#ffa900)] px-4 py-3 text-sm font-semibold text-[#1b2330] disabled:opacity-40 sm:w-auto">
                               {busy ? "A anexar…" : anexo ? `Substituir ${t.label}` : `Anexar ${t.label}`}
                             </button>
                           </form>

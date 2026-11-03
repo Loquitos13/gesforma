@@ -51,7 +51,22 @@ export default function Site(_props: VistaProps) {
   );
 }
 
-const CHAVES = ["tituloSeparador", "rgpdObrigatorio", "rgpdVersao", "evaNome", "evaBoasVindas", "evaObjetivos", "evaWhatsapp"] as const;
+const CHAVES_INSCRICAO = [
+  ["inscEtiqueta", "Etiqueta por cima do nome do curso"], ["inscTituloDatas", "Título da escolha da turma"],
+  ["inscAjudaDatas", "Ajuda por baixo do título"], ["inscSemDatas", "Sem turmas no local ({local} = o local)"],
+  ["inscVerCronograma", "Botão do cronograma"], ["inscCheia", "Turma cheia"], ["inscRecebido", "Etiqueta do pedido recebido"],
+  ["inscRecebidoTexto", "Texto do pedido recebido"],
+] as const;
+const CHAVES_LIGACAO = [
+  ["ligPagamentoTexto", "Texto do passo de pagamento ({curso} = o curso)"], ["ligComprovativoAjuda", "Ajuda do comprovativo"],
+  ["ligBotaoComprovativo", "Botão de anexar o comprovativo"],
+] as const;
+const CORES = [
+  ["inscCorPrincipal", "Pré-inscrição · cor principal"], ["inscCorDestaque", "Pré-inscrição · cor de destaque"],
+  ["ligCorDestaque", "Ligação pessoal · cor de destaque"], ["ligCorFundo", "Ligação pessoal · fundo"],
+] as const;
+const CHAVES = ["tituloSeparador", "rgpdObrigatorio", "rgpdVersao", "evaNome", "evaBoasVindas", "evaObjetivos", "evaWhatsapp",
+  ...CHAVES_INSCRICAO.map(([k]) => k), ...CHAVES_LIGACAO.map(([k]) => k), ...CORES.map(([k]) => k)] as const;
 type Chave = typeof CHAVES[number];
 
 /** Definições do site que não são layout: separador do browser, consentimento e assistente. */
@@ -95,6 +110,34 @@ function DefinicoesSite() {
           <Campo rotulo="WhatsApp da ENA para «Falar com um operador»" ajuda="Com o indicativo, só números (ex.: 351912345678). A pessoa abre a conversa no WhatsApp dela com este número e a ENA responde-lhe diretamente. Vazio: só fica o formulário de contacto.">
             {p => <Entrada {...p} className="max-w-[16rem]" inputMode="numeric" placeholder="351…" value={v.evaWhatsapp} onChange={e => mudar("evaWhatsapp", e.target.value.replace(/\D/g, "").slice(0, 15))} />}
           </Campo>
+        </div>
+      </Cartao>
+      <Cartao titulo="Janela de pré-inscrição" subtitulo="Os textos da janela que abre ao clicar em «Pré-inscrição» num curso.">
+        <div className="flex flex-col gap-3">
+          {CHAVES_INSCRICAO.map(([k, rotulo]) => (
+            <Campo key={k} rotulo={rotulo}>{p => <AreaTexto {...p} rows={2} value={v[k]} onChange={e => mudar(k, e.target.value.slice(0, 800))} />}</Campo>
+          ))}
+        </div>
+      </Cartao>
+      <Cartao titulo="Ligação pessoal" subtitulo="As páginas dos documentos e do pagamento que a pessoa abre pelo email.">
+        <div className="flex flex-col gap-3">
+          {CHAVES_LIGACAO.map(([k, rotulo]) => (
+            <Campo key={k} rotulo={rotulo}>{p => <AreaTexto {...p} rows={2} value={v[k]} onChange={e => mudar(k, e.target.value.slice(0, 800))} />}</Campo>
+          ))}
+        </div>
+      </Cartao>
+      <Cartao titulo="Cores" subtitulo="Da janela de pré-inscrição e das páginas da ligação pessoal.">
+        <div className="grid gap-3 sm:grid-cols-2">
+          {CORES.map(([k, rotulo]) => (
+            <Campo key={k} rotulo={rotulo}>
+              {p => (
+                <div className="flex items-center gap-2">
+                  <input type="color" aria-label={rotulo} value={/^#[0-9a-f]{6}$/i.test(v[k]) ? v[k] : "#000000"} onChange={e => mudar(k, e.target.value)} className="h-9 w-12 cursor-pointer rounded border border-linha" />
+                  <Entrada {...p} className="max-w-[9rem] font-mono" value={v[k]} onChange={e => mudar(k, e.target.value.trim().slice(0, 9))} />
+                </div>
+              )}
+            </Campo>
+          ))}
         </div>
       </Cartao>
       <div><Botao variante="primario" aCarregar={gravar.aCorrer} onClick={() => void gravar.correr(v)}>Gravar definições</Botao></div>

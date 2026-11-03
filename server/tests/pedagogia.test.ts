@@ -75,10 +75,10 @@ async function preparar(ctx: Ctx) {
 }
 
 describe("certificado e fecho", () => {
-  it("regras pedagógicas: a administração e as coordenações; o comercial não", async () => {
+  it("regras pedagógicas: só a administração (Configurações)", async () => {
     const ctx = await arrancar();
     expect((await pedido(ctx, "comercial", "PUT", "/v1/settings/regras_pedagogicas", { values: { assiduidadeMinGold: "50" } })).statusCode).toBe(403);
-    expect((await pedido(ctx, "secretaria", "PUT", "/v1/settings/regras_pedagogicas", { values: { assiduidadeMinGold: "150" } })).statusCode).toBe(400);
+    expect((await pedido(ctx, "secretaria", "PUT", "/v1/settings/regras_pedagogicas", { values: { assiduidadeMinGold: "50" } })).statusCode).toBe(403);
     expect((await pedido(ctx, "admin", "PUT", "/v1/settings/regras_pedagogicas", { values: { assiduidadeMinGold: "150" } })).statusCode).toBe(400);
   });
 

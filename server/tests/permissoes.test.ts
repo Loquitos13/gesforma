@@ -11,8 +11,9 @@ describe("matriz de permissões", () => {
     }
   });
 
-  it("pagamentos: a coordenação Gold e a contabilidade veem; só a contabilidade valida e regista", () => {
-    for (const r of ["admin", "secretaria", "contabilidade"]) expect(podeAceder(r, "GET", "/v1/pagamentos"), r).toBe(true);
+  it("pagamentos: só a administração e a contabilidade (as coordenações não abrem a vista)", () => {
+    for (const r of ["admin", "contabilidade"]) expect(podeAceder(r, "GET", "/v1/pagamentos"), r).toBe(true);
+    for (const r of ["secretaria", "financiada"]) expect(podeAceder(r, "GET", "/v1/pagamentos"), r).toBe(false);
     for (const r of ["admin", "contabilidade"]) {
       expect(podeAceder(r, "POST", "/v1/pagamentos/TRX-1/confirmar"), r).toBe(true);
       expect(podeAceder(r, "POST", "/v1/pagamentos/TRX-1/recusar"), r).toBe(true);
@@ -20,7 +21,7 @@ describe("matriz de permissões", () => {
     }
     expect(podeAceder("secretaria", "POST", "/v1/pagamentos/TRX-1/confirmar")).toBe(false);
     expect(podeAceder("secretaria", "PATCH", "/v1/pagamentos/TRX-1")).toBe(false);
-    expect(podeAceder("secretaria", "POST", "/v1/pagamentos/TRX-1/recibo")).toBe(true);
+    expect(podeAceder("secretaria", "POST", "/v1/pagamentos/TRX-1/recibo")).toBe(false);
     expect(podeAceder("contabilidade", "POST", "/v1/pagamentos/TRX-1/recibo")).toBe(true);
     expect(podeAceder("comercial", "POST", "/v1/pagamentos")).toBe(false);
     expect(podeAceder("financiada", "GET", "/v1/pagamentos")).toBe(false);

@@ -52,11 +52,12 @@ describe("logótipo da entidade", () => {
     expect(html.statusCode).toBe(400);
   });
 
-  it("só o admin carrega; a secretaria vê a informação", async () => {
+  it("só o admin carrega e vê (as Configurações são da administração)", async () => {
     expect((await carregarLogo(ctx, "secretaria", "logo.png", PNG)).statusCode).toBe(403);
     const ok = await carregarLogo(ctx, "admin", "Logo ENA.png", PNG);
     expect(ok.statusCode).toBe(200);
-    const info = await pedido(ctx, "secretaria", "GET", "/v1/configuracoes/logo");
+    expect((await pedido(ctx, "secretaria", "GET", "/v1/configuracoes/logo")).statusCode).toBe(403);
+    const info = await pedido(ctx, "admin", "GET", "/v1/configuracoes/logo");
     expect(info.json().logo).toMatchObject({ mime: "image/png", nome: "Logo ENA.png" });
     expect((await pedido(ctx, "comercial", "GET", "/v1/configuracoes/logo")).statusCode).toBe(403);
   });
@@ -79,7 +80,7 @@ describe("pagamentos: exportação para Excel", () => {
   it("exporta só os pagamentos do filtro e neutraliza fórmulas", async () => {
     await novoPagamento(ctx, { nome: "=HYPERLINK(\"http://mal\")", valor: 90, estado: "Pago" });
     await novoPagamento(ctx, { nome: "Pessoa Pendente", valor: 40, estado: "Pendente" });
-    const r = await pedido(ctx, "secretaria", "GET", "/v1/pagamentos/exportar?situacao=pago");
+    const r = await pedido(ctx, "contabilidade", "GET", "/v1/pagamentos/exportar?situacao=pago");
     expect(r.statusCode).toBe(200);
     expect(r.headers["content-type"]).toContain("spreadsheetml");
     const livro = XLSX.read(r.rawPayload, { type: "buffer" });
@@ -96,7 +97,7 @@ describe("pagamentos: exportação para Excel", () => {
   it("fica registado na auditoria e é recusado a quem não trata de pagamentos", async () => {
     const audit = await ctx.db.query<{ n: number }>("SELECT count(*)::int AS n FROM audit_log WHERE action = 'pagamento.exportar'");
     expect(Number(audit.rows[0]?.n)).toBeGreaterThan(0);
-    for (const perfil of ["comercial", "financiada", "formador"] as const) {
+    for (const perfil of ["comercial", "financiada", "secretaria", "formador"] as const) {
       expect((await pedido(ctx, perfil, "GET", "/v1/pagamentos/exportar")).statusCode).toBe(403);
     }
   });
@@ -116,20 +117,20 @@ describe("pagamentos: recibos", () => {
   });
 
   it("só um pagamento confirmado tem recibo", async () => {
-    const r = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pendente}/recibo`);
+    const r = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pendente}/recibo`);
     expect(r.statusCode).toBe(409);
-    expect((await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${pendente}/recibo`)).statusCode).toBe(404);
+    expect((await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos/${pendente}/recibo`)).statusCode).toBe(404);
   });
 
   it("numera em sequência e mantém o número ao gerar de novo", async () => {
-    const a = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo`);
+    const a = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pago1}/recibo`);
     expect(a.statusCode).toBe(200);
     expect(a.json()).toMatchObject({ novo: true, recibo: { numero: `0001/${ano}` } });
     const b = await pedido(ctx, "admin", "POST", `/v1/pagamentos/${pago2}/recibo`);
     expect(b.json().recibo.numero).toBe(`0002/${ano}`);
-    const denovo = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo`);
+    const denovo = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pago1}/recibo`);
     expect(denovo.json()).toMatchObject({ novo: false, recibo: { numero: `0001/${ano}` } });
-    const estado = await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${pago1}/recibo/estado`);
+    const estado = await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos/${pago1}/recibo/estado`);
     expect(estado.json().recibo.numero).toBe(`0001/${ano}`);
   });
 
@@ -139,14 +140,14 @@ describe("pagamentos: recibos", () => {
     expect((await pedido(ctx, "contabilidade", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125, referencia: "REF-1" })).statusCode).toBe(200);
     // O admin corrige (fica na auditoria), mas o recibo já emitido mantém o valor recebido.
     expect((await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 999 })).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pago1}/recibo`)).statusCode).toBe(200);
     const r = await ctx.db.query<{ dados: { valor: number } }>("SELECT dados FROM recibos WHERE pagamento_id = $1", [pago1]);
     expect(r.rows[0]!.dados.valor).toBe(125);
     await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${pago1}`, { valor: 125 });
   });
 
   it("o PDF abre e diz que não substitui a fatura", async () => {
-    const r = await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${pago1}/recibo`);
+    const r = await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos/${pago1}/recibo`);
     expect(r.statusCode).toBe(200);
     expect(r.headers["content-type"]).toContain("application/pdf");
     expect(r.rawPayload.subarray(0, 5).toString()).toBe("%PDF-");
@@ -156,7 +157,7 @@ describe("pagamentos: recibos", () => {
   });
 
   it("envia por email e regista o destinatário", async () => {
-    const r = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pago1}/recibo/enviar`, {});
+    const r = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pago1}/recibo/enviar`, {});
     expect(r.statusCode).toBe(200);
     expect(r.json().recibo).toMatchObject({ enviadoPara: "ana.recibo@exemplo.pt" });
   });

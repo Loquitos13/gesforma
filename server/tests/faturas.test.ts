@@ -81,8 +81,9 @@ describe("fatura do pagamento", () => {
       expect(m.anexos[0]).toMatch(/^Fatura FT 2026-15 - Rui Costa/);
     }
 
-    // A coordenação Gold vê a fatura; não a envia.
-    const visto = (await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${c.pag}`)).json();
+    // A coordenação Gold não abre os pagamentos; a contabilidade vê a fatura.
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${c.pag}`)).statusCode).toBe(403);
+    const visto = (await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos/${c.pag}`)).json();
     expect(visto.fatura).toMatchObject({ numero: "FT 2026/15", enviadaPara: `contas@costa.pt, ${c.email}` });
     expect(visto.pagamento.fatura_em).toBeTruthy();
     expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${c.pag}/fatura/enviar`)).statusCode).toBe(403);

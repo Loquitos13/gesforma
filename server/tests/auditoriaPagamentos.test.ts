@@ -139,7 +139,7 @@ describe("recibo emitido não muda", () => {
     const ctx = await arrancar();
     const r = await pedido(ctx, "contabilidade", "POST", "/v1/pagamentos", { nome: "Recibo Fixo", valor: 70, metodo: "Numerário", estado: "Pago", email: "fixo@exemplo.pt" });
     const id = r.json().pagamento.id as string;
-    const em = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${id}/recibo`);
+    const em = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${id}/recibo`);
     expect(em.statusCode, em.body).toBe(200);
     const antes = (await ctx.db.query<{ dados: { numero: string; valor: number } }>("SELECT dados FROM recibos WHERE pagamento_id = $1", [id])).rows[0]!.dados;
     expect(antes.valor).toBe(70);
@@ -150,7 +150,7 @@ describe("recibo emitido não muda", () => {
 
     // O admin corrige o pagamento; o recibo emitido e gerado de novo continua com o valor recebido.
     expect((await pedido(ctx, "admin", "PATCH", `/v1/pagamentos/${id}`, { valor: 75 })).statusCode).toBe(200);
-    expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${id}/recibo`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${id}/recibo`)).statusCode).toBe(200);
     const depois = (await ctx.db.query<{ dados: { valor: number } }>("SELECT dados FROM recibos WHERE pagamento_id = $1", [id])).rows[0]!.dados;
     expect(depois.valor).toBe(70);
   });
@@ -170,12 +170,12 @@ describe("recibo emitido não muda", () => {
     const f = await criarGold(ctx, { nome: "Marta", apelido: "Empresa", email, curso, valor: 200 });
     expect((await pedido(ctx, "secretaria", "POST", `/v1/formandos/gold/${f}/registar-pagamento`, { metodo: "Transferência bancária", valor: 200 })).statusCode).toBe(200);
     const mov = (await ctx.db.query<{ id: string }>("SELECT id FROM pagamentos WHERE formando_id = $1", [f])).rows[0]!.id;
-    expect((await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${mov}/recibo`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${mov}/recibo`)).statusCode).toBe(200);
     const dados = (await ctx.db.query<{ dados: { pagador: { nome: string; nif: string }; formando?: string } }>(
       "SELECT dados FROM recibos WHERE pagamento_id = $1", [mov])).rows[0]!.dados;
     expect(dados.pagador).toMatchObject({ nome: "Empresa Faturada, Lda", nif: "509999999" });
     expect(dados.formando).toBe("Marta Empresa");
-    const pdf = await pedido(ctx, "secretaria", "GET", `/v1/pagamentos/${mov}/recibo`);
+    const pdf = await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos/${mov}/recibo`);
     expect(pdf.statusCode).toBe(200);
   });
 

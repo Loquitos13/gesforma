@@ -117,7 +117,7 @@ describe("servidor: o comercial não chega à gestão", () => {
     ];
     for (const [m, p] of bloqueadas) expect(podeAceder("comercial", m, p), `${m} ${p}`).toBe(false);
     // A secretaria continua a chegar lá.
-    for (const [m, p] of bloqueadas.filter(([, p]) => !p.startsWith("/v1/turma-regras") && !p.startsWith("/v1/settings"))) {
+    for (const [m, p] of bloqueadas.filter(([, p]) => !p.startsWith("/v1/turma-regras") && !p.startsWith("/v1/settings") && !p.startsWith("/v1/pagamentos"))) {
       expect(podeAceder("secretaria", m, p), `secretaria ${m} ${p}`).toBe(true);
     }
   });

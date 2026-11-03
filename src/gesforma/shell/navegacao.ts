@@ -102,8 +102,9 @@ function gruposDoPerfil(role: string): string[] {
 
 /** O Sistema de cada perfil: os utilizadores (e as integrações, dentro das Configurações) são só da administração. */
 const SISTEMA_DO_PERFIL: Record<string, Vista[]> = {
-  secretaria: ["emails", "pagamentos", "site", "configuracoes"],
-  financiada: ["emails", "site", "configuracoes"],
+  // As coordenações: emails e site (pagamentos, configurações e utilizadores não).
+  secretaria: ["emails", "site"],
+  financiada: ["emails", "site"],
   contabilidade: ["pagamentos", "emails"],
 };
 

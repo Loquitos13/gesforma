@@ -175,7 +175,7 @@ describe("ZIP do dossiê (Gold)", () => {
     expect(p.statusCode, p.body).toBe(200);
     const pagamento = p.json<{ pagamento: { id: string } }>().pagamento.id;
     await ctx.db.query("UPDATE pagamentos SET turma_id = $2, formando_id = $3 WHERE id = $1", [pagamento, id, fid]);
-    const r = await pedido(ctx, "secretaria", "POST", `/v1/pagamentos/${pagamento}/recibo`);
+    const r = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagamento}/recibo`);
     expect(r.statusCode, r.body).toBe(200);
     const f = (await ctx.db.query<{ kind: string; formando: string; folder_path: string }>(
       "SELECT f.kind, f.formando, f.folder_path FROM recibos r JOIN drive_files f ON f.id = r.drive_file_id WHERE r.pagamento_id = $1", [pagamento],

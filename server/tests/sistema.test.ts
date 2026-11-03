@@ -30,7 +30,7 @@ describe("Pagamentos", () => {
     const ctx = await arrancar();
     const { pagId, leadId } = await novoPagamentoComComprovativo(`rita.${randomUUID().slice(0, 6)}@exemplo.pt`);
 
-    let lista = await pedido(ctx, "secretaria", "GET", `/v1/pagamentos?q=${pagId}`);
+    let lista = await pedido(ctx, "contabilidade", "GET", `/v1/pagamentos?q=${pagId}`);
     expect(lista.statusCode).toBe(200);
     let linha = (lista.json() as Pagina<LinhaPag>).linhas[0]!;
     expect(linha.situacao).toBe("a_confirmar");
@@ -58,7 +58,7 @@ describe("Pagamentos", () => {
     const outra = await pedido(ctx, "contabilidade", "POST", `/v1/pagamentos/${pagId}/confirmar`);
     expect(outra.statusCode).toBe(200);
     expect(outra.json()).toMatchObject({ jaConfirmado: true });
-    lista = await pedido(ctx, "secretaria", "GET", "/v1/pagamentos?situacao=pago");
+    lista = await pedido(ctx, "contabilidade", "GET", "/v1/pagamentos?situacao=pago");
     linha = (lista.json() as Pagina<LinhaPag>).linhas.find(l => l.id === pagId)!;
     expect(linha.situacao).toBe("pago");
   });

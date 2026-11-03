@@ -46,7 +46,8 @@ export const CAPACIDADES = {
   "turmas.reabrir": PEDAGOGIA,
   // Utilizadores e integrações ficam com a administração; o resto do Sistema também é das coordenações.
   "utilizadores.gerir": ADMIN,
-  "configuracoes.editar": COORDENACAO,
+  // Configurações: só a administração (as coordenações editam o Site, não as Configurações).
+  "configuracoes.editar": ADMIN,
   "configuracoes.integracoes": ADMIN,
   "site.editar": COORDENACAO,
   "auditoria.ver": COORDENACAO,

@@ -55,7 +55,7 @@ const seccao = (sufixo: string, ancora: string, conteudo: No[], fundo = "") => (
 });
 
 export const CONTACTOS = [
-  "R. do Conselheiro Veloso da Cruz 524, 4400-705 Vila Nova de Gaia",
+  "R. do Conselheiro Veloso da Cruz 524, 4400-092 Vila Nova de Gaia",
   "Telefone: 223 781 100 | tel:+351223781100",
   "Telemóvel: 912 744 205 | tel:+351912744205",
   "geral@ena.pt | mailto:geral@ena.pt",
@@ -157,7 +157,7 @@ export const AJUSTES: Ajuste[] = [
         type: "Mapa",
         props: {
           id: id("Mapa", "inicio"), titulo: "Onde estamos", texto: "",
-          morada: "Escola de Negócios e Administração, R. do Conselheiro Veloso da Cruz 524, 4400-705 Vila Nova de Gaia",
+          morada: "Escola de Negócios e Administração, R. do Conselheiro Veloso da Cruz 524, 4400-092 Vila Nova de Gaia",
           contactos: CONTACTOS, altura: 380, aparencia: estilo(),
         },
       }]));
@@ -175,6 +175,16 @@ export const AJUSTES: Ajuste[] = [
         return { ...c, linhas: linhas.replace(/^(Política de privacidade\s*\|[^\n]*)$/mi, "$1\nTermos e condições | /termos-e-condicoes") };
       });
     }),
+  },
+  {
+    // Código postal da morada de Gaia: 4400-092 (o rodapé e o mapa «Onde estamos» tinham 4400-705).
+    id: "2026-11-codigo-postal",
+    paginas: ["moldura", "inicio", "catalogo", "empresas", "noticias", "noticia", "curso", "servico", "area"],
+    aplicar: p => {
+      const novo = JSON.parse(JSON.stringify(p).split("4400-705").join("4400-092")) as Pagina;
+      p.root = novo.root;
+      p.content = novo.content;
+    },
   },
   {
     // «Notícias» passa a «Notícias e artigos» (título da página e regresso à lista).

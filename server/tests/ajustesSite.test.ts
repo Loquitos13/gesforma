@@ -63,11 +63,16 @@ describe("ajustes ao conteúdo do site", () => {
     const { aplicarAjustesSite, criarPaginasSite } = await import("../src/db/ajustesSite.js");
     const { redirecionamentoAntigo } = await import("../src/seoRedirecionamentos.js");
     await ctx.db.query("DELETE FROM ajustes_site");
-    await ctx.db.query("DELETE FROM site_paginas WHERE pagina IN ('moldura', 'livre-politica-de-privacidade', 'livre-termos-e-condicoes')");
+    await ctx.db.query("DELETE FROM site_paginas WHERE pagina IN ('moldura', 'inicio', 'livre-politica-de-privacidade', 'livre-termos-e-condicoes')");
     expect(await redirecionamentoAntigo(ctx.db, "/termos-e-condicoes")).toMatchObject({ estado: 302 });
     const ligacoes = "Notícias e artigos | /noticias\nPolítica de privacidade | https://ena.pt/politica-de-privacidade\nLivro de reclamações | https://www.livroreclamacoes.pt";
     await ctx.db.query("INSERT INTO site_paginas (pagina, rascunho, publicado) VALUES ('moldura', $1::jsonb, $1::jsonb)", [JSON.stringify({
       root: { props: {} }, content: [{ type: "Rodape", props: { id: "r", colunas: [{ titulo: "Ligações", linhas: ligacoes }] } }],
+    })]);
+    // O mapa «Onde estamos» com o código postal antigo (também nos valores por ecrã).
+    const morada = "R. do Conselheiro Veloso da Cruz 524, 4400-705 Vila Nova de Gaia";
+    await ctx.db.query("INSERT INTO site_paginas (pagina, rascunho, publicado) VALUES ('inicio', $1::jsonb, $1::jsonb)", [JSON.stringify({
+      root: { props: {} }, content: [{ type: "Mapa", props: { id: "m", morada, contactos: morada, __disp: { base: { morada } } } }],
     })]);
 
     await aplicarAjustesSite(ctx.db);
@@ -89,6 +94,10 @@ describe("ajustes ao conteúdo do site", () => {
     expect(textoPolitica).toContain("VIVERAPRENDER - Escola de Negócios e Administração, Lda.");
     expect(textoPolitica).toContain("NIPC 505654296");
     expect(textoPolitica).not.toMatch(/cyber|escolamagica/i);
+    expect(textoPolitica).toContain("4400-092 Vila Nova de Gaia");
+    const inicio = JSON.stringify((await ctx.db.query("SELECT rascunho, publicado FROM site_paginas WHERE pagina = 'inicio'")).rows[0]);
+    expect(inicio).not.toContain("4400-705");
+    expect(inicio.match(/4400-092/g)?.length).toBe(6);
     const dadosTermos = (await publica("termos-e-condicoes")).dados as { content: { props: { conteudo: { props: { conteudo: { props: Record<string, unknown> }[] } }[] } }[] };
     const blocosTermos = dadosTermos.content[0]!.props.conteudo[0]!.props.conteudo.map(b => b.props);
     expect(blocosTermos[0]).toMatchObject({ nivel: "h1", texto: "Termos e condições de inscrição e acesso" });

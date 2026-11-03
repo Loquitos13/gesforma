@@ -1,7 +1,7 @@
 /**
  * «Política de privacidade» e «Termos e condições»: o texto do site antigo (antigo.ena.pt), com gralhas evidentes
  * corrigidas. A responsável é a VIVERAPRENDER - Escola de Negócios e Administração, Lda. (NIF 505654296, sede na
- * R. do Conselheiro Veloso da Cruz, 524, 4400-093 Vila Nova de Gaia, como no registo da empresa); a política antiga
+ * R. do Conselheiro Veloso da Cruz, 524, 4400-092 Vila Nova de Gaia); a política antiga
  * trazia os dados de outra empresa e de outro site. Criam-se uma vez, no arranque, como páginas livres já publicadas
  * (Sistema › Site); depois editam-se em blocos como as outras.
  */
@@ -16,7 +16,7 @@ const POLITICA: PaginaLegal = {
   titulo: "Política de privacidade",
   partes: [
     ["titulo", "Identificação do responsável"],
-    ["texto", "O presente “Website” é propriedade e é gerido por VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia, e com o NIPC 505654296, doravante designada por ENA."],
+    ["texto", "O presente “Website” é propriedade e é gerido por VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-092 Vila Nova de Gaia, e com o NIPC 505654296, doravante designada por ENA."],
     ["texto", "Enquanto responsável pela recolha e tratamento da informação relativa ao sítio, a ENA procurará garantir que os dados pessoais recolhidos sejam:"],
     ["lista", [
       "Objeto de tratamento legal, lícito, leal e transparente;",
@@ -27,7 +27,7 @@ const POLITICA: PaginaLegal = {
     ]],
     ["texto", "A ENA pode ser contactada pelos seguintes meios:"],
     ["lista", [
-      "Via postal: Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia",
+      "Via postal: Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-092 Vila Nova de Gaia",
       "Correio eletrónico: geral@ena.pt",
     ]],
     ["titulo", "Recolha e tratamento de dados pessoais"],
@@ -109,7 +109,7 @@ const TERMOS: PaginaLegal = {
   titulo: "Termos e condições de inscrição e acesso",
   partes: [
     ["titulo", "Preâmbulo"],
-    ["texto", "Os Termos e Condições de Inscrição e Acesso são acordados entre VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia, com o NIPC 505654296, doravante designada por Escola de Negócios e Administração, e as pessoas que desejem inscrever-se nos cursos no site www.ena.pt, doravante designadas por utilizador."],
+    ["texto", "Os Termos e Condições de Inscrição e Acesso são acordados entre VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-092 Vila Nova de Gaia, com o NIPC 505654296, doravante designada por Escola de Negócios e Administração, e as pessoas que desejem inscrever-se nos cursos no site www.ena.pt, doravante designadas por utilizador."],
     ["titulo", "Definição do Serviço"],
     ["texto", "A Escola de Negócios e Administração disponibiliza serviços e cursos de formação para ambiente e-learning e b-learning. Os serviços e cursos compreendem:"],
     ["lista", [
@@ -139,7 +139,7 @@ const TERMOS: PaginaLegal = {
     ["texto", "A inscrição de acesso e contrato para aceder ao serviço Escola de Negócios e Administração poderá ser livremente resolvido com base nos termos do art. 9.º da Lei n.º 47/2014, de 28 de julho, devendo para tal o utilizador comunicar a sua intenção de rescisão no prazo máximo de 15 dias a contar da data da disponibilização do serviço."],
     ["texto", "O utilizador deverá comunicar a sua intenção de rescindir livremente o contrato através de uma das seguintes formas:"],
     ["lista", [
-      "Carta registada com aviso de receção para a morada Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia;",
+      "Carta registada com aviso de receção para a morada Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-092 Vila Nova de Gaia;",
       "Email, para o email geral@ena.pt;",
       "Telefone 916 355 576.",
     ]],

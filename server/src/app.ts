@@ -135,7 +135,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       return reply.code(403).send({ error: "Sem permissão para esta operação." });
     }
     // Pré-inscrições, propostas e contratos: a regra do RLS também aqui (não depende da base a aplicar).
-    const linha = kind === "staff" && req.actor.role !== "admin" && req.actor.role !== "secretaria" ? linhaCrmDoCaminho(path) : null;
+    const linha = kind === "staff" && req.actor.role !== "admin" ? linhaCrmDoCaminho(path) : null;
     if (linha && !(await linhaVisivel(db, linha.tabela, linha.id, req.actor))) {
       return reply.code(404).send({ error: "registo não encontrado" });
     }

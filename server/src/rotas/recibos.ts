@@ -18,8 +18,8 @@ const exportarQuery = periodoQuery.extend({
 });
 const envioSchema = z.object({ para: z.string().trim().max(254).optional() }).default({});
 
-/** Perfis que podem ver o NIF de quem pagou (a lista de pagamentos já é só da secretaria e do admin). */
-const VEEM_NIF = new Set(["admin", "secretaria"]);
+/** Perfis que podem ver o NIF de quem pagou (a lista de pagamentos é só da coordenação Gold, da contabilidade e do admin). */
+const VEEM_NIF = new Set(["admin", "secretaria", "contabilidade"]);
 
 function nomeFicheiro(texto: string) {
   return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^\w.\- ]/g, "").trim().slice(0, 120) || "recibo";

@@ -2,7 +2,7 @@ import { Filtros, many, one, padraoPesquisa, valor, type Consulta } from "./sql.
 
 /** Contas de acesso (equipa, formadores e formandos). */
 
-export const PERFIS = ["admin", "secretaria", "comercial", "financiada", "formador", "formando"] as const;
+export const PERFIS = ["admin", "secretaria", "comercial", "financiada", "contabilidade", "formador", "formando"] as const;
 export type PerfilUtilizador = (typeof PERFIS)[number];
 
 export type LinhaUtilizador = {

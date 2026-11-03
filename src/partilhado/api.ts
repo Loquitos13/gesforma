@@ -5,7 +5,7 @@ export { ApiError };
 export * from "./api/pedagogia";
 export * from "./api/publico";
 
-export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "formador" | "formando";
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando";
 export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; mustChangePassword?: boolean };
 
 export type DriveStatus = {

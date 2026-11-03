@@ -1,7 +1,7 @@
 // API do domínio "utilizadores": contas, perfis, palavras-passe e sessões (só administração).
 import { api, enviar, qs } from "./cliente";
 
-export type PerfilUtilizador = "admin" | "secretaria" | "comercial" | "financiada" | "formador" | "formando";
+export type PerfilUtilizador = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando";
 
 export type Utilizador = {
   id: string;

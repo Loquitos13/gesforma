@@ -79,17 +79,33 @@ export const MENU_FORMADOR: GrupoMenu = {
 /** Vistas que o formador pode abrir. */
 export const VISTAS_FORMADOR = new Set<Vista>(["formador-turmas", "formador-calendario", "formador-perfil", "gold-cockpit-turma", "fin-cockpit-turma", "fin-presencas", "gold-turmas"]);
 
-/** Cada perfil começa no seu painel: a Comercial Gold não entra na Financiada e vice-versa. */
+/**
+ * Onde cada perfil começa. As coordenações não têm painel (pedido do cliente): começam nas pré-inscrições da sua
+ * linha; a contabilidade começa nos pagamentos.
+ */
 export function painelDoPerfil(role: string): Vista {
   if (role === "formador") return "formador-turmas";
-  return role === "financiada" ? "fin-painel" : "gold-painel";
+  if (role === "contabilidade") return "pagamentos";
+  if (role === "secretaria") return "gold-preinscricoes";
+  if (role === "financiada") return "fin-preinscricoes";
+  return "gold-painel";
 }
 
+/** Cada coordenação só tem a sua linha (Gold ou Financiada); a contabilidade só o Sistema (pagamentos e emails). */
 function gruposDoPerfil(role: string): string[] {
   if (role === "formador") return ["Formador"];
+  if (role === "contabilidade") return ["Sistema"];
   if (role === "financiada") return ["Financiada", "Gestão", "Sistema"];
+  if (role === "secretaria") return ["Gold", "Gestão", "Sistema"];
   return ["Gold", "Financiada", "Gestão", "Sistema"];
 }
+
+/** O Sistema de cada perfil: os utilizadores (e as integrações, dentro das Configurações) são só da administração. */
+const SISTEMA_DO_PERFIL: Record<string, Vista[]> = {
+  secretaria: ["emails", "pagamentos", "site", "configuracoes"],
+  financiada: ["emails", "site", "configuracoes"],
+  contabilidade: ["pagamentos", "emails"],
+};
 
 /** O comercial só vende: do menu ficam as vistas de `VISTAS_COMERCIAL` (submenus sem filhos desaparecem). */
 function soVendas(g: GrupoMenu): GrupoMenu {
@@ -109,19 +125,15 @@ export function menuDoPerfil(role: string): GrupoMenu[] {
   if (role === "formador") return [MENU_FORMADOR];
   if (role === "comercial") return MENU.map(soVendas).filter(g => g.items.length);
   const permitidos = gruposDoPerfil(role);
+  const semPainel = role !== "admin";
   return MENU
     .filter(g => permitidos.includes(g.group))
-    // «Cronogramas» é a vista de vendas das turmas: quem gere turmas usa as Turmas.
-    .map(g => ({ ...g, items: g.items.filter(item => item.view !== "gold-cronogramas") }))
+    // «Cronogramas» é a vista de vendas das turmas: quem gere turmas usa as Turmas. Os painéis são só da administração.
+    .map(g => ({ ...g, items: g.items.filter(item => item.view !== "gold-cronogramas" && !(semPainel && (item.view === "gold-painel" || item.view === "fin-painel"))) }))
     .map(g => (g.group !== "Sistema" || role === "admin")
       ? g
-      : { ...g, items: g.items.filter(item => item.view !== "utilizadores" && item.view !== "site") })
-    // A coordenação da Financiada só tem, em Sistema, os emails automáticos (modelos e regras).
-    .map(g => (g.group === "Sistema" && role === "financiada") ? { ...g, items: g.items.filter(item => item.view === "emails") } : g)
-    // Os serviços para empresas são conteúdo do site: só a administração os edita (o servidor também o impõe).
-    .map(g => (g.group === "Gestão" && role !== "admin") ? { ...g, items: g.items.filter(item => item.view !== "empresas-servicos") } : g)
-    // O blog é da secretaria: a Financiada vê só as listas de opções em Gestão (o comercial não tem Gestão, ver soVendas).
-    .map(g => (g.group === "Gestão" && role === "financiada") ? { ...g, items: g.items.filter(item => item.label !== "Blog") } : g);
+      : { ...g, items: g.items.filter(item => item.view != null && (SISTEMA_DO_PERFIL[role] ?? []).includes(item.view)) })
+    .filter(g => g.items.length);
 }
 
 /** Vistas sem entrada própria no menu que qualquer perfil da equipa pode abrir. */

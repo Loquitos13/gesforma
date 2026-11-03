@@ -1,4 +1,4 @@
-import { ADMIN, EQUIPA, FIN, GOLD, MARKETING, PEDAGOGIA, SECRETARIA, type Perfil } from "./perfis.js";
+import { ADMIN, BLOG, COORDENACAO, EQUIPA, FIN, GOLD, MARKETING, PAGAMENTOS, PEDAGOGIA, SECRETARIA, type Perfil } from "./perfis.js";
 
 /**
  * Capacidades que o cliente usa para mostrar ou esconder acções (`/v1/me` → `pode`).
@@ -9,34 +9,38 @@ export const CAPACIDADES = {
   "gold.ver": GOLD,
   "fin.ver": FIN,
   "gestao.ver": EQUIPA,
-  "sistema.ver": SECRETARIA,
+  "sistema.ver": COORDENACAO,
   "sistema.admin": ADMIN,
   "crm.escrever": EQUIPA,
   "crm.apagar": PEDAGOGIA,
   "crm.validarDocumentos": PEDAGOGIA,
-  "pagamentos.ver": SECRETARIA,
+  "pagamentos.ver": PAGAMENTOS,
+  // TODO (cliente): se a validação do comprovativo pela contabilidade também confirma o pagamento e conclui a
+  // inscrição. Até lá, confirmar e recusar ficam com a coordenação Gold.
   "pagamentos.confirmar": SECRETARIA,
-  "emails.gerir": EQUIPA,
+  "pagamentos.faturas": PAGAMENTOS,
+  "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
   "emails.historico": SECRETARIA,
   // O comercial só vende: não edita cursos nem gere turmas (ver permissoes/comercial.ts).
   "cursos.editar": SECRETARIA,
   "cursos.apagar": SECRETARIA,
-  "cursosFin.editar": PEDAGOGIA,
+  "cursosFin.editar": FIN,
   "campanhas.gerir": MARKETING,
   "campanhas.apagar": SECRETARIA,
-  "blog.gerir": MARKETING,
+  "blog.gerir": BLOG,
   "formadores.gerir": PEDAGOGIA,
   "turmas.gerir": PEDAGOGIA,
   "turmasFin.gerir": PEDAGOGIA,
   "formandosFin.gerir": PEDAGOGIA,
   "formandos.apagar": SECRETARIA,
   "pedagogia.gerir": PEDAGOGIA,
-  "turmas.reabrir": ADMIN,
+  "turmas.reabrir": PEDAGOGIA,
+  // Utilizadores e integrações ficam com a administração; o resto do Sistema também é das coordenações.
   "utilizadores.gerir": ADMIN,
-  "configuracoes.editar": SECRETARIA,
+  "configuracoes.editar": COORDENACAO,
   "configuracoes.integracoes": ADMIN,
-  "site.editar": ADMIN,
-  "auditoria.ver": ADMIN,
+  "site.editar": COORDENACAO,
+  "auditoria.ver": COORDENACAO,
   "formador.area": ["formador"] as Perfil[],
 } satisfies Record<string, Perfil[]>;
 

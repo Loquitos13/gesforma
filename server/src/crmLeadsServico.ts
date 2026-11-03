@@ -41,10 +41,10 @@ export function regimeDaLinha(row: { regime?: unknown } | null | undefined): "go
   return String(row?.regime ?? "") === "fin" ? "fin" : "gold";
 }
 
-/** O perfil decide o regime: comercial → Gold, financiada → Fin; os restantes escolhem. */
+/** O perfil decide o regime: comercial e coordenação Gold → Gold, financiada → Fin; o admin escolhe. */
 export function regimeDoPedido(role: string | undefined, pedido?: string): "gold" | "fin" {
   if (role === "financiada") return "fin";
-  if (role === "comercial") return "gold";
+  if (role === "comercial" || role === "secretaria") return "gold";
   return pedido === "fin" ? "fin" : "gold";
 }
 

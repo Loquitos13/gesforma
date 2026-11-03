@@ -4,6 +4,7 @@ import { satisfacaoPublica } from "../areaFormando.js";
 import { ID_AVALIACOES_GOOGLE } from "../avaliacoesGoogle.js";
 import { guardarImagemHero } from "../cursoImagens.js";
 import { normalizarLembrete } from "../lembretePre.js";
+import { pode } from "../permissoes/capacidades.js";
 import { ehSegredo, settingsSemSegredos } from "../opsVisibilidade.js";
 import { DEFINICOES_SO_ADMIN, MAX_TELEFONES_ZONA, lerEntidadePublica, validarDefinicoes } from "../regrasConfig.js";
 import * as settings from "../repos/settings.js";
@@ -42,8 +43,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = p.params.id;
     // A chave e a cópia das avaliações Google só se mudam pela secção própria (a chave fica cifrada).
     if (id === ID_AVALIACOES_GOOGLE) return reply.code(403).send({ error: "Use Configurações › Avaliações Google." });
-    if (DEFINICOES_SO_ADMIN.has(id) && req.actor?.role !== "admin") {
-      return reply.code(403).send({ error: id === "site" ? "só o administrador edita o site" : "Só o administrador altera esta definição." });
+    // Site, SEO, lembretes, regras pedagógicas e entidade: a administração e as coordenações (os segredos continuam só do admin).
+    if (DEFINICOES_SO_ADMIN.has(id) && !pode(req.actor?.role ?? "", "configuracoes.editar")) {
+      return reply.code(403).send({ error: id === "site" ? "Só a administração e as coordenações editam o site." : "Só a administração e as coordenações alteram esta definição." });
     }
     const parsed = (id === "site" ? siteSchema : settingsSchema).safeParse(req.body);
     if (!parsed.success) return reply.code(400).send({ error: "pedido inválido" });
@@ -66,7 +68,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.post("/v1/site/hero/:slot/imagem", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (req.actor?.role !== "admin") return reply.code(403).send({ error: "só o administrador edita o site" });
+    if (!pode(req.actor?.role ?? "", "site.editar")) return reply.code(403).send({ error: "Só a administração e as coordenações editam o site." });
     const v = validar(reply, { params: slotParam }, req);
     if (!v) return;
     let ficheiro: { nome: string; mime: string; bytes: Buffer } | null = null;

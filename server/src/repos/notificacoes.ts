@@ -199,8 +199,14 @@ export async function construirNotificacoes(db: Db, actorId: string, role = "", 
     }
   }
 
+  // Cada coordenação só vê a sua linha; a contabilidade, só os pagamentos.
+  const vista = (x: Nova) => String(x.view ?? "");
   const visiveis = role === "formador"
     ? out.filter(x => x.tab !== "dtp" && x.view !== "pagamentos" && x.view !== "fin-formandos" && !/pagament|dossiê|dtp|document/i.test(`${x.titulo} ${x.texto}`))
-    : role === "comercial" ? paraComercial(out) : out;
+    : role === "comercial" ? paraComercial(out)
+    : role === "secretaria" ? out.filter(x => !vista(x).startsWith("fin-"))
+    : role === "financiada" ? out.filter(x => !vista(x).startsWith("gold-") && vista(x) !== "pagamentos")
+    : role === "contabilidade" ? out.filter(x => vista(x) === "pagamentos")
+    : out;
   return visiveis.map(x => ({ ...x, lida: lidas.has(x.chave) }));
 }

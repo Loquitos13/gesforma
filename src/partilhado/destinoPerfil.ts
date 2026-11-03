@@ -2,7 +2,10 @@
 export function destinoDoPerfil(role: string) {
   if (role === "formando") return "/area-formando";
   if (role === "formador") return "/gesforma/formador/turmas";
-  if (role === "financiada") return "/gesforma/financiada";
+  // As coordenações não têm painel: começam nas pré-inscrições; a contabilidade, nos pagamentos.
+  if (role === "financiada") return "/gesforma/financiada/pre-inscricoes";
+  if (role === "secretaria") return "/gesforma/gold/pre-inscricoes";
+  if (role === "contabilidade") return "/gesforma/sistema/pagamentos";
   return "/gesforma/gold";
 }
 

@@ -47,6 +47,8 @@ function publicOrigin(req: FastifyRequest) {
 type Actor = NonNullable<FastifyRequest["actor"]>;
 
 /** Ficheiros sem regime (conteúdos gerais) vêem-se em ambos; os outros só por quem trabalha nesse regime. */
+const FICHEIROS_CONTABILIDADE = new Set(["comprovativo-pagamento", "Pagamentos", "fatura"]);
+
 function veRegime(role: string, regime: string | null) {
   return (regime !== "gold" && regime !== "fin") || pode(role, regime === "fin" ? "fin.ver" : "gold.ver");
 }
@@ -99,6 +101,8 @@ async function comercialVeFicheiro(db: Deps["db"], actor: Actor, f: Pick<DriveFi
 
 /** O formador só vê o que enviou, os documentos da sua ficha e os materiais das suas turmas. */
 async function podeVerFicheiro(db: Deps["db"], actor: Actor, f: DriveFileRow) {
+  // A contabilidade só abre o que é dos pagamentos: comprovativos, recibos e faturas.
+  if (actor.role === "contabilidade") return FICHEIROS_CONTABILIDADE.has(f.kind);
   if (eContrato(f)) return veContrato(db, actor, f);
   if (actor.role === "comercial") return comercialVeFicheiro(db, actor, f);
   if (actor.role !== "formador") return veRegime(actor.role, f.regime);

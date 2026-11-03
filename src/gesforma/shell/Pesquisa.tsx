@@ -21,9 +21,9 @@ function deResultado(h: GlobalSearchHit): Linha {
 
 /** Regimes cujo trabalho o perfil vê. */
 function regimesDoPerfil(role: string): RegimePainel[] {
-  if (role === "comercial") return ["gold"];
+  if (role === "comercial" || role === "secretaria") return ["gold"];
   if (role === "financiada") return ["fin"];
-  if (role === "admin" || role === "secretaria") return ["gold", "fin"];
+  if (role === "admin") return ["gold", "fin"];
   return [];
 }
 

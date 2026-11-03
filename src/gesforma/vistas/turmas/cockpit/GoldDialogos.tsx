@@ -112,6 +112,7 @@ export function InscreverGold({ aberto, onFechar, turma, activa, membros, onActi
             const { nome, apelido } = splitNome(dados.nome);
             const id = await inscreverNaTurma("gold", turma, {
               nome, apelido: apelido || "-", email: dados.email, telf: dados.telf || "", pagamento: pagamentoDaFicha(dados.opcoes),
+              semEmails: dados.opcoes.semEmails,
             });
             if (id && dados.opcoes.criarAcesso) await darAcessoManual("gold", id);
           }}

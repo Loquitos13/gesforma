@@ -24,6 +24,7 @@ import { itemRecusa, pendenciaDocsLead } from "./pendenciaDocs.js";
 import * as repo from "./repos/avisosDocumentos.js";
 import { modeloEmail } from "./repos/emails.js";
 import { notaDoSistemaFin } from "./repos/finPipeline.js";
+import { semEmailsDocsPagamento } from "./repos/formandosDocs.js";
 import * as leads from "./repos/leads.js";
 import { isEmail, normalizeEmail } from "./security.js";
 import { areaDoRegime, type AreaEmail } from "../../src/partilhado/emailAreas.js";
@@ -162,6 +163,11 @@ export async function avisarRecusasFin(db: Db, formandoId: number, opts: { forca
   if (!vista) return null;
   if (!(await fichaFinAberta(db, formandoId))) return { enviado: false, erro: "A ligação de documentos deste formando está fechada." };
   const porAvisar = await repo.recusasPorAvisarFin(db, formandoId);
+  // Ficha sem emails de documentos (inscrição feita pela equipa): a recusa fica só na ficha.
+  if (await semEmailsDocsPagamento(db, "fin", formandoId)) {
+    await repo.marcarRecusasAvisadasFin(db, formandoId, porAvisar);
+    return { enviado: false, erro: "Esta ficha está sem emails de documentos (inscrição feita pela equipa)." };
+  }
   const recusados = recusadosFin(vista);
   if (!recusados.length) {
     await repo.marcarRecusasAvisadasFin(db, formandoId, porAvisar);

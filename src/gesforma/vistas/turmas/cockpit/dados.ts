@@ -218,14 +218,19 @@ export function useLeadsDoCurso(regime: Regime, curso: string | undefined, ativo
 /** Inscreve um formando na turma (cria a ficha no servidor, que recalcula a ocupação). */
 export async function inscreverNaTurma(regime: Regime, turma: { id: number; nome: string; curso: string; local: string }, dados: {
   nome: string; apelido: string; email: string; telf: string; pagamento?: Record<string, unknown>;
+  /** Inscrição feita pela equipa: sem emails de documentos nem de pagamento. */
+  semEmails?: boolean;
 }) {
   try {
     const r = regime === "gold"
       ? await apiCriarFormandoGold({
         nome: dados.nome, apelido: dados.apelido, email: dados.email, telf: dados.telf,
-        curso: turma.curso, local: turma.local, turmaId: turma.id, ...(dados.pagamento ?? {}),
+        curso: turma.curso, local: turma.local, turmaId: turma.id, semEmails: dados.semEmails, ...(dados.pagamento ?? {}),
       } as Parameters<typeof apiCriarFormandoGold>[0])
-      : await apiCriarFormandoFin({ nome: dados.nome, apelido: dados.apelido, email: dados.email, telf: dados.telf, curso: turma.curso, turmaId: turma.id, estado: "Elegível" });
+      : await apiCriarFormandoFin({
+        nome: dados.nome, apelido: dados.apelido, email: dados.email, telf: dados.telf, curso: turma.curso, turmaId: turma.id, estado: "Elegível",
+        semEmails: dados.semEmails,
+      });
     recarregarTurma(regime, turma.id);
     const formando = (r as { formando?: { id?: number } }).formando;
     return formando?.id;

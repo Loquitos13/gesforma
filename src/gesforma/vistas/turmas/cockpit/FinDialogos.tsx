@@ -95,7 +95,7 @@ export function InscreverFin({ aberto, onFechar, turma, activa, membros, onActiv
           onInscreverManual={async dados => {
             if (vagas <= 0) return;
             const { nome, apelido } = splitNome(dados.nome);
-            const id = await inscreverNaTurma("fin", turma, { nome, apelido: apelido || "-", email: dados.email, telf: dados.telf || "" });
+            const id = await inscreverNaTurma("fin", turma, { nome, apelido: apelido || "-", email: dados.email, telf: dados.telf || "", semEmails: dados.opcoes.semEmails });
             if (id && dados.opcoes.criarAcesso) await darAcessoManual("fin", id);
           }}
         />

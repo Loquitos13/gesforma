@@ -12,6 +12,7 @@ import { pode } from "../../permissoes/capacidades.js";
 import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch } from "../../pii.js";
 import { precoParaOferta } from "../../precoOferta.js";
 import { linhaFormando } from "../../repos/formandos.js";
+import { definirSemEmails } from "../../repos/formandosDocs.js";
 import { piiFormandoFinParaGravar } from "../../repos/formandoFinanciamento.js";
 import {
   apagarFormando, atualizarFormandoFin, atualizarFormandoGold, definirTurmaFin, inserirFormandoFin, inserirFormandoGold,
@@ -74,7 +75,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
   app.post("/v1/formandos-gold", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (proibidoFormador(req.actor!.role)) return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
-    const v = validar(reply, { body: formandoGold }, req);
+    const v = validar(reply, { body: formandoGold.extend({ semEmails: z.boolean().optional() }) }, req);
     if (!v) return;
     const d = v.body;
     let horario = "";
@@ -121,7 +122,8 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       if (err instanceof InscricaoErro) return reply.code(err.status).send({ error: err.message });
       throw err;
     }
-    await audit(db, req.actor!.id, "formando.inscrever", "formandos_gold", String(id), req.ip, { turmaId: d.turmaId ?? null, metodo });
+    if (d.semEmails) await definirSemEmails(db, "gold", id, true);
+    await audit(db, req.actor!.id, "formando.inscrever", "formandos_gold", String(id), req.ip, { turmaId: d.turmaId ?? null, metodo, semEmails: Boolean(d.semEmails) });
     await ligarPreinscricaoAoFormandoGold(db, id, req.actor!.id).catch(err => req.log.warn({ err }, "pré-inscrição não ligada ao formando"));
     const row = await linhaFormando(db, "gold", id);
     return { formando: row ? mapFormandoGold(row) : { id } };
@@ -233,7 +235,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
   app.post("/v1/formandos-fin", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (proibidoFormador(req.actor!.role)) return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
-    const v = validar(reply, { body: formandoFin }, req);
+    const v = validar(reply, { body: formandoFin.extend({ semEmails: z.boolean().optional() }) }, req);
     if (!v) return;
     const d = v.body;
     const vazio = { ok: false, data: "" };
@@ -266,7 +268,8 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     for (const [docId, doc] of Object.entries(docs)) {
       if (doc.ok) await registarDocManualFin(db, id, docId, true, { id: req.actor!.id, name: req.actor!.name });
     }
-    await audit(db, req.actor!.id, "formando.inscrever", "formandos_fin", String(id), req.ip, { turmaId });
+    if (d.semEmails) await definirSemEmails(db, "fin", id, true);
+    await audit(db, req.actor!.id, "formando.inscrever", "formandos_fin", String(id), req.ip, { turmaId, semEmails: Boolean(d.semEmails) });
     if (turmaId) await reavaliarDocsDoFormando(db, "fin", id, req.actor!.id).catch(() => undefined);
     const row = await linhaFormando(db, "fin", id);
     return { formando: row ? mapFormandoFin(row) : { id } };

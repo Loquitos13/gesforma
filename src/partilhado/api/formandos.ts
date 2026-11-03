@@ -1,6 +1,6 @@
 // API do domínio "formandos": listas, ficha e acções (server/src/rotas/formandos.ts).
 import type { DadosFinanciamento } from "../execucaoFisica";
-import { api, enviar, qs, type Pagina } from "./cliente";
+import { api, enviar, enviarFicheiro, qs, type Pagina } from "./cliente";
 import { descarregar } from "./ficheiros";
 import { hojeLisboa } from "../horaLisboa";
 
@@ -76,6 +76,8 @@ export type FichaFormando = {
   documentos: DocFicha[];
   docsResumo: { validados: number; total: number; recusados: number };
   ligacaoDocumentos: string | null;
+  /** Inscrição feita pela equipa: sem emails de documentos nem de pagamento. */
+  semEmails: boolean;
   pagamento: null | {
     valor: number; metodo: string; pago: boolean; situacao: SituacaoPagamento; pedidoEm: string | null; temIban: boolean;
     movimentos: { id: string; valor: number; metodo: string; estado: string; data: string; pagoEm: string | null }[];
@@ -100,6 +102,8 @@ export function apiFichaFormando(regime: Regime, id: number, signal?: AbortSigna
 export type NovaFichaGold = {
   nome: string; apelido?: string; email: string; telf?: string; curso?: string; local?: string;
   turmaId?: number; pago?: boolean; valor?: number; metodo?: string;
+  /** Sem emails de documentos nem de pagamento (inscrição feita pela equipa). */
+  semEmails?: boolean;
 };
 
 export function apiCriarFormandoGold(corpo: NovaFichaGold) {
@@ -110,7 +114,7 @@ export function apiAlterarFormandoGold(id: number, corpo: Partial<NovaFichaGold>
   return enviar.patch<{ formando: { id: number } | null }>(`/v1/formandos-gold/${id}`, corpo);
 }
 
-export type NovaFichaFin = { nome: string; apelido?: string; email?: string; telf?: string; curso?: string; turmaId?: number; estado?: string };
+export type NovaFichaFin = { nome: string; apelido?: string; email?: string; telf?: string; curso?: string; turmaId?: number; estado?: string; semEmails?: boolean };
 
 export function apiCriarFormandoFin(corpo: NovaFichaFin) {
   return enviar.post<{ formando: { id: number } }>("/v1/formandos-fin", corpo);
@@ -128,6 +132,16 @@ export function apiAcessoFormando(regime: Regime, id: number, opts: { repor?: bo
   return enviar.post<{ acesso: { email: string; password?: string; criado: boolean; reposto: boolean; emailEnviado: boolean } }>(
     `/v1/formandos/${regime}/${id}/acesso`, opts,
   );
+}
+
+/** Liga ou desliga os emails de documentos e de pagamento da ficha. */
+export function apiSemEmailsFormando(regime: Regime, id: number, ativo: boolean) {
+  return enviar.put<{ ok: boolean; semEmails: boolean }>(`/v1/formandos/${regime}/${id}/sem-emails`, { ativo });
+}
+
+/** A equipa carrega o ficheiro de um documento (fica logo validado; não sai email). */
+export function apiCarregarDocFormando(regime: Regime, id: number, docId: string, ficheiro: File) {
+  return enviarFicheiro<{ ok: boolean; nome: string }>(`/v1/formandos/${regime}/${id}/documentos/${encodeURIComponent(docId)}/ficheiro`, ficheiro);
 }
 
 export function apiValidarDocFormando(regime: Regime, id: number, docId: string) {

@@ -126,6 +126,38 @@ export async function docEnviado(
   );
 }
 
+/** Ficheiro carregado pela equipa na ficha (documento entregue em papel ou na plataforma antiga): fica logo validado. */
+export async function docCarregadoPelaEquipa(
+  c: Consulta,
+  regime: Regime,
+  id: number,
+  docId: string,
+  f: { nome: string; data: string; driveFileId: string; driveUrl: string },
+  actorId: string,
+) {
+  await one(
+    c,
+    `INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name, data, drive_file_id, drive_url, estado, observacao, validated_by, validated_at)
+     VALUES ($1, $2, $3, true, $4, $5, $6, $7, 'validado', '', $8::uuid, now())
+     ON CONFLICT (regime, formando_id, doc_id) DO UPDATE SET
+       ok = true, file_name = EXCLUDED.file_name, data = EXCLUDED.data, drive_file_id = EXCLUDED.drive_file_id, drive_url = EXCLUDED.drive_url,
+       estado = 'validado', observacao = '', validated_by = EXCLUDED.validated_by, validated_at = now(), updated_at = now()`,
+    [regime, id, docId, f.nome, f.data, f.driveFileId, f.driveUrl, actorId],
+  );
+}
+
+const TABELA_FORMANDOS: Record<Regime, string> = { gold: "formandos_gold", fin: "formandos_fin" };
+
+/** Ficha sem emails de documentos nem de pagamento (inscrição feita pela equipa)? */
+export async function semEmailsDocsPagamento(c: Consulta, regime: Regime, id: number) {
+  const r = await one<{ sem: boolean }>(c, `SELECT sem_emails_docs_pagamento AS sem FROM ${TABELA_FORMANDOS[regime]} WHERE id = $1`, [id]);
+  return Boolean(r?.sem);
+}
+
+export async function definirSemEmails(c: Consulta, regime: Regime, id: number, ativo: boolean) {
+  return one<{ id: number }>(c, `UPDATE ${TABELA_FORMANDOS[regime]} SET sem_emails_docs_pagamento = $2 WHERE id = $1 RETURNING id`, [id, ativo]);
+}
+
 /** Marcação manual (ex.: entregue em papel), com quem marcou e quando. */
 export async function docManual(c: Consulta, regime: Regime, id: number, docId: string, ok: boolean, data: string, actorId: string) {
   await one(

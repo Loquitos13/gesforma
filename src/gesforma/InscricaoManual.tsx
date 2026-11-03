@@ -14,9 +14,11 @@ export type OpcoesManual = {
   pagamento: "oferta" | "pago" | "por_pagar";
   metodo: string;
   criarAcesso: boolean;
+  /** Sem emails de documentos nem de pagamento (inscrição feita pela equipa, ex.: vinda da plataforma antiga). */
+  semEmails: boolean;
 };
 
-export const OPCOES_MANUAL: OpcoesManual = { pagamento: "por_pagar", metodo: "", criarAcesso: true };
+export const OPCOES_MANUAL: OpcoesManual = { pagamento: "por_pagar", metodo: "", criarAcesso: true, semEmails: true };
 
 export function emailValido(email: string) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
@@ -60,6 +62,10 @@ export function CamposInscricaoManual({ value, onChange, regime }: {
       {regime === "gold" && value.pagamento === "pago" && (
         <OptionSelect lista="metodos_pagamento" value={value.metodo} onChange={m => onChange({ ...value, metodo: m })} allowEmpty placeholder="Método de pagamento" />
       )}
+      <label className="flex items-start gap-2 text-sm text-slate-700">
+        <input type="checkbox" className="mt-0.5 h-4 w-4" checked={value.semEmails} onChange={e => onChange({ ...value, semEmails: e.target.checked })} />
+        <span>Sem emails de documentos nem de pagamento (inscrição já tratada pela equipa; os documentos carregam-se na ficha).</span>
+      </label>
       {podeAcesso && (
         <label className="flex items-start gap-2 text-sm text-slate-700">
           <input type="checkbox" className="mt-0.5 h-4 w-4" checked={value.criarAcesso} onChange={e => onChange({ ...value, criarAcesso: e.target.checked })} />

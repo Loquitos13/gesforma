@@ -6,6 +6,7 @@ import type { Db } from "./db/pool.js";
 import {
   mapPagamento, marcarFormandoGoldPago, marcarLeadPago, marcarPago, obterPagamento, pagamentosPorReferencia, registarRecusa,
 } from "./repos/pagamentos.js";
+import { semEmailsDocsPagamento } from "./repos/formandosDocs.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 /**
@@ -46,7 +47,9 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>, a
   // Depois de gravado: emails e conclusão da inscrição (ambos seguros de repetir).
   const { aposPagamentoConfirmado, leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
   const doPercurso = await leadDoPagamentoPedido(db, mapped.id);
-  if (comEmail && !doPercurso) {
+  // Ficha Gold sem emails de pagamento (inscrição feita pela equipa): a confirmação não sai.
+  const semEmails = formandoId != null && await semEmailsDocsPagamento(db, "gold", formandoId);
+  if (comEmail && !doPercurso && !semEmails) {
     await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso, pagamentoId: mapped.id }, `payment:${mapped.id}:${email}`)
       .catch(() => undefined);
   }

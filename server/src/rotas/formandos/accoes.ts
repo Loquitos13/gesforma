@@ -4,12 +4,15 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { avisarRecusasFin } from "../../avisosDocumentos.js";
 import { config } from "../../config.js";
+import { carregarDocPelaEquipa } from "../../formandoDocsEquipa.js";
 import { recusarDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
 import { nextOpsId } from "../../ops.js";
 import { pode } from "../../permissoes/capacidades.js";
 import { lerEntidade } from "../../regrasConfig.js";
 import { dadosBasicos, garantirPagamentoPendente, registarPagamentoRecebido } from "../../repos/formandosEscrita.js";
-import { decidirDoc, docDoFormando, docsDoFormando, gravarDocFicha, inserirNota, notasDoFormando } from "../../repos/formandosDocs.js";
+import {
+  decidirDoc, definirSemEmails, docDoFormando, docsDoFormando, gravarDocFicha, inserirNota, notasDoFormando, semEmailsDocsPagamento,
+} from "../../repos/formandosDocs.js";
 import type { Regime } from "../../repos/sql.js";
 import { isEmail, normalizeEmail } from "../../security.js";
 import { idNum, regime as regimeEnum, regimeIdParam, validar } from "../../validacao.js";
@@ -91,6 +94,42 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     return vista;
   });
 
+  /**
+   * Ficha sem emails de documentos nem de pagamento (inscrição feita pela equipa, por exemplo vinda da plataforma
+   * antiga): o formando não recebe pedidos nem lembretes de documentos, avisos de recusa, pedidos de pagamento nem a
+   * confirmação do pagamento. Os emails da turma continuam.
+   */
+  app.put("/v1/formandos/:regime/:id/sem-emails", async (req, reply) => {
+    const v = validar(reply, { params: regimeIdParam, body: z.object({ ativo: z.boolean() }) }, req);
+    if (!v || !equipa(req, reply, v.params.regime)) return;
+    const { regime, id } = v.params;
+    if (!await definirSemEmails(db, regime, id, v.body.ativo)) return reply.code(404).send({ error: "formando inexistente" });
+    await inserirNota(db, regime, id, req.actor!.name, req.actor!.id,
+      v.body.ativo ? "Sem emails de documentos nem de pagamento (inscrição feita pela equipa)." : "Emails de documentos e de pagamento ligados.");
+    await audit(db, req.actor!.id, "formando.sem_emails", `formandos_${regime}`, String(id), req.ip, { ativo: v.body.ativo });
+    return { ok: true, semEmails: v.body.ativo };
+  });
+
+  // A equipa carrega o ficheiro de um documento (entregue em papel ou na plataforma antiga): fica logo validado.
+  app.post("/v1/formandos/:regime/:id/documentos/:docId/ficheiro", async (req, reply) => {
+    const v = validar(reply, { params: docParam }, req);
+    if (!v || !equipa(req, reply, v.params.regime)) return;
+    const { regime, id, docId } = v.params;
+    let ficheiro: { name: string; mime: string; bytes: Buffer } | null = null;
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === "file") ficheiro = { name: part.filename || "documento", mime: part.mimetype || "application/octet-stream", bytes: await part.toBuffer() };
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!ficheiro?.bytes.length) return reply.code(400).send({ error: "Escolha o ficheiro do documento." });
+    const r = await carregarDocPelaEquipa(db, regime, id, docId, ficheiro, { id: req.actor!.id, name: req.actor!.name });
+    if (!r.ok) return reply.code(r.status).send({ error: r.error });
+    await audit(db, req.actor!.id, "formando.doc_carregado", `formandos_${regime}`, String(id), req.ip, { docId });
+    return { ok: true, nome: r.nome };
+  });
+
   // Validar / recusar um documento enviado (Gold e Financiada).
   app.post("/v1/formandos/:regime/:id/documentos/:docId/validar", async (req, reply) => {
     const v = validar(reply, { params: docParam }, req);
@@ -133,6 +172,9 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     const id = v.params.id;
     const f = await dadosBasicos(db, "gold", id);
     if (!f) return reply.code(404).send({ error: "formando inexistente" });
+    if (await semEmailsDocsPagamento(db, "gold", id)) {
+      return reply.code(409).send({ error: "Esta ficha está sem emails de documentos nem de pagamento (inscrição feita pela equipa). Desligue essa opção na ficha para pedir o pagamento por email." });
+    }
     const valor = Number(f.valor ?? 0);
     if (f.pago || /^oferta$/i.test(f.metodo) || valor <= 0) return reply.code(409).send({ error: "Esta ficha não tem pagamento por fazer." });
     const email = normalizeEmail(f.email);

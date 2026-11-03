@@ -104,13 +104,17 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
       {podeEditar && porPagar && (
         <div className="mt-3 flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
-            <Botao tamanho="sm" variante="primario" aCarregar={pedir.aCorrer} disabled={!p.temIban || !ficha.email} onClick={() => pedir.correr()}>
-              {p.pedidoEm ? "Pedir de novo" : "Pedir pagamento"}
-            </Botao>
+            {!ficha.semEmails && (
+              <Botao tamanho="sm" variante="primario" aCarregar={pedir.aCorrer} disabled={!p.temIban || !ficha.email} onClick={() => pedir.correr()}>
+                {p.pedidoEm ? "Pedir de novo" : "Pedir pagamento"}
+              </Botao>
+            )}
             {pode("pagamentos.registarFicha") && <Botao tamanho="sm" onClick={() => setRegistar(true)}>Registar pagamento</Botao>}
           </div>
           <p className="m-0 text-xs text-tinta-suave">
-            {p.temIban ? "Envia um email com o valor e o IBAN da ENA; a pessoa responde com o comprovativo." : "Falta o IBAN da entidade em Configurações › Entidade."}
+            {ficha.semEmails
+              ? "Ficha sem emails de pagamento (inscrição tratada pela equipa): registe o pagamento quando o receber."
+              : p.temIban ? "Envia um email com o valor e o IBAN da ENA; a pessoa responde com o comprovativo." : "Falta o IBAN da entidade em Configurações › Entidade."}
           </p>
         </div>
       )}

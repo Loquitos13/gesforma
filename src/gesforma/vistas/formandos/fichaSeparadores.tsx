@@ -1,11 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import {
-  apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiValidarDocFormando, type DocFicha, type FichaFormando,
+  apiCarregarDocFormando, apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiSemEmailsFormando, apiValidarDocFormando,
+  type DocFicha, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { toastOk } from "../../../partilhado/toastBus";
 import {
-  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, Cartao, Estado, Kpi, KpiFaixa, Vazio, data, dataHora, num,
+  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, Cartao, Estado, Interruptor, Kpi, KpiFaixa, Vazio, data, dataHora, num,
 } from "../../../partilhado/ui";
 import { ContratosFormando } from "../assinaturas/ContratosFormando";
 import { RecusarDoc } from "./fichaDialogos";
@@ -20,6 +21,16 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
     invalidar: INVALIDAR, ok: "Documento actualizado.",
   });
   const lembrete = useAccao(() => apiLembreteDocsFin(ficha.id), { ok: "Lembrete enviado ao formando. Seguem lembretes automáticos enquanto faltarem documentos." });
+  const semEmails = useAccao((ativo: boolean) => apiSemEmailsFormando(ficha.regime, ficha.id, ativo), {
+    invalidar: INVALIDAR,
+    ok: r => (r.semEmails ? "O formando deixa de receber emails de documentos e de pagamento." : "Emails de documentos e de pagamento ligados."),
+  });
+  // Um ficheiro de cada vez: o botão do documento abre a escolha e o ficheiro segue para esse documento.
+  const escolha = useRef<HTMLInputElement>(null);
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const carregar = useAccao((docId: string, f: File) => apiCarregarDocFormando(ficha.regime, ficha.id, docId, f), {
+    invalidar: INVALIDAR, ok: r => `Documento carregado e validado (${r.nome}).`,
+  });
   const fin = ficha.regime === "fin";
   const pasta = ["GesForma", fin ? "Financiada" : "Gold", "Turmas", ficha.turma?.nome, "Formandos", `${ficha.nome} ${ficha.apelido}`.trim()].filter(Boolean).join(" › ");
 
@@ -28,6 +39,11 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
     const manual = !d.fileName;
     return (
       <div className="flex gap-1.5 flex-wrap justify-end">
+        <Botao tamanho="sm" variante="fantasma" aCarregar={carregar.aCorrer && alvo === d.id}
+          title="Ficheiro entregue em papel ou na plataforma antiga: fica validado, sem email ao formando"
+          onClick={() => { setAlvo(d.id); escolha.current?.click(); }}>
+          {d.fileName ? "Substituir ficheiro" : "Carregar ficheiro"}
+        </Botao>
         {d.estado === "pendente" && <Botao tamanho="sm" variante="primario" aCarregar={validar.aCorrer} onClick={() => validar.correr(d.id)}>Validar</Botao>}
         {(d.estado === "pendente" || (d.estado === "validado" && !manual)) && (
           <Botao tamanho="sm" variante="fantasma" onClick={() => setRecusar({ id: d.id, label: d.label })}>Recusar</Botao>
@@ -50,10 +66,29 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
               Copiar ligação de documentos
             </Botao>
           )}
-          {podeEditar && <Botao tamanho="sm" aCarregar={lembrete.aCorrer} onClick={() => lembrete.correr()}>Enviar lembrete</Botao>}
+          {podeEditar && !ficha.semEmails && <Botao tamanho="sm" aCarregar={lembrete.aCorrer} onClick={() => lembrete.correr()}>Enviar lembrete</Botao>}
         </>
       )}
     >
+      <input ref={escolha} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" className="sr-only" tabIndex={-1} aria-hidden="true"
+        onChange={e => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (f && alvo) void carregar.correr(alvo, f);
+        }} />
+      {podeEditar && (
+        <div className="px-5 py-3 border-b border-linha flex items-start gap-3 flex-wrap">
+          <div className="flex-1 min-w-[220px]">
+            <Interruptor ligado={ficha.semEmails} desativado={semEmails.aCorrer} rotulo="Sem emails de documentos nem de pagamento"
+              onMudar={v => void semEmails.correr(v)} />
+            <p className="m-0 mt-1 text-xs text-tinta-suave">
+              {ficha.semEmails
+                ? "Inscrição tratada pela equipa: o formando não recebe pedidos nem lembretes de documentos, avisos de recusa nem emails de pagamento. Carregue os documentos aqui. Os emails da turma continuam."
+                : "O formando recebe os emails de documentos e de pagamento."}
+            </p>
+          </div>
+        </div>
+      )}
       {ficha.documentos.length === 0 ? (
         <Vazio compacto titulo="Sem documentos definidos para esta ficha." />
       ) : (

@@ -1,3 +1,4 @@
+import { semEmailsDocsPagamento } from "./repos/formandosDocs.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
 import { garantirVaga, recontar, recontarTurma } from "./inscricao.js";
 import type { Db } from "./db/pool.js";
@@ -292,6 +293,9 @@ export async function upsertFormandoFinFromInscricao(db: Db, payload: Record<str
 export async function enviarLembreteDocsFin(db: Db, formandoId: number, actorId?: string) {
   const f = await formandoFinParaLembrete(db, formandoId);
   if (!f) return { enviado: false as const, erro: "Formando inexistente." };
+  if (await semEmailsDocsPagamento(db, "fin", formandoId)) {
+    return { enviado: false as const, erro: "Esta ficha está sem emails de documentos (inscrição feita pela equipa). Desligue essa opção na ficha para enviar o lembrete." };
+  }
   const email = normalizeEmail(f.email);
   if (!isEmail(email)) return { enviado: false as const, erro: "Email inválido na ficha." };
 

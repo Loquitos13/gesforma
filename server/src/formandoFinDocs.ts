@@ -88,7 +88,7 @@ export async function formandoFinPorToken(db: Db, token: string) {
   return vistaDocumentosFormandoFin(db, Number(row.id));
 }
 
-async function mergeDocsJson(db: Db, formandoId: number, patch: Record<string, { ok: boolean; data: string }>) {
+export async function mergeDocsJson(db: Db, formandoId: number, patch: Record<string, { ok: boolean; data: string }>) {
   const p = await pessoaFin(db, formandoId);
   const base = p?.docs && typeof p.docs === "object" ? { ...(p.docs as Record<string, unknown>) } : {};
   for (const [k, v] of Object.entries(patch)) base[k] = v;

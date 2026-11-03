@@ -165,6 +165,8 @@ export async function montarFicha(db: Db, regime: Regime, id: number) {
     documentos,
     docsResumo: { validados: obrig.filter(d => d.estado === "validado").length, total: obrig.length, recusados: documentos.filter(d => d.estado === "recusado").length },
     ligacaoDocumentos,
+    /** Inscrição feita pela equipa: sem emails de documentos nem de pagamento. */
+    semEmails: Boolean(row.sem_emails_docs_pagamento),
     pagamento,
     resultado,
     certificado,

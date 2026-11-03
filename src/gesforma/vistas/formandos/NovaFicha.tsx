@@ -40,13 +40,15 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
   const [pagamento, setPagamento] = useState<Pagamento>("por_pagar");
   const [metodo, setMetodo] = useState("");
   const [criarAcesso, setCriarAcesso] = useState(true);
+  // Inscrição feita pela equipa (ex.: vinda da plataforma antiga): por omissão, sem emails de documentos nem de pagamento.
+  const [semEmails, setSemEmails] = useState(true);
   const [aGravar, setAGravar] = useState(false);
   const [erros, setErros] = useState<Record<string, string>>({});
 
   useEffect(() => {
     if (!aberto) return;
     setNome(""); setApelido(""); setEmail(""); setTelf(""); setCurso(""); setTurmaId(""); setLocal("");
-    setPagamento("por_pagar"); setMetodo(""); setCriarAcesso(true); setErros({});
+    setPagamento("por_pagar"); setMetodo(""); setCriarAcesso(true); setSemEmails(true); setErros({});
   }, [aberto]);
 
   // Só as turmas do curso escolhido (as opções trazem o curso em `extra`).
@@ -74,10 +76,10 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
       const turma = turmaId ? Number(turmaId) : undefined;
       const r = gold
         ? await apiCriarFormandoGold({
-          nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(), curso, local, turmaId: turma,
+          nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(), curso, local, turmaId: turma, semEmails,
           ...(pagamento === "oferta" ? { metodo: "Oferta", pago: true, valor: 0 } : pagamento === "pago" ? { pago: true, metodo } : { pago: false }),
         })
-        : await apiCriarFormandoFin({ nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(), curso, turmaId: turma });
+        : await apiCriarFormandoFin({ nome: nome.trim(), apelido: apelido.trim(), email: email.trim(), telf: telf.trim(), curso, turmaId: turma, semEmails });
       const id = r.formando.id;
       invalidar("formandos:");
       if (criarAcesso && podeAcesso) {
@@ -153,6 +155,12 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
             )}
           </div>
         )}
+        <Caixa
+          rotulo="Sem emails de documentos nem de pagamento"
+          ajuda="Para inscrições já tratadas pela equipa (ex.: plataforma antiga): o formando não recebe pedidos nem lembretes de documentos, nem emails de pagamento. Os documentos carregam-se na ficha. Os emails da turma continuam."
+          checked={semEmails}
+          onChange={e => setSemEmails(e.target.checked)}
+        />
         {podeAcesso && <Caixa
           rotulo="Criar o acesso à área do formando e enviar por email"
           ajuda="Utilizador: o email. Palavra-passe temporária, a mudar no primeiro acesso."

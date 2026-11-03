@@ -139,6 +139,7 @@ export async function formandosFinDevidos(c: Consulta, limite: Date, maximo: num
       WHERE lembrete_docs_em IS NOT NULL AND lembrete_docs_em <= $1
         AND lembretes_docs_enviados < $2
         AND btrim(COALESCE(email, '')) <> ''
+        AND NOT sem_emails_docs_pagamento
       ORDER BY lembrete_docs_em
       LIMIT $3`,
     [limite, maximo, lote]);

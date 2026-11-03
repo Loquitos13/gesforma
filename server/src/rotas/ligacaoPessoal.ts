@@ -9,7 +9,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logLeadEvent } from "../crmDossier.js";
 import { ficheiroModelo, situacaoPagamento } from "../docsCurso.js";
-import { enviarComprovativoContabilidade } from "../comprovativoContabilidade.js";
+import { comprovativoRecebido, faturacaoConfirmada } from "../comprovativoContabilidade.js";
+import { dadosFaturacaoSchema, faturacaoDoPercurso, gravarFaturacaoDoPercurso } from "../faturacao.js";
 import { avisarDocumentoRecebido } from "../avisosEquipa.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "../docsLink.js";
 import { garantirPastaPendente } from "../driveArvore.js";
@@ -166,6 +167,23 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     });
   }
 
+  // Dados de faturação: no passo de pagamento, a seguir ao comprovativo (vêm com os dados da ficha; a pessoa altera-os
+  // para uma fatura em nome de uma empresa). Um comprovativo à espera destes dados segue então para a contabilidade.
+  app.post("/v1/public/documentos/:token/faturacao", limite(12), async (req, reply) => {
+    const v = validar(reply, { body: dadosFaturacaoSchema }, req);
+    if (!v) return;
+    const lead = await ligacaoAberta(req, reply);
+    if (!lead) return;
+    if ((await situacaoPagamento(db, lead)).estado !== "pedido") {
+      return reply.code(409).send({ error: "O passo de pagamento já fechou. Para alterar os dados de faturação, contacte a ENA." });
+    }
+    const leadId = Number(lead.id);
+    await marcarUso(db, leadId);
+    await gravarFaturacaoDoPercurso(db, leadId, v.body);
+    await faturacaoConfirmada(db, leadId).catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
+    return { ok: true, faturacao: await faturacaoDoPercurso(db, lead) };
+  });
+
   app.post("/v1/public/documentos/:token/concluir", limite(12), async (req, reply) => {
     const lead = await ligacaoAberta(req, reply);
     if (!lead) return;
@@ -231,9 +249,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }
       await docsRepo.substituirDoc(db, { leadId, tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "" });
       await logLeadEvent(db, leadId, undefined, "campo", comprovativo ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`, file.name);
-      // O comprovativo segue também para a contabilidade (com o ficheiro); uma falha no email não recusa o envio.
+      // O comprovativo segue também para a contabilidade (com o ficheiro e os dados de faturação; sem estes, espera por
+      // eles: é o passo seguinte da ligação). Uma falha no email não recusa o envio.
       if (comprovativo) {
-        await enviarComprovativoContabilidade(db, lead, { nome: file.name, mime: up.mime, bytes: up.bytes })
+        await comprovativoRecebido(db, lead, { driveFileId: file.id, nome: file.name, mime: up.mime, bytes: up.bytes })
           .catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
       }
       await avisarDocumentoRecebido(db, lead, rotulo, file.id).catch(err => console.error("[emails] aviso de documento recebido:", err));

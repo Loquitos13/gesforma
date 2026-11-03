@@ -86,6 +86,8 @@ export type PagamentoPercurso = {
   iban: string;
   titular: string;
   comprovativo: { id: number; tipo: string; nome: string; estado?: string; observacao?: string } | null;
+  /** Dados de faturação (passo a seguir ao comprovativo): os confirmados, ou os da ficha para confirmar. */
+  faturacao?: { dados: DadosFaturacao; confirmado: boolean };
 };
 
 export type TurmaPercurso = {
@@ -287,3 +289,8 @@ export const apiPublicFaturacao = (token: string) =>
 
 export const apiPublicFaturacaoGravar = (token: string, dados: DadosFaturacao) =>
   api<{ ok: boolean }>(`/v1/public/faturacao/${encodeURIComponent(token)}`, { method: "POST", body: JSON.stringify(dados) });
+
+/** Dados de faturação no passo de pagamento da ligação pessoal (a seguir ao comprovativo). */
+export const apiPublicFaturacaoPercurso = (token: string, dados: DadosFaturacao) =>
+  api<{ ok: boolean; faturacao: { dados: DadosFaturacao; confirmado: boolean } }>(
+    `/v1/public/documentos/${encodeURIComponent(token)}/faturacao`, { method: "POST", body: JSON.stringify(dados) });

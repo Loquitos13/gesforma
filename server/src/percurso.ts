@@ -2,6 +2,7 @@ import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
 import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento } from "./docsCurso.js";
 import { lerEntidade } from "./regrasConfig.js";
+import { faturacaoDoPercurso } from "./faturacao.js";
 import { avisarDocumentosEmFalta, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
 import { idsRecusados } from "./lembretePre.js";
 import { modulosPorOrdem, sessoesPublicas } from "./cronogramaPublico.js";
@@ -331,7 +332,11 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const docs = await listarDocsLead(db, id) as Ficheiro[];
   const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
   // O passo de pagamento só abre depois de a secretaria validar os documentos e pedir o pagamento.
-  let pagamento: { valor: number; estado: string; iban: string; titular: string; comprovativo: Ficheiro | null } | null = null;
+  let pagamento: {
+    valor: number; estado: string; iban: string; titular: string; comprovativo: Ficheiro | null;
+    /** Dados de faturação (passo a seguir ao comprovativo): os confirmados, ou os da ficha para confirmar. */
+    faturacao: Awaited<ReturnType<typeof faturacaoDoPercurso>>;
+  } | null = null;
   if ((pag.estado === "pedido" || pag.estado === "pago") && lead.pagamento_id) {
     const r = await repo.valorEstadoPagamento(db, String(lead.pagamento_id));
     const ent = await lerEntidade(db);
@@ -341,6 +346,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
       iban: ent.iban.replace(/(.{4})/g, "$1 ").trim(),
       titular: ent.titularConta || ent.nome,
       comprovativo: docs.find(d => d.tipo === COMPROVATIVO.id) ?? null,
+      faturacao: await faturacaoDoPercurso(db, lead),
     };
   }
   const turmaId = Number(lead.turma_escolhida_id || 0);

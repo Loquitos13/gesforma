@@ -58,9 +58,9 @@ function upload(ctx: Ctx, token: string, tipo: string, nome: string, bytes: Buff
   });
 }
 
-async function validarDoc(ctx: Ctx, leadId: number, tipo: string) {
+async function validarDoc(ctx: Ctx, leadId: number, tipo: string, perfil: "secretaria" | "admin" = "secretaria") {
   const d = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = $2", [leadId, tipo]);
-  const r = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${leadId}/documentos/${d.rows[0]!.id}/validar`);
+  const r = await pedido(ctx, perfil, "POST", `/v1/crm/leads/${leadId}/documentos/${d.rows[0]!.id}/validar`);
   expect(r.statusCode).toBe(200);
 }
 
@@ -186,7 +186,10 @@ describe("ligação pessoal até à validação", () => {
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
 
     expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
-    await validarDoc(ctx, id, "comprovativo");
+    // A coordenação Gold não valida o comprovativo: é a contabilidade (em Pagamentos) ou a administração.
+    const comp = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = 'comprovativo'", [id]);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${comp.rows[0]!.id}/validar`)).statusCode).toBe(403);
+    await validarDoc(ctx, id, "comprovativo", "admin");
     // Já concluída: repetir não cria nada de novo.
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(409);
 

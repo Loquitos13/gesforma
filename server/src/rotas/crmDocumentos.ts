@@ -14,6 +14,7 @@ import { regenerarToken } from "../ligacaoPessoal.js";
 import { confirmarPagamento } from "../ops.js";
 import { PedidoPagamentoErro, pedirPagamento } from "../pagamentoPedido.js";
 import { PercursoErro, enviarSugestaoTurmaCheia, validarPreinscricao } from "../percurso.js";
+import { pode } from "../permissoes/capacidades.js";
 import * as dossie from "../repos/leadDossier.js";
 import * as docs from "../repos/leadDocs.js";
 import * as leads from "../repos/leads.js";
@@ -21,6 +22,9 @@ import { idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
 const docParams = idParam.extend({ docId: z.coerce.number().int().positive() });
+
+/** O comprovativo de pagamento valida-o (ou recusa-o) a contabilidade: só então a pré-inscrição fica concluída. */
+const SO_CONTABILIDADE = "O comprovativo de pagamento é validado pela contabilidade, em Pagamentos.";
 
 export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
@@ -54,6 +58,9 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: docParams }, req);
     if (!v) return;
     const { id, docId } = v.params;
+    if ((await docs.tipoDoDoc(db, docId)) === "comprovativo" && !pode(req.actor!.role, "pagamentos.confirmar")) {
+      return reply.code(403).send({ error: SO_CONTABILIDADE });
+    }
     const ok = await definirEstadoDoc(db, id, docId, "validado", "", req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
@@ -65,7 +72,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       if (pag && String(pag.estado ?? "") === "Pendente") {
         await confirmarPagamento(db, pag, null, { soPendente: true });
         await audit(db, req.actor!.id, "pagamento.confirmado_comprovativo", "pagamento", String(pag.id), req.ip, { preinscricao: id });
-        await logLeadEvent(db, id, req.actor!.id, "seguimento", "Pagamento confirmado", "Comprovativo validado pela secretaria.");
+        await logLeadEvent(db, id, req.actor!.id, "seguimento", "Pagamento confirmado", "Comprovativo validado na ficha da pré-inscrição.");
       }
     }
     await audit(db, req.actor!.id, "crm.doc_validado", "preinscricao", String(id), req.ip, { docId });
@@ -82,6 +89,9 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     const { id, docId } = v.params;
     const observacao = v.body?.observacao ?? "";
     if (!observacao) return reply.code(400).send({ error: "Escreva o que está incorrecto." });
+    if ((await docs.tipoDoDoc(db, docId)) === "comprovativo" && !pode(req.actor!.role, "pagamentos.confirmar")) {
+      return reply.code(403).send({ error: SO_CONTABILIDADE });
+    }
     const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao, req.actor!.id);
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);

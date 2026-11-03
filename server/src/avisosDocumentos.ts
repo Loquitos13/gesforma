@@ -9,6 +9,7 @@
  *   depois de um lembrete manual ou de uma recusa, até ficarem completos (ou a ligação fechar).
  */
 import { renderModelo, telefonesPorZona } from "./automations.js";
+import { enviarComprovativosPendentes } from "./comprovativoContabilidade.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
@@ -264,7 +265,8 @@ export async function enviarRecusasPendentes(db: Db, fim = 0) {
 
 /**
  * A volta dos avisos de documentos (cron diário na Vercel, worker local fora dela): recusas por avisar,
- * lembretes das pré-inscrições e lembretes dos formandos da Financiada. Com `fim`, em lotes até ao prazo
+ * lembretes das pré-inscrições, lembretes dos formandos da Financiada e os comprovativos à espera dos dados de
+ * faturação (lembrete à pessoa; email à contabilidade no fim do prazo). Com `fim`, em lotes até ao prazo
  * (deixando `RESERVA_FILA_MS` à fila de emails); sem ele, um lote de cada.
  */
 export async function enviarAvisosDocumentos(db: Db, fim = 0) {
@@ -272,5 +274,7 @@ export async function enviarAvisosDocumentos(db: Db, fim = 0) {
   const recusas = await enviarRecusasPendentes(db, prazo);
   const lembretesPreinscricao = await enviarLembretesPreinscricao(db, prazo);
   const lembretesFormandosFin = await enviarLembretesFormandosFin(db, prazo);
-  return { recusas, lembretesPreinscricao, lembretesFormandosFin };
+  const comprovativos = await enviarComprovativosPendentes(db, prazo)
+    .catch(err => { console.error("[pagamentos] comprovativos à espera dos dados de faturação:", err); return { lembretes: 0, contabilidade: 0 }; });
+  return { recusas, lembretesPreinscricao, lembretesFormandosFin, comprovativos };
 }

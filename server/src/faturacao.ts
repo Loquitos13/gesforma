@@ -77,36 +77,59 @@ export async function pedirFaturacaoSeFalta(db: Db, leadId: number, actorId?: st
   return pedirFaturacao(db, leadId, actorId);
 }
 
+/** Os dados de faturação sugeridos a partir da ficha da pré-inscrição (nome, NIF, morada fiscal, código postal, email). */
+export function sugestaoFaturacao(lead: Record<string, unknown>): DadosFaturacao {
+  const pii = readPreinscricaoPii(lead);
+  return {
+    nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.replace(/\s+/g, " ").trim(),
+    nif: pii.nif ?? "",
+    moradaFiscal: pii.moradaFiscal ?? "",
+    codigoPostal: pii.codigoPostal ?? "",
+    email: normalizeEmail(String(lead.email ?? "")),
+  };
+}
+
+/** Os dados de faturação confirmados pela pessoa (null: ainda não confirmou). */
+export async function dadosConfirmados(db: Db, leadId: number) {
+  return lerDados((await repo.faturacaoDoLead(db, leadId))?.dados_enc);
+}
+
 /** O que a página pública mostra: o curso e os dados (já gravados, ou sugeridos a partir da ficha). */
 export async function faturacaoPublica(db: Db, token: string) {
   const linha = await repo.faturacaoPorToken(db, token);
   if (!linha?.aberta) return null;
   const lead = await leads.lead(db, linha.preinscricao_id) as Record<string, unknown> | null;
   if (!lead) return null;
-  const gravados = lerDados(linha.dados_enc);
-  const pii = readPreinscricaoPii(lead);
-  const sugestao: DadosFaturacao = {
-    nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(),
-    nif: pii.nif ?? "",
-    moradaFiscal: pii.moradaFiscal ?? "",
-    codigoPostal: pii.codigoPostal ?? "",
-    email: normalizeEmail(String(lead.email ?? "")),
-  };
   return {
     curso: String(lead.curso ?? ""),
     preenchido: Boolean(linha.preenchido_em),
-    dados: gravados ?? sugestao,
+    dados: lerDados(linha.dados_enc) ?? sugestaoFaturacao(lead),
   };
 }
 
+/** Passo de pagamento da ligação pessoal: os dados de faturação (confirmados, ou sugeridos a partir da ficha). */
+export async function faturacaoDoPercurso(db: Db, lead: Record<string, unknown>) {
+  const gravados = await dadosConfirmados(db, Number(lead.id));
+  return { dados: gravados ?? sugestaoFaturacao(lead), confirmado: Boolean(gravados) };
+}
+
+/** A pessoa confirmou os dados de faturação na ligação pessoal (a seguir ao comprovativo). */
+export async function gravarFaturacaoDoPercurso(db: Db, leadId: number, dados: DadosFaturacao) {
+  await repo.gravarDadosConfirmados(db, leadId, randomBytes(24).toString("base64url"), encryptJson(dados));
+  // O histórico não leva NIF, nome nem morada: os dados ficam só cifrados, no botão «Contabilidade».
+  await logLeadEvent(db, leadId, undefined, "seguimento", "Dados de faturação confirmados",
+    "Dados guardados cifrados: veja «Contabilidade» na ficha.");
+}
+
+/** Grava os dados da página da faturação; devolve a pré-inscrição (null: ligação inválida ou fechada). */
 export async function gravarFaturacaoPublica(db: Db, token: string, dados: DadosFaturacao) {
   const linha = await repo.faturacaoPorToken(db, token);
-  if (!linha?.aberta) return false;
+  if (!linha?.aberta) return null;
   await repo.gravarDados(db, linha.preinscricao_id, encryptJson(dados));
   // O histórico não leva NIF, nome nem morada: os dados ficam só cifrados, no botão «Contabilidade».
   await logLeadEvent(db, linha.preinscricao_id, undefined, "seguimento", "Dados de faturação recebidos",
     "Dados guardados cifrados: veja «Contabilidade» na ficha.");
-  return true;
+  return linha.preinscricao_id;
 }
 
 /** Para o botão «Contabilidade» da ficha. */

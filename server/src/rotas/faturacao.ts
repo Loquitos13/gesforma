@@ -1,6 +1,7 @@
 /** Dados de faturação: página pública da ligação pessoal e botão «Contabilidade» da ficha do CRM. */
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
+import { faturacaoConfirmada } from "../comprovativoContabilidade.js";
 import { dadosFaturacaoSchema, faturacaoParaEquipa, faturacaoPublica, gravarFaturacaoPublica, pedirFaturacao } from "../faturacao.js";
 import { idParam, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -26,7 +27,10 @@ export async function registarFaturacao(app: FastifyInstance, deps: Deps) {
   app.post("/v1/public/faturacao/:token", { config: { rateLimit: { max: 8, timeWindow: "1 minute" } } }, async (req, reply) => {
     const v = validar(reply, { params: tokenParam, body: dadosFaturacaoSchema }, req);
     if (!v) return;
-    if (!(await gravarFaturacaoPublica(db, v.params.token, v.body))) return reply.code(404).send({ error: "Ligação inválida ou expirada." });
+    const leadId = await gravarFaturacaoPublica(db, v.params.token, v.body);
+    if (!leadId) return reply.code(404).send({ error: "Ligação inválida ou expirada." });
+    // Um comprovativo à espera destes dados segue agora para a contabilidade.
+    await faturacaoConfirmada(db, leadId).catch(err => req.log.error({ err }, "comprovativo para a contabilidade"));
     return { ok: true };
   });
 

@@ -33,3 +33,15 @@ export async function garantirPedido(c: Consulta, leadId: number, token: string)
 export async function gravarDados(c: Consulta, leadId: number, dadosEnc: string) {
   await one(c, "UPDATE preinscricao_faturacao SET dados_enc = $2, preenchido_em = now() WHERE preinscricao_id = $1 RETURNING preinscricao_id", [leadId, dadosEnc]);
 }
+
+/**
+ * Dados confirmados no passo de pagamento da ligação pessoal (a seguir ao comprovativo). Sem registo, cria-o com uma
+ * ligação própria nova, já fechada (os dados chegaram); com ele, a ligação fica como estava e fecha ao gravar.
+ */
+export async function gravarDadosConfirmados(c: Consulta, leadId: number, token: string, dadosEnc: string) {
+  await one(c,
+    `INSERT INTO preinscricao_faturacao (preinscricao_id, token, dados_enc, preenchido_em) VALUES ($1, $2, $3, now())
+     ON CONFLICT (preinscricao_id) DO UPDATE SET dados_enc = EXCLUDED.dados_enc, preenchido_em = now()
+     RETURNING preinscricao_id`,
+    [leadId, token, dadosEnc]);
+}

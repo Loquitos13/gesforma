@@ -3,7 +3,7 @@ import { useSiteTextoState } from "./SiteLanding";
 import { corSegura } from "./editor/estilos";
 import {
   ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
-  type DadosFinLigacao, type PagamentoPercurso, type TurmaPercurso,
+  apiPublicFaturacaoPercurso, type DadosFaturacao, type DadosFinLigacao, type PagamentoPercurso, type TurmaPercurso,
 } from "../partilhado/api";
 import { PercursoDadosFin, etapaInicial, type EtapaFin } from "./PercursoDadosFin";
 import { LeituraConsentimento } from "./LeituraConsentimento";
@@ -243,13 +243,26 @@ export function PublicDocumentos({ token }: { token: string }) {
     setOk("");
     try {
       await apiPublicDocumentoUpload(token, f, "comprovativo");
-      setOk("Comprovativo recebido.");
+      setOk(pagamento?.faturacao?.confirmado ? "Comprovativo recebido." : "Comprovativo recebido. Falta confirmar os dados de faturação, aqui em baixo.");
       await recarregar(true);
     } catch (err) {
       setError(erroDe(err, "Não foi possível enviar o comprovativo."));
     } finally {
       setBusy(false);
     }
+  }
+
+  /** Dados de faturação (a seguir ao comprovativo): os erros vão para o formulário; com a ligação fechada, volta a ler. */
+  async function gravarFaturacao(dados: DadosFaturacao) {
+    setError("");
+    setOk("");
+    try {
+      await apiPublicFaturacaoPercurso(token, dados);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 410) { void recarregar(); return; }
+      throw err;
+    }
+    await recarregar(true);
   }
 
   const pagar = estado === "ready" && !encerrada && pagamento != null;
@@ -293,7 +306,7 @@ export function PublicDocumentos({ token }: { token: string }) {
         )}
 
         {pagar && pagamento && (
-          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo}
+          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo} onFaturacao={gravarFaturacao}
             textos={{ intro: txt("ligPagamentoTexto"), ajuda: txt("ligComprovativoAjuda"), botao: txt("ligBotaoComprovativo") }} />
         )}
 

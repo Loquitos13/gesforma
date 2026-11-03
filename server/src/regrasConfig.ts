@@ -51,8 +51,10 @@ export type Entidade = {
   /** Conta para transferências: aparece no passo de pagamento da ligação pessoal. */
   iban: string;
   titularConta: string;
-  /** Recebe cada comprovativo de pagamento (com os dados da pessoa e o ficheiro em anexo). Vazio: não se envia. */
+  /** Recebe cada comprovativo de pagamento (com os dados da pessoa, os de faturação e o ficheiro em anexo). Vazio: não se envia. */
   emailContabilidade: string;
+  /** Horas que o email à contabilidade espera pelos dados de faturação depois do comprovativo (vazio: 24; 0: não espera). */
+  esperaFaturacaoHoras: string;
   /** Contactos telefónicos por zona, um por linha (ex.: «223781100 se pretende realizar o curso no Porto/Gaia»): vão nos emails. */
   telefonesZona: string;
 };
@@ -71,6 +73,7 @@ export const ENTIDADE_OMISSAO: Entidade = {
   iban: "",
   titularConta: "",
   emailContabilidade: "",
+  esperaFaturacaoHoras: "",
   telefonesZona: "",
 };
 
@@ -216,6 +219,10 @@ export function validarDefinicoes(
     if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return { ok: false, erro: "IBAN inválido." };
     const contab = (values.emailContabilidade ?? "").trim();
     if (contab && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contab)) return { ok: false, erro: "Email da contabilidade inválido." };
+    const espera = (values.esperaFaturacaoHoras ?? "").trim().replace(",", ".");
+    if (espera && !(/^\d+(\.\d+)?$/.test(espera) && Number(espera) <= 168)) {
+      return { ok: false, erro: "Espera pelos dados de faturação: de 0 a 168 horas." };
+    }
     const e = parseEntidade({ ...values, nif, iban });
     return { ok: true, values: { ...e } };
   }

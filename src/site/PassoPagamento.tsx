@@ -1,14 +1,16 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { PagamentoPercurso } from "../partilhado/api";
+import type { DadosFaturacao, PagamentoPercurso } from "../partilhado/api";
 import { CampoFicheiro } from "./PercursoPartes";
+import { PassoFaturacao } from "./PassoFaturacao";
 import { eur } from "../partilhado/ui/formatos";
 
 
 /**
  * Passo de pagamento da ligação pessoal. Só aparece depois de a secretaria validar os documentos
- * e pedir o pagamento. Transferência bancária: a pessoa anexa o comprovativo e a secretaria valida.
+ * e pedir o pagamento. Transferência bancária: a pessoa anexa o comprovativo, confirma os dados de faturação
+ * e a contabilidade valida o pagamento.
  */
-export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnviar, textos }: {
+export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnviar, onFaturacao, textos }: {
   nome: string;
   curso: string;
   pagamento: PagamentoPercurso;
@@ -16,6 +18,8 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
   error: string;
   ok: string;
   onEnviar: (ficheiro: File) => Promise<void>;
+  /** Grava os dados de faturação (lança o erro do servidor, para o formulário o mostrar). */
+  onFaturacao: (dados: DadosFaturacao) => Promise<void>;
   /** Textos editáveis em Sistema › Site › Definições («{curso}» é o nome do curso). */
   textos?: { intro?: string; ajuda?: string; botao?: string };
 }) {
@@ -24,11 +28,17 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
   const comp = pagamento.comprovativo;
   const recusado = comp?.estado === "recusado";
   const aguarda = Boolean(comp) && !recusado && !substituir;
+  const fat = pagamento.faturacao;
+  // Depois do comprovativo, os dados de faturação (em destaque até estarem confirmados).
+  const pedeFaturacao = Boolean(comp) && !recusado && fat != null;
+  const faltaFaturacao = pedeFaturacao && !fat?.confirmado;
   const zona = useRef<HTMLDivElement>(null);
+  const zonaFaturacao = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!aguarda) zona.current?.scrollIntoView({ behavior: "smooth", block: "center" });
-    // Só ao abrir a página.
-  }, []);
+    else if (faltaFaturacao) zonaFaturacao.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    // Ao abrir a página e quando chega um comprovativo (o passo seguinte são os dados de faturação).
+  }, [comp?.id]);
 
   async function submeter(e: FormEvent) {
     e.preventDefault();
@@ -65,7 +75,7 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         {aguarda && comp && (
           <div className="mt-2 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
             <p className="truncate text-emerald-800">{comp.nome}</p>
-            <p className="mt-1 text-[#5c564c]">Recebido. Quando a secretaria confirmar o pagamento, recebe por email o acesso à área do formando.</p>
+            <p className="mt-1 text-[#5c564c]">Recebido. Quando o pagamento for confirmado, recebe por email o acesso à área do formando.</p>
             <button type="button" className="mt-2 text-xs font-semibold underline decoration-[color:var(--lig-d,#ffa900)] underline-offset-2" onClick={() => setSubstituir(true)}>
               Enviar outro ficheiro
             </button>
@@ -73,7 +83,7 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         )}
         {recusado && (
           <p className="mt-2 text-sm text-red-800">
-            A secretaria não aceitou o comprovativo{comp?.observacao ? `: ${comp.observacao}` : "."} Envie outro ficheiro.
+            O comprovativo não foi aceite{comp?.observacao ? `: ${comp.observacao}` : "."} Envie outro ficheiro.
           </p>
         )}
         {!aguarda && (
@@ -87,6 +97,11 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
         {error && <p className="mt-3 text-sm text-red-700" role="alert">{error}</p>}
         {ok && <p className="mt-3 text-sm text-emerald-800">{ok}</p>}
       </div>
+      {pedeFaturacao && fat && (
+        <div ref={zonaFaturacao}>
+          <PassoFaturacao key={`${comp?.id}:${fat.confirmado}`} dados={fat.dados} confirmado={fat.confirmado} destaque={faltaFaturacao} onGravar={onFaturacao} />
+        </div>
+      )}
     </article>
   );
 }

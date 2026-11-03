@@ -76,7 +76,10 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
   comprovativo_contabilidade: {
     nome_formando: "Ana Silva", nif: "123456789", telemovel: "910000000", email_formando: "ana@exemplo.pt",
     iban_formando: "—", valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0",
+    faturacao_estado: "confirmados pela pessoa", faturacao_nome: "Empresa, Lda.", faturacao_nif: "501234567",
+    faturacao_morada: "Rua das Flores, 10, Porto", faturacao_codigo_postal: "4000-100", faturacao_email: "contas@empresa.pt",
   },
+  lembrete_faturacao: { link: "(página de pagamento)" },
   pedido_contacto: { sobre_curso: " sobre Formação de Formadores - CCP" },
   pedido_proposta: {
     nome_contacto: "Ana Silva", empresa: "Empresa, Lda.", email_contacto: "ana@empresa.pt", telefone: "910000000",

@@ -285,6 +285,16 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
   const abertas = turmasParaMostrar([...ofertaGold, ...ofertaFin]
     .filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.dataInicio) && t.dataInicio >= hoje));
   const inicios = new Map<string, { data: string; local: string }>();
+  // Financiada: as datas registadas em Edição de Cursos › Datas (a próxima de cada curso), para quando ainda não há turma.
+  const datasFin = new Map<string, { data: string; local: string }>();
+  for (const { payload: d } of (await db.query<{ payload: Record<string, unknown> }>(
+    "SELECT payload FROM catalog_items WHERE kind = 'datas' AND regime = 'fin'")).rows) {
+    const data = String(d.inicio ?? "").slice(0, 10);
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(data) || data < hoje || /^inac?tivo$/i.test(String(d.status ?? ""))) continue;
+    const key = chave(String(d.curso ?? ""));
+    const actual = datasFin.get(key);
+    if (key && (!actual || data < actual.data)) datasFin.set(key, { data, local: String(d.local ?? "") });
+  }
   const cheias = new Set<string>();
   // Locais com turmas abertas e vagas, por curso: com mais de um, o cartão diz «Em várias localizações».
   const locaisAbertos = new Map<string, Set<string>>();
@@ -362,7 +372,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const modo = modalidade(curso.modalidadeTexto);
     const entrada = classificarInscricao(curso.regime, curso.tipo, curso.modalidadeTexto);
     const procura = curso.chaves.reduce((max, key) => Math.max(max, vendas.get(key) ?? 0), 0);
-    const inicio = curso.chaves.map(key => inicios.get(key)).find(Boolean);
+    const inicio = curso.chaves.map(key => inicios.get(key)).find(Boolean)
+      ?? (curso.regime === "fin" ? curso.chaves.map(key => datasFin.get(key)).find(Boolean) : undefined);
     const precos = curso.regime === "gold" ? precosDaFicha(payload, curso.preco) : [];
     const desde = precos.length ? Math.min(...precos) : null;
     const gravadaThumb = imagens.get(`${curso.regime}:${curso.id}:thumb`) ?? null;

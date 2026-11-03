@@ -2,11 +2,14 @@ import type { Db } from "./db/pool.js";
 import { turmaDoFormador } from "./sessaoAcesso.js";
 import {
   apagarAtalho, atalhoDoDoc, atalhosDaTurma, atalhosOrfaos, caminhosDosDocsDoLead, docsNaDriveDoFormador, emailsEquipaActiva,
-  emailsSecretaria, formadorPorNome, formadoresPorNomes, gravarAtalho, gravarPastaFormador,
-  gravarPastaNaTurma, gravarPastaPendente, gravarPastasTurma, nomeDaTurma, nomeDoFormador, pastaDaPreinscricao,
-  turmasComAtalhosDoFormador, turmasComEquipa,
+  emailsSecretaria, ficheirosDosDocsDoFormando, formadorPorNome, formadoresPorNomes, formandoParaPasta, formandosPorArrumar, gravarAtalho,
+  gravarPastaDoFormando, gravarPastaFormador, gravarPastaNaTurma, gravarPastaPendente, gravarPastasTurma, leadComPasta, leadDaPasta,
+  marcarDocsArrumados, marcarTurmaNoRegime, nomeDaTurma, nomeDoFormador, pastaDaPreinscricao, pastaFormandosDaTurma,
+  turmasComAtalhosDoFormador, turmasComEquipa, turmasForaDoRegime,
 } from "./repos/driveArvore.js";
-import { contaGoogle, contarPartilhasPorAcertar, marcarPartilhasSincronizadas, pastaDaTurma, turmaComPartilhasPorAcertar } from "./repos/drive.js";
+import {
+  contaGoogle, contarPartilhasPorAcertar, gravarCaminhoFicheiro, marcarPartilhasSincronizadas, pastaDaTurma, turmaComPartilhasPorAcertar,
+} from "./repos/drive.js";
 import { PASTAS_FIN_ANTERIORES, TOPICOS_FIN } from "./dtpTopicosFin.js";
 import { sanitizeFileName } from "./ficheirosValidacao.js";
 import {
@@ -17,6 +20,13 @@ import {
 export const ZONA_PENDENTES = "01_INSCRIÇÕES_PENDENTES";
 export const ZONA_TURMAS = "02_TURMAS_ATIVAS";
 export const ZONA_BOLSA = "00_BOLSA_FORMADORES";
+/** Dentro de «02_TURMAS_ATIVAS», as turmas de cada regime ficam na sua pasta. */
+export const PASTA_REGIME: Record<"gold" | "fin", string> = { gold: "Gold", fin: "Financiada" };
+
+/** «02_TURMAS_ATIVAS / Gold» (ou «/ Financiada»): a pasta das turmas do regime. */
+async function zonaDoRegime(db: Db, token: string, regime: "gold" | "fin") {
+  return garantirPastaFilha(token, await garantirPastaFilha(token, await raizDoProjecto(db, token), ZONA_TURMAS), PASTA_REGIME[regime]);
+}
 
 /** As 14 pastas da Drive são os tópicos do dossiê, pela mesma ordem e com o mesmo nome. */
 export const PASTAS_DTP = TOPICOS_FIN.map(t => t.pasta);
@@ -46,13 +56,17 @@ export async function criarEstruturaDtp(
   const acesso = token || await tokenDrive(db);
   if (!acesso) return null;
   const turmaNome = nomePastaPessoa(input.turmaId, input.nome.trim() || `Turma ${input.turmaId}`);
-  const novaPasta = async () => garantirPastaFilha(acesso, await garantirPastaFilha(acesso, await raizDoProjecto(db, acesso), ZONA_TURMAS), turmaNome);
-  // A turma já tem pasta: fica com o nome actual da turma (os documentos e as partilhas não mudam de sítio).
-  // Só sem pasta (ou se foi apagada na Drive) se procura ou cria pelo nome.
+  const novaPasta = async () => garantirPastaFilha(acesso, await zonaDoRegime(db, acesso, input.regime), turmaNome);
+  // A turma já tem pasta: fica com o nome actual da turma e dentro da pasta do regime (as turmas antigas estavam logo
+  // em «02_TURMAS_ATIVAS»); os documentos e as partilhas vão com ela. Só sem pasta (ou se foi apagada na Drive) se
+  // procura ou cria pelo nome.
   const gravada = await pastaDaTurma(db, input.regime, input.turmaId);
   const turmaPastaId = gravada
-    ? await renomearItemDrive(acesso, gravada, turmaNome).then(() => gravada, err => { if (isNotFound(err)) return novaPasta(); throw err; })
+    ? await renomearItemDrive(acesso, gravada, turmaNome).then(
+      async () => { await moverPastaDrive(acesso, gravada, await zonaDoRegime(db, acesso, input.regime)); return gravada; },
+      err => { if (isNotFound(err)) return novaPasta(); throw err; })
     : await novaPasta();
+  await marcarTurmaNoRegime(db, input.regime, input.turmaId);
   const criadas = await Promise.all(PASTAS_DTP.map(async nome => {
     const id = await garantirPastaFilha(acesso, turmaPastaId, nome, PASTAS_FIN_ANTERIORES[nome] ?? []);
     return [nome, id] as const;
@@ -207,7 +221,7 @@ export async function moverPastaFormando(
   const estrutura = await criarEstruturaDtp(db, { regime, turmaId, nome: turmaNome }, token);
   if (!estrutura?.formandosId) return { moved: false as const, turma: turmaNome };
   const pessoa = nomePastaPessoa(row.id, `${row.nome} ${row.apelido}`);
-  const path = `${ZONA_TURMAS} / ${nomePastaPessoa(turmaId, turmaNome)} / ${PASTA_FORMANDOS} / ${pessoa}`;
+  const path = `${ZONA_TURMAS} / ${PASTA_REGIME[regime]} / ${nomePastaPessoa(turmaId, turmaNome)} / ${PASTA_FORMANDOS} / ${pessoa}`;
   let pastaId = row.drive_pasta_id.trim();
   if (!pastaId) {
     pastaId = await garantirPastaFilha(token, estrutura.formandosId, pessoa);
@@ -217,6 +231,97 @@ export async function moverPastaFormando(
   await gravarPastaNaTurma(db, leadId, pastaId, estrutura.formandosId, turmaId);
   await caminhosDosDocsDoLead(db, leadId, path, turmaNome);
   return { moved: true as const, turma: turmaNome, pastaId };
+}
+
+/**
+ * A pasta do formando, onde ficam todos os documentos dele (os da pré-inscrição, o comprovativo de pagamento, os da
+ * ficha e os contratos): «02_TURMAS_ATIVAS / <regime> / <n.º> - <turma> / 5. Formandos / <n.º> - <nome>». É a pasta
+ * da pré-inscrição quando existe (vem com os documentos e o comprovativo); senão cria-se. Sem turma, fica nas
+ * inscrições pendentes. Sem Drive ligada, null (os ficheiros seguem a regra habitual). `criar: false`: só muda a pasta
+ * que já existe (na mudança de turma), sem criar uma vazia.
+ */
+export async function pastaDoFormando(db: Db, regime: "gold" | "fin", formandoId: number, opts: { criar?: boolean } = {}) {
+  const token = await tokenDrive(db);
+  if (!token) return null;
+  const f = await formandoParaPasta(db, regime, formandoId);
+  if (!f) return null;
+  let pai: string;
+  let caminho: string;
+  if (f.turma_id) {
+    const turmaNome = String((await nomeDaTurma(db, regime, f.turma_id)) ?? `Turma ${f.turma_id}`);
+    const formandosId = await pastaFormandosDaTurma(db, regime, f.turma_id)
+      || (await criarEstruturaDtp(db, { regime, turmaId: f.turma_id, nome: turmaNome }, token))?.formandosId || "";
+    if (!formandosId) return null;
+    pai = formandosId;
+    caminho = `${ZONA_TURMAS} / ${PASTA_REGIME[regime]} / ${nomePastaPessoa(f.turma_id, turmaNome)} / ${PASTA_FORMANDOS}`;
+  } else {
+    pai = await garantirPastaFilha(token, await raizDoProjecto(db, token), ZONA_PENDENTES);
+    caminho = ZONA_PENDENTES;
+  }
+  let pastaId = f.drive_pasta_id && await pastaExiste(token, f.drive_pasta_id) ? f.drive_pasta_id : "";
+  if (!pastaId) {
+    const lead = await leadComPasta(db, regime, f.email, f.curso);
+    if (lead && await pastaExiste(token, lead.drive_pasta_id)) pastaId = lead.drive_pasta_id;
+  }
+  // O nome da pasta: o da pré-inscrição de onde veio («<n.º da pré-inscrição> - <nome>»), ou o da ficha.
+  const dona = pastaId ? await leadDaPasta(db, pastaId) : null;
+  const nome = dona ? nomePastaPessoa(dona.id, `${dona.nome} ${dona.apelido}`) : nomePastaPessoa(formandoId, `${f.nome} ${f.apelido}`);
+  if (pastaId) await moverPastaDrive(token, pastaId, pai);
+  else if (opts.criar === false) return null;
+  else pastaId = await garantirPastaFilha(token, pai, nome);
+  if (pastaId !== f.drive_pasta_id) await gravarPastaDoFormando(db, regime, formandoId, pastaId);
+  return { pastaId, path: `${caminho} / ${nome}` };
+}
+
+/** Arruma as pastas das turmas antigas dentro da pasta do regime (tarefa noturna da Drive). Devolve quantas mudou. */
+export async function arrumarTurmasNoRegime(db: Db, prazoMs: number, limite = 60) {
+  const token = await tokenDrive(db).catch(() => null);
+  if (!token) return 0;
+  const fim = Date.now() + prazoMs;
+  let mudadas = 0;
+  for (const t of await turmasForaDoRegime(db, limite)) {
+    if (Date.now() > fim) break;
+    try {
+      const pasta = await pastaDaTurma(db, t.regime, t.id);
+      if (pasta) await moverPastaDrive(token, pasta, await zonaDoRegime(db, token, t.regime));
+      await marcarTurmaNoRegime(db, t.regime, t.id);
+      mudadas++;
+    } catch (err) {
+      // Pasta apagada na Drive: a próxima gravação da turma cria-a de novo, já no regime.
+      if (isNotFound(err)) await marcarTurmaNoRegime(db, t.regime, t.id);
+    }
+  }
+  return mudadas;
+}
+
+/** Leva os documentos antigos de cada formando para a pasta dele (tarefa noturna da Drive). Devolve quantos mudou. */
+export async function arrumarDocsDosFormandos(db: Db, prazoMs: number, limite = 40) {
+  const token = await tokenDrive(db).catch(() => null);
+  if (!token) return 0;
+  const fim = Date.now() + prazoMs;
+  let movidos = 0;
+  for (const f of await formandosPorArrumar(db, limite)) {
+    if (Date.now() > fim) break;
+    try {
+      const pasta = await pastaDoFormando(db, f.regime, f.id);
+      if (!pasta) continue;
+      for (const doc of await ficheirosDosDocsDoFormando(db, f.regime, f.id)) {
+        try {
+          await moverPastaDrive(token, doc.drive_id, pasta.pastaId);
+        } catch (err) {
+          // Ficheiro apagado na Drive: não há o que mudar (os outros seguem).
+          if (isNotFound(err)) continue;
+          throw err;
+        }
+        await gravarCaminhoFicheiro(db, doc.id, pasta.path);
+        movidos++;
+      }
+      await marcarDocsArrumados(db, f.regime, f.id);
+    } catch {
+      // Sem acesso ou falha da Drive: fica para a próxima noite.
+    }
+  }
+  return movidos;
 }
 
 export async function garantirBolsaFormador(db: Db, nome: string) {

@@ -16,7 +16,7 @@ import { GATILHOS_COM_PRAZO } from "../regrasAgendadas.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
 import { enviarAvisosDocumentos } from "../avisosDocumentos.js";
-import { sincronizarPartilhasPendentes } from "../driveArvore.js";
+import { arrumarDocsDosFormandos, arrumarTurmasNoRegime, sincronizarPartilhasPendentes } from "../driveArvore.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { idParam, paginacao, periodoQuery, textoQuery, validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -440,10 +440,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(503).send({ error: "cron desligado: falta CRON_SECRET" });
     }
     if (!cronAutorizado(req.headers.authorization)) return reply.code(401).send({ error: "cron recusado" });
+    // As pastas das turmas antigas passam para dentro de «02_TURMAS_ATIVAS / Gold» (ou «/ Financiada»).
+    const turmasNoRegime = await arrumarTurmasNoRegime(db, 8_000).catch(() => 0);
     const r = await sincronizarPartilhasPendentes(db, CRON_ORCAMENTO_MS);
     // Recibos e reembolso que ainda estão dentro de um dossiê passam para a pasta da turma.
     const arrumados = await arrumarNaPastaDaTurma(db, 5_000).catch(() => 0);
-    return { ...r, arrumados };
+    // Os documentos antigos de cada formando passam para a pasta dele (com os da pré-inscrição e o comprovativo).
+    const docsDosFormandos = await arrumarDocsDosFormandos(db, 10_000).catch(() => 0);
+    return { ...r, arrumados, turmasNoRegime, docsDosFormandos };
   });
 
   app.post("/v1/events", async (req, reply) => {

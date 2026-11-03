@@ -2,6 +2,7 @@ import { randomBytes } from "node:crypto";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { DOCS_FORMANDO_FIN } from "../../src/partilhado/dossierDocs.js";
+import { pastaDoFormando } from "./driveArvore.js";
 import { storeDriveFile } from "./driveFicheiros.js";
 import { erroFicheiroPublico, nomeIdentificado } from "./ficheirosValidacao.js";
 import { readFormandoDocs } from "./pii.js";
@@ -121,6 +122,8 @@ export async function uploadDocFormandoFin(
   if (!p) return { error: "Formando inexistente." as const };
   const label = DOCS_FORMANDO_FIN.find(d => d.id === tipo)?.label ?? tipo;
   const nome = nomeIdentificado(file.name, label, `${p.nome} ${p.apelido}`);
+  // Na pasta do formando, com os outros documentos dele (sem Drive ligada, a regra habitual).
+  const pasta = await pastaDoFormando(db, "fin", formandoId).catch(() => null);
   const stored = await storeDriveFile(db, opts.actorId, { ...file, name: nome }, {
     kind: "formando-doc",
     regime: "fin",
@@ -128,6 +131,7 @@ export async function uploadDocFormandoFin(
     turma: p.turma,
     label,
     itemId: String(formandoId),
+    ...(pasta ? { parentDriveId: pasta.pastaId, folderPath: pasta.path } : {}),
   });
   const data = hoje();
   await docEnviado(db, "fin", formandoId, tipo, { nome: stored.name, data, driveFileId: stored.id, driveUrl: stored.openUrl ?? "" });

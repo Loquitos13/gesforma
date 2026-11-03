@@ -3,7 +3,7 @@ import { createHash, randomBytes, randomInt } from "node:crypto";
 import { config } from "../config.js";
 import { fmtDataDDMMAAAA, fmtDataHoraLisboa } from "../../../src/partilhado/horaLisboa.js";
 import type { Db } from "../db/pool.js";
-import { nomePastaPessoa } from "../driveArvore.js";
+import { nomePastaPessoa, pastaDoFormando } from "../driveArvore.js";
 import { storeDriveFile } from "../driveFicheiros.js";
 import { renderAutomaticEmail } from "../emailHtml.js";
 import { parseEmailXml } from "../emailXml.js";
@@ -177,8 +177,11 @@ export async function guardarNaDrive(db: Db, a: repo.Assinatura, pdf: Buffer, ac
     const turma = f?.turma_id ? await repo.nomeTurma(db, a.formandoRegime, f.turma_id) : null;
     const pessoa = nomePastaPessoa(a.formandoId, a.signatarioNome);
     if (turma) {
+      // Na pasta do formando, com os outros documentos dele (sem Drive ligada, a regra habitual).
+      const pasta = await pastaDoFormando(db, a.formandoRegime, a.formandoId).catch(() => null);
       return storeDriveFile(db, actorId, ficheiro, {
         kind: "formando-doc", regime: a.formandoRegime, turma, formando: pessoa, label: "Contratos", contratoId: a.contratoId,
+        ...(pasta ? { parentDriveId: pasta.pastaId, folderPath: pasta.path } : {}),
       }, { gerado: true });
     }
     const regime = a.formandoRegime === "fin" ? "Financiada" : "Gold";

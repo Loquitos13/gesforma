@@ -138,7 +138,7 @@ describe("#8 turmas automáticas sem nome ou com nome repetido", () => {
 });
 
 describe("#9 mudar o nome da turma não cria outra pasta na Drive", () => {
-  it("renomeia a pasta gravada; só sem pasta (ou apagada) procura ou cria pelo nome", async () => {
+  it("renomeia a pasta gravada (e leva-a para a pasta do regime); só sem pasta (ou apagada) procura ou cria pelo nome", async () => {
     const ctx = await arrancar();
     await ligarDrive(ctx);
     const { id } = await turmaGold(ctx);
@@ -147,11 +147,16 @@ describe("#9 mudar o nome da turma não cria outra pasta na Drive", () => {
     const chamadas = driveFalsa();
     const e = await criarEstruturaDtp(ctx.db, { regime: "gold", turmaId: id, nome: "Nome Novo" });
     expect(e?.turmaPastaId).toBe("pasta-antiga");
-    const patch = chamadas.find(c => c.metodo === "PATCH" && c.url.includes("/files/pasta-antiga"));
+    const patch = chamadas.find(c => c.metodo === "PATCH" && c.url.includes("/files/pasta-antiga") && c.corpo);
     expect(JSON.parse(patch!.corpo)).toEqual({ name: nomePastaPessoa(id, "Nome Novo") });
-    // Nem se procura a pasta das turmas activas (só serve para procurar ou criar pelo nome).
-    expect(chamadas.some(c => c.url.includes("02_TURMAS_ATIVAS"))).toBe(false);
-    expect((await ctx.db.query<{ drive_pasta_id: string }>("SELECT drive_pasta_id FROM turmas_gold WHERE id = $1", [id])).rows[0]!.drive_pasta_id).toBe("pasta-antiga");
+    // A pasta gravada passa para «02_TURMAS_ATIVAS / Gold»; nunca se procura nem se cria outra com o nome da turma.
+    const mover = chamadas.find(c => c.metodo === "PATCH" && c.url.includes("/files/pasta-antiga") && c.url.includes("addParents="));
+    expect(new URL(mover!.url).searchParams.get("addParents")).toBe("p:Gold");
+    const procurou = (nome: string) => chamadas.some(c => c.metodo === "GET" && (new URL(c.url).searchParams.get("q") ?? "").includes(`name='${nome}'`));
+    expect(procurou("02_TURMAS_ATIVAS")).toBe(true);
+    expect(procurou(nomePastaPessoa(id, "Nome Novo"))).toBe(false);
+    expect((await ctx.db.query<{ drive_pasta_id: string; drive_no_regime: boolean }>("SELECT drive_pasta_id, drive_no_regime FROM turmas_gold WHERE id = $1", [id])).rows[0])
+      .toEqual({ drive_pasta_id: "pasta-antiga", drive_no_regime: true });
 
     // Pasta apagada na Drive (404): procura-se pelo nome.
     vi.unstubAllGlobals();

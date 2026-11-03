@@ -132,3 +132,89 @@ export function turmasComEquipa(c: Consulta) {
      UNION ALL
      SELECT 'fin', id, nome, formador, formadores, cronograma FROM turmas_fin`);
 }
+
+// ─── Turmas na pasta do regime e a pasta de cada formando ─────────────────────
+
+/** Pasta «Formandos» guardada da turma (vazia: a turma ainda não tem estrutura na Drive). */
+export async function pastaFormandosDaTurma(c: Consulta, regime: Regime, turmaId: number) {
+  const r = await one<{ id: string }>(c, `SELECT COALESCE(drive_formandos_id, '') AS id FROM ${tabelaRegime("turmas", regime)} WHERE id = $1`, [turmaId]);
+  return r?.id ?? "";
+}
+
+/** A pasta da turma já está dentro da pasta do seu regime («02_TURMAS_ATIVAS / Gold» ou «/ Financiada»). */
+export async function marcarTurmaNoRegime(c: Consulta, regime: Regime, turmaId: number) {
+  await many(c, `UPDATE ${tabelaRegime("turmas", regime)} SET drive_no_regime = true WHERE id = $1`, [turmaId]);
+}
+
+/** Turmas com pasta na Drive ainda fora da pasta do regime (as criadas antes desta arrumação). */
+export function turmasForaDoRegime(c: Consulta, limite: number) {
+  return many<{ regime: Regime; id: number; nome: string }>(c,
+    `SELECT * FROM (
+       SELECT 'gold' AS regime, id, nome FROM turmas_gold WHERE COALESCE(drive_pasta_id, '') <> '' AND NOT drive_no_regime
+       UNION ALL
+       SELECT 'fin', id, nome FROM turmas_fin WHERE COALESCE(drive_pasta_id, '') <> '' AND NOT drive_no_regime
+     ) t ORDER BY regime DESC, id LIMIT $1`,
+    [limite]);
+}
+
+export function formandoParaPasta(c: Consulta, regime: Regime, id: number) {
+  return one<{ id: number; nome: string; apelido: string; email: string; curso: string; turma_id: number | null; drive_pasta_id: string }>(c,
+    `SELECT id, COALESCE(nome, '') AS nome, COALESCE(apelido, '') AS apelido, COALESCE(email, '') AS email, COALESCE(curso, '') AS curso,
+            turma_id, COALESCE(drive_pasta_id, '') AS drive_pasta_id
+       FROM ${tabelaRegime("formandos", regime)} WHERE id = $1`,
+    [id]);
+}
+
+/** A pré-inscrição desta pessoa com pasta na Drive (a do mesmo curso primeiro, a mais recente). */
+export function leadComPasta(c: Consulta, regime: Regime, email: string, curso: string) {
+  return one<{ id: number; nome: string; apelido: string; drive_pasta_id: string }>(c,
+    `SELECT id, COALESCE(nome, '') AS nome, COALESCE(apelido, '') AS apelido, drive_pasta_id FROM preinscricoes
+      WHERE lower(btrim(email)) = lower(btrim($1)) AND btrim($1) <> '' AND COALESCE(regime, 'gold') = $2 AND COALESCE(drive_pasta_id, '') <> ''
+      ORDER BY (lower(btrim(COALESCE(curso, ''))) = lower(btrim($3))) DESC, id DESC LIMIT 1`,
+    [email, regime, curso]);
+}
+
+/** A pré-inscrição dona desta pasta (para o nome da pasta: «<n.º da pré-inscrição> - <nome>»). */
+export function leadDaPasta(c: Consulta, pastaId: string) {
+  return one<{ id: number; nome: string; apelido: string }>(c,
+    "SELECT id, COALESCE(nome, '') AS nome, COALESCE(apelido, '') AS apelido FROM preinscricoes WHERE drive_pasta_id = $1 ORDER BY id DESC LIMIT 1",
+    [pastaId]);
+}
+
+export async function gravarPastaDoFormando(c: Consulta, regime: Regime, id: number, pastaId: string) {
+  await many(c, `UPDATE ${tabelaRegime("formandos", regime)} SET drive_pasta_id = $2 WHERE id = $1`, [id, pastaId]);
+}
+
+/**
+ * Formandos numa turma com documentos ainda por arrumar na pasta da pessoa. Os que não têm ficheiros na Google Drive
+ * ficam logo arrumados (nada a mover).
+ */
+export async function formandosPorArrumar(c: Consulta, limite: number) {
+  for (const regime of ["gold", "fin"] as const) {
+    const t = tabelaRegime("formandos", regime);
+    await many(c,
+      `UPDATE ${t} x SET drive_docs_arrumados = true
+        WHERE NOT x.drive_docs_arrumados AND NOT EXISTS (
+          SELECT 1 FROM formando_docs d JOIN drive_files f ON f.id = d.drive_file_id
+           WHERE d.regime = '${regime}' AND d.formando_id = x.id AND f.stored_in = 'google' AND COALESCE(f.drive_id, '') <> '')`);
+  }
+  return many<{ regime: Regime; id: number }>(c,
+    `SELECT * FROM (
+       SELECT 'gold' AS regime, id FROM formandos_gold WHERE turma_id IS NOT NULL AND NOT drive_docs_arrumados
+       UNION ALL
+       SELECT 'fin', id FROM formandos_fin WHERE turma_id IS NOT NULL AND NOT drive_docs_arrumados
+     ) t ORDER BY regime DESC, id LIMIT $1`,
+    [limite]);
+}
+
+/** Ficheiros dos documentos da ficha que estão na Google Drive. */
+export function ficheirosDosDocsDoFormando(c: Consulta, regime: Regime, formandoId: number) {
+  return many<{ id: string; drive_id: string }>(c,
+    `SELECT DISTINCT f.id, f.drive_id FROM formando_docs d JOIN drive_files f ON f.id = d.drive_file_id
+      WHERE d.regime = $1 AND d.formando_id = $2 AND d.drive_file_id <> '' AND f.stored_in = 'google' AND COALESCE(f.drive_id, '') <> ''`,
+    [regime, formandoId]);
+}
+
+export async function marcarDocsArrumados(c: Consulta, regime: Regime, id: number) {
+  await many(c, `UPDATE ${tabelaRegime("formandos", regime)} SET drive_docs_arrumados = true WHERE id = $1`, [id]);
+}

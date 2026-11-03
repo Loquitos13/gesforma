@@ -6,6 +6,7 @@
 import { DOCS_FORMANDO_FIN, DOCS_FORMANDO_GOLD } from "../../src/partilhado/dossierDocs.js";
 import { hojeLisboa } from "./datas.js";
 import type { Db } from "./db/pool.js";
+import { pastaDoFormando } from "./driveArvore.js";
 import { storeDriveFile } from "./driveFicheiros.js";
 import { erroFicheiroPublico, nomeIdentificado } from "./ficheirosValidacao.js";
 import { mergeDocsJson } from "./formandoFinDocs.js";
@@ -32,8 +33,11 @@ export async function carregarDocPelaEquipa(
   if (!f) return { ok: false, status: 404, error: "Formando inexistente." };
   const pessoa = `${f.nome ?? ""} ${f.apelido ?? ""}`.replace(/\s+/g, " ").trim();
   const label = def?.label ?? docId;
+  // Na pasta do formando, com os outros documentos dele (sem Drive ligada, a regra habitual).
+  const pasta = await pastaDoFormando(db, regime, formandoId).catch(() => null);
   const guardado = await storeDriveFile(db, actor.id, { ...file, name: nomeIdentificado(file.name, label, pessoa) }, {
     kind: "formando-doc", regime, formando: pessoa, turma: String(f.turma ?? "") || undefined, label, itemId: String(formandoId),
+    ...(pasta ? { parentDriveId: pasta.pastaId, folderPath: pasta.path } : {}),
   });
   const data = hojeLisboa();
   await docCarregadoPelaEquipa(db, regime, formandoId, docId, { nome: guardado.name, data, driveFileId: guardado.id, driveUrl: guardado.openUrl ?? "" }, actor.id);

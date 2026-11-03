@@ -11,6 +11,7 @@ import { ligarPreinscricaoAoFormandoGold, moverDocsParaTurma } from "../../percu
 import { pode } from "../../permissoes/capacidades.js";
 import { readFormandoPii, writeFormandoDocs, writeFormandoPiiPatch } from "../../pii.js";
 import { precoParaOferta } from "../../precoOferta.js";
+import { pastaDoFormando } from "../../driveArvore.js";
 import { linhaFormando } from "../../repos/formandos.js";
 import { definirSemEmails } from "../../repos/formandosDocs.js";
 import { piiFormandoFinParaGravar } from "../../repos/formandoFinanciamento.js";
@@ -206,6 +207,8 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     }
     if (mapped?.email && d.turmaId && mapped.turmaId) {
       await moverDocsParaTurma(db, { email: mapped.email, turmaId: mapped.turmaId, curso: mapped.curso, regime: "gold" }).catch(() => undefined);
+      // A pasta do formando na Drive (documentos da ficha, contratos) vai para a turma nova.
+      await pastaDoFormando(db, "gold", id, { criar: false }).catch(() => null);
     }
     if (mapped && d.estado && /conclu/i.test(d.estado) && mapped.email) {
       await ingestEvent(db, "formando.completed", {
@@ -337,6 +340,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       const email = String(current.email ?? "");
       if (turmaNova && email) {
         await moverDocsParaTurma(db, { email, turmaId: Number(turmaNova.id), curso: String(turmaNova.curso ?? current.curso ?? ""), regime: "fin" }).catch(() => undefined);
+        await pastaDoFormando(db, "fin", id, { criar: false }).catch(() => null);
       }
     }
     const row = await linhaFormando(db, "fin", id);

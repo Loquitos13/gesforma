@@ -123,6 +123,20 @@ export async function registarMensagemWhatsapp(c: Consulta, telefone: string, di
   );
 }
 
+/**
+ * Regista uma mensagem recebida com o seu id da Meta, uma só vez: devolve `false` se esse id já estava registado (a Meta
+ * pode entregar a mesma mensagem mais de uma vez, até em simultâneo).
+ */
+export async function registarEntradaWhatsapp(c: Consulta, telefone: string, corpo: string, wamid: string) {
+  const r = await one<{ id: string }>(
+    c,
+    `INSERT INTO whatsapp_mensagens (telefone, direccao, corpo, wamid) VALUES ($1, 'in', $2, $3)
+     ON CONFLICT (wamid) DO NOTHING RETURNING id::text AS id`,
+    [telefone, corpo.slice(0, 4000), wamid],
+  );
+  return Boolean(r);
+}
+
 export async function wamidJaVisto(c: Consulta, wamid: string) {
   return Boolean(await one(c, "SELECT 1 FROM whatsapp_mensagens WHERE wamid = $1 LIMIT 1", [wamid]));
 }

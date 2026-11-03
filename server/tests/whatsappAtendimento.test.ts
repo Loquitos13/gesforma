@@ -1,5 +1,6 @@
 // WhatsApp: botões e listas nas respostas do assistente, pedido para falar com a equipa (bot em pausa + aviso por email)
 // e caixa de conversas do CRM (a equipa responde pelo número da ENA, só até 24 horas depois da última mensagem da pessoa).
+import { createHmac } from "node:crypto";
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
@@ -66,7 +67,7 @@ describe("botões e listas", () => {
       contacts: [{ wa_id: "351910000001", profile: { name: "Rita" } }],
       messages: [{ from: "351910000001", id: "wamid.1", type: "interactive", interactive: { list_reply: { id: "4", title: "Falar com a equipa" } } }],
     } }] }] });
-    expect(msgs).toEqual([{ from: "351910000001", text: "4", wamid: "wamid.1", nome: "Rita", rotulo: "Falar com a equipa" }]);
+    expect(msgs).toEqual([{ from: "351910000001", text: "4", wamid: "wamid.1", nome: "Rita", rotulo: "Falar com a equipa", ts: 0 }]);
   });
 });
 
@@ -133,5 +134,32 @@ describe("falar com uma pessoa", () => {
     expect(r.statusCode).toBe(409);
     expect(r.json().error).toMatch(/24 horas/);
     expect((await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json().podeResponder).toBe(false);
+  });
+});
+
+describe("webhook: sem respostas repetidas", () => {
+  it("ignora mensagens atrasadas, do próprio número e a mesma mensagem entregue duas vezes", async () => {
+    const { config } = await import("../src/config.js");
+    config.whatsappAppSecret = "segredo-teste-wa";
+    const t = tel();
+    const agora = Math.floor(Date.now() / 1000);
+    const msg = (id: string, from: string, ts: number) => ({ from, id, timestamp: String(ts), type: "text", text: { body: "olá" } });
+    const entregar = (mensagens: unknown[]) => {
+      const corpo = JSON.stringify({ entry: [{ changes: [{ value: { metadata: { display_phone_number: "351962215550" }, messages: mensagens } }] }] });
+      return ctx.app.inject({
+        method: "POST", url: "/v1/public/whatsapp/webhook", payload: corpo,
+        headers: { "content-type": "application/json", "x-hub-signature-256": `sha256=${createHmac("sha256", "segredo-teste-wa").update(corpo).digest("hex")}` },
+      });
+    };
+    pedidosMeta.length = 0;
+    // Uma mensagem de ontem (entrega repetida pela Meta) e uma do próprio número: nenhuma resposta.
+    expect((await entregar([msg(`wamid.antiga.${t}`, t, agora - 86_400), msg(`wamid.eco.${t}`, "351962215550", agora)])).statusCode).toBe(200);
+    expect(pedidosMeta).toHaveLength(0);
+    // A mesma mensagem duas vezes ao mesmo tempo: uma resposta.
+    const nova = msg(`wamid.nova.${t}`, t, agora);
+    const [a, b] = await Promise.all([entregar([nova]), entregar([nova])]);
+    expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
+    expect(pedidosMeta.filter(p => p.to === t)).toHaveLength(1);
+    config.whatsappAppSecret = "";
   });
 });

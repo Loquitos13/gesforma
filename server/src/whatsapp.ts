@@ -204,6 +204,8 @@ async function enviarCloudApi(db: Db, to: string, mensagem: Resposta) {
 type WaMsg = {
   from?: string;
   id?: string;
+  /** Segundos desde 1970 (texto). */
+  timestamp?: string;
   type?: string;
   text?: { body?: string };
   button?: { text?: string };
@@ -212,19 +214,29 @@ type WaMsg = {
 
 type WaContacto = { wa_id?: string; profile?: { name?: string } };
 
-export function extractIncoming(body: unknown): { from: string; text: string; wamid: string; nome: string; rotulo: string }[] {
-  const out: { from: string; text: string; wamid: string; nome: string; rotulo: string }[] = [];
-  const root = body as { entry?: Array<{ changes?: Array<{ value?: { messages?: WaMsg[]; contacts?: WaContacto[] } }> }> };
+/** Mensagens mais antigas do que isto não têm resposta: são entregas atrasadas (a Meta repete as que falharam durante dias). */
+export const WHATSAPP_ANTIGA_MIN = 15;
+
+export type Entrada = { from: string; text: string; wamid: string; nome: string; rotulo: string; ts: number };
+
+export function extractIncoming(body: unknown): Entrada[] {
+  const out: Entrada[] = [];
+  const root = body as { entry?: Array<{ changes?: Array<{ value?: {
+    messages?: WaMsg[]; contacts?: WaContacto[]; metadata?: { display_phone_number?: string };
+  } }> }> };
   for (const entry of root.entry ?? []) {
     for (const change of entry.changes ?? []) {
       // O nome do perfil de WhatsApp da pessoa (para a caixa de conversas).
       const nomes = new Map((change.value?.contacts ?? []).map(c => [c.wa_id ?? "", c.profile?.name ?? ""]));
+      // Nunca responder ao próprio número da ENA (evita conversas do bot consigo mesmo).
+      const proprio = (change.value?.metadata?.display_phone_number ?? "").replace(/\D/g, "");
       for (const m of change.value?.messages ?? []) {
+        if (proprio && (m.from ?? "").replace(/\D/g, "") === proprio) continue;
         // Botão ou linha de lista tocados: conta o id da opção (o número ou «sim»/«menu»); o título fica no histórico.
         const escolha = m.interactive?.button_reply ?? m.interactive?.list_reply;
         const text = escolha?.id || escolha?.title || m.text?.body || m.button?.text || "";
         const rotulo = escolha?.title ?? "";
-        if (m.from && text) out.push({ from: m.from, text, wamid: m.id ?? "", nome: nomes.get(m.from) ?? "", rotulo });
+        if (m.from && text) out.push({ from: m.from, text, wamid: m.id ?? "", nome: nomes.get(m.from) ?? "", rotulo, ts: Number(m.timestamp) || 0 });
       }
     }
   }
@@ -295,6 +307,10 @@ export function registerWhatsappRoutes(
       try { body = JSON.parse(raw); } catch { return reply.code(400).send({ error: "JSON inválido" }); }
       const incoming = extractIncoming(body).slice(0, WHATSAPP_MAX_MENSAGENS);
       for (const msg of incoming) {
+        if (msg.ts && Date.now() / 1000 - msg.ts > WHATSAPP_ANTIGA_MIN * 60) {
+          req.log.info({ wamid: msg.wamid, idadeMin: Math.round((Date.now() / 1000 - msg.ts) / 60) }, "WhatsApp: mensagem atrasada ignorada");
+          continue;
+        }
         const out = await handleWhatsappText(db, msg.from, msg.text, msg.wamid, msg.nome, msg.rotulo);
         for (const m of out.mensagens) {
           await enviarCloudApi(db, out.telefone, m);

@@ -8,7 +8,7 @@ import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./securit
 import { avisarWhatsappHumano } from "./avisosEquipa.js";
 import {
   gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
-  pedirHumanoWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp, wamidJaVisto,
+  pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
 } from "./repos/whatsapp.js";
 
 type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consentimento";
@@ -180,11 +180,6 @@ async function logMsg(db: Db, telefone: string, direccao: "in" | "out", corpo: s
   }
 }
 
-async function wamidVisto(db: Db, wamid: string) {
-  if (!wamid) return false;
-  return wamidJaVisto(db, wamid);
-}
-
 /** Pergunta de consentimento (RGPD) antes de gravar a pré-inscrição: o mesmo texto e a mesma política do formulário do site. */
 async function pedidoConsentimento(db: Db): Promise<Resposta> {
   const { texto, url } = await politicaPrivacidade(db);
@@ -214,11 +209,13 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     const r = "Não percebi. Escreva *menu* para recomeçar.";
     return { replies: [r], mensagens: [r] as Resposta[], telefone };
   }
-  if (wamid && await wamidVisto(db, wamid)) {
-    return { replies: [], mensagens, telefone, duplicado: true };
+  const corpoEntrada = sanitizeText(rotulo, 500).trim() || text;
+  // Com id da Meta, o registo é também a reserva: a mesma mensagem entregue duas vezes só tem uma resposta.
+  if (wamid) {
+    if (!(await registarEntradaWhatsapp(db, telefone, corpoEntrada, wamid))) return { replies: [], mensagens, telefone, duplicado: true };
+  } else {
+    await logMsg(db, telefone, "in", corpoEntrada);
   }
-
-  await logMsg(db, telefone, "in", sanitizeText(rotulo, 500).trim() || text, wamid || undefined);
   const perfil = sanitizeHeader(nomePerfil).slice(0, 120);
   if (perfil) await gravarNomePerfilWhatsapp(db, telefone, perfil).catch(() => undefined);
   const sess = await getSessao(db, telefone);

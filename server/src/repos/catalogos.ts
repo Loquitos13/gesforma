@@ -55,17 +55,19 @@ export async function listarOpcoes(
         }));
     }
     case "turmas": {
-      const linhas = await many<{ id: number; regime: Regime; nome: string; curso: string; data_inicio: string; fechada: boolean }>(
+      const linhas = await many<{ id: number; regime: Regime; nome: string; curso: string; data_inicio: string; fechada: boolean; local: string; horario: string }>(
         c,
-        `SELECT id, 'gold' AS regime, nome, curso, data_inicio, false AS fechada FROM turmas_gold WHERE $1::text IS NULL OR $1 = 'gold'
+        `SELECT id, 'gold' AS regime, nome, curso, data_inicio, false AS fechada, COALESCE(local, '') AS local, COALESCE(horario, '') AS horario
+           FROM turmas_gold WHERE $1::text IS NULL OR $1 = 'gold'
          UNION ALL
-         SELECT id, 'fin' AS regime, nome, curso, data_inicio, fechada_em IS NOT NULL AS fechada FROM turmas_fin WHERE $1::text IS NULL OR $1 = 'fin'
+         SELECT id, 'fin' AS regime, nome, curso, data_inicio, fechada_em IS NOT NULL AS fechada, COALESCE(local, '') AS local, COALESCE(horario, '') AS horario
+           FROM turmas_fin WHERE $1::text IS NULL OR $1 = 'fin'
          ORDER BY data_inicio DESC, nome`,
         [regime ?? null],
       );
       return linhas
         .filter(l => todos || !l.fechada)
-        .map(l => ({ valor: l.nome, rotulo: l.nome, id: l.id, regime: l.regime, extra: { curso: l.curso, inicio: l.data_inicio } }));
+        .map(l => ({ valor: l.nome, rotulo: l.nome, id: l.id, regime: l.regime, extra: { curso: l.curso, inicio: l.data_inicio, local: l.local, horario: l.horario } }));
     }
     case "formadores": {
       const linhas = await many<{ id: number; nome: string; estado: string; regimes: unknown }>(

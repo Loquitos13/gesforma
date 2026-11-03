@@ -37,6 +37,7 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
   const [curso, setCurso] = useState("");
   const [turmaId, setTurmaId] = useState("");
   const [local, setLocal] = useState("");
+  const [horario, setHorario] = useState("");
   const [pagamento, setPagamento] = useState<Pagamento>("por_pagar");
   const [metodo, setMetodo] = useState("");
   const [criarAcesso, setCriarAcesso] = useState(true);
@@ -47,16 +48,29 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
 
   useEffect(() => {
     if (!aberto) return;
-    setNome(""); setApelido(""); setEmail(""); setTelf(""); setCurso(""); setTurmaId(""); setLocal("");
+    setNome(""); setApelido(""); setEmail(""); setTelf(""); setCurso(""); setTurmaId(""); setLocal(""); setHorario("");
     setPagamento("por_pagar"); setMetodo(""); setCriarAcesso(true); setSemEmails(true); setErros({});
   }, [aberto]);
 
-  // Só as turmas do curso escolhido (as opções trazem o curso em `extra`).
+  // Primeiro o curso, depois o local e o horário; as turmas são as desse curso, local e horário (vêm em `extra`).
+  const igual = (a: unknown, b: string) => String(a ?? "").trim().toLowerCase() === b.trim().toLowerCase();
+  const doCurso = useMemo(() => turmas.opcoes.filter(t => curso && igual(t.extra?.curso, curso)), [turmas.opcoes, curso]);
+  const unicos = (v: string[]) => [...new Set(v.map(x => x.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b, "pt"))
+    .map(x => ({ valor: x, rotulo: x }));
+  // Locais: os das turmas do curso (sem turmas, todos os locais).
+  const locaisDoCurso = useMemo(() => {
+    const das = unicos(doCurso.map(t => String(t.extra?.local ?? "")));
+    return das.length ? das : locais.selecao;
+  }, [doCurso, locais.selecao]);
+  const horariosDoLocal = useMemo(
+    () => unicos(doCurso.filter(t => !local || igual(t.extra?.local, local)).map(t => String(t.extra?.horario ?? ""))),
+    [doCurso, local],
+  );
   const turmasDoCurso = useMemo(
-    () => turmas.opcoes
-      .filter(t => !curso || String(t.extra?.curso ?? "").trim().toLowerCase() === curso.trim().toLowerCase())
+    () => doCurso
+      .filter(t => (!local || igual(t.extra?.local, local)) && (!horario || igual(t.extra?.horario, horario)))
       .map(t => ({ valor: String(t.id), rotulo: t.rotulo })),
-    [turmas.opcoes, curso],
+    [doCurso, local, horario],
   );
 
   function validarCampos() {
@@ -124,18 +138,21 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
         </Campo>
         <Campo rotulo="Telemóvel">{p => <Entrada {...p} type="tel" value={telf} onChange={e => setTelf(e.target.value)} autoComplete="off" />}</Campo>
         <Campo rotulo={gold ? "Curso" : "Curso / UFCD"} obrigatorio erro={erros.curso}>
-          {p => <Selecao {...p} opcoes={cursos.selecao} vazio="Escolher…" value={curso} onChange={e => { setCurso(e.target.value); setTurmaId(""); }} />}
+          {p => <Selecao {...p} opcoes={cursos.selecao} vazio="Escolher…" value={curso} onChange={e => { setCurso(e.target.value); setLocal(""); setHorario(""); setTurmaId(""); }} />}
         </Campo>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <Campo rotulo="Turma" ajuda={turmasDoCurso.length ? "Opcional: sem turma fica como avulso." : "Não há turmas abertas deste curso."}>
-            {p => <Selecao {...p} opcoes={turmasDoCurso} vazio="Sem turma" value={turmaId} onChange={e => setTurmaId(e.target.value)} disabled={!curso} />}
+          <Campo rotulo="Local">
+            {p => <Selecao {...p} opcoes={locaisDoCurso} vazio="—" value={local} disabled={!curso}
+              onChange={e => { setLocal(e.target.value); setHorario(""); setTurmaId(""); }} />}
           </Campo>
-          {gold && (
-            <Campo rotulo="Local" ajuda={turmaId ? "Vem da turma." : undefined}>
-              {p => <Selecao {...p} opcoes={locais.selecao} vazio="—" value={local} onChange={e => setLocal(e.target.value)} disabled={Boolean(turmaId)} />}
-            </Campo>
-          )}
+          <Campo rotulo="Horário">
+            {p => <Selecao {...p} opcoes={horariosDoLocal} vazio="Todos" value={horario} disabled={!curso || !horariosDoLocal.length}
+              onChange={e => { setHorario(e.target.value); setTurmaId(""); }} />}
+          </Campo>
         </div>
+        <Campo rotulo="Turma" ajuda={!curso ? "Escolha primeiro o curso." : turmasDoCurso.length ? "Opcional: sem turma fica como avulso." : "Não há turmas abertas deste curso neste local e horário."}>
+          {p => <Selecao {...p} opcoes={turmasDoCurso} vazio="Sem turma" value={turmaId} onChange={e => setTurmaId(e.target.value)} disabled={!curso} />}
+        </Campo>
         {gold && (
           <div className="flex flex-col gap-2">
             <span className="text-[13px] font-medium text-tinta">Pagamento</span>

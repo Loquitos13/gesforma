@@ -15,10 +15,10 @@ import { FormRegra } from "./FormRegra";
 import { MolduraEmail } from "./Previsualizacao";
 
 const FASES: { id: string; titulo: string; teste: (evento: string) => boolean }[] = [
-  { id: "pre", titulo: "Pré-inscrição", teste: e => (e.startsWith("preinscricao.") && e !== "preinscricao.unpaid_3d") || e.startsWith("lead.") },
-  { id: "pag", titulo: "Pagamento", teste: e => e.startsWith("payment.") || e === "preinscricao.unpaid_3d" || e === "sale.followup" },
+  { id: "pre", titulo: "Pré-inscrição", teste: e => (e.startsWith("preinscricao.") && e !== "preinscricao.unpaid_3d") || e.startsWith("lead.") || e.startsWith("matricula.") || e.startsWith("documentos.") },
+  { id: "pag", titulo: "Pagamento", teste: e => e.startsWith("payment.") || e.startsWith("pagamento.") || e === "preinscricao.unpaid_3d" || e === "sale.followup" },
   { id: "form", titulo: "Formação", teste: e => e.startsWith("turma.") || e.startsWith("formando.") },
-  { id: "int", titulo: "Avisos internos", teste: e => e.startsWith("sessao.") },
+  { id: "int", titulo: "Avisos internos", teste: e => e.startsWith("sessao.") || e.startsWith("equipa.") || e.startsWith("formador.") },
 ];
 
 const INVALIDAR = ["emails:"];

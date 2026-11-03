@@ -126,6 +126,7 @@ function kindFolder(kind: string) {
     conteudo: "Conteudos",
     dtp: "DTP",
     documento: "Documentos",
+    fatura: "Faturas",
   };
   return map[kind] ?? sanitizeFileName(kind || "Documentos");
 }

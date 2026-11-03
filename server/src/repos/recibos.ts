@@ -89,6 +89,8 @@ export type LinhaExportacao = {
   id: string; criado: string; pago_em: string | null; nome: string; email: string; curso: string; turma: string | null;
   valor: number; metodo: string; estado: string; comprovativo: boolean; confirmado_por: string | null; recusa_motivo: string;
   lead_pii: string | null; lead_nif: string | null; recibo: string | null;
+  /** Fatura anexada: o número (ou «sim» sem número); null sem fatura. */
+  fatura: string | null;
 };
 
 /** Mesmos filtros da lista de pagamentos (`repos/pagamentos.ts`), sem paginação (até 10 000 linhas). */
@@ -98,11 +100,13 @@ export function linhasExportacao(c: Consulta, f: FiltrosPagamentos) {
     `SELECT p.id, p.created_at::text AS criado, p.pago_em::text AS pago_em, p.nome, p.email, p.curso, t.nome AS turma,
             p.valor::float AS valor, p.metodo, p.estado, (comp.id IS NOT NULL) AS comprovativo, u.name AS confirmado_por,
             p.recusa_motivo, lead.pii_enc AS lead_pii, lead.nif AS lead_nif,
-            CASE WHEN r.id IS NULL THEN NULL ELSE r.numero || '/' || r.ano END AS recibo
+            CASE WHEN r.id IS NULL THEN NULL ELSE r.numero || '/' || r.ano END AS recibo,
+            CASE WHEN fat.pagamento_id IS NULL THEN NULL ELSE COALESCE(NULLIF(fat.numero, ''), 'sim') END AS fatura
        FROM pagamentos p
        LEFT JOIN turmas_gold t ON t.id = p.turma_id
        LEFT JOIN users u ON u.id = p.confirmado_por
        LEFT JOIN recibos r ON r.pagamento_id = p.id
+       LEFT JOIN faturas fat ON fat.pagamento_id = p.id
        LEFT JOIN LATERAL (
          SELECT l.id, l.pii_enc, l.nif FROM preinscricoes l WHERE l.pagamento_id = p.id ORDER BY l.id DESC LIMIT 1
        ) lead ON true

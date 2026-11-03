@@ -10,5 +10,8 @@ export const regras: Regra[] = [
   ["POST", "/v1/pagamentos", CONTABILIDADE],
   ["PATCH", "/v1/pagamentos/:id", CONTABILIDADE],
   ["DELETE", "/v1/pagamentos/:id", CONTABILIDADE],
+  // A fatura (PDF) anexa-a e envia-a a contabilidade; a coordenação Gold vê-a.
+  ["POST", "/v1/pagamentos/:id/fatura", CONTABILIDADE],
+  ["POST", "/v1/pagamentos/:id/fatura/enviar", CONTABILIDADE],
   ["*", "/v1/pagamentos*", PAGAMENTOS],
 ];

@@ -82,7 +82,11 @@ export function fillVars(text: string, vars: Record<string, string>) {
       if (k === "telefones_itens") return itens.map(blocoContactos).join("<br><br>");
       return itens.map(i => `• ${i}`).join("<br>");
     }
-    return sanitizeHeader(vars[k] ?? "");
+    // Uma variável que começa por espaço (« sobre CCP», « (12-11-2026)», « n.º FT 1») junta-se ao texto anterior:
+    // o espaço fica (o resto é limpo como sempre).
+    const bruto = String(vars[k] ?? "");
+    const limpo = sanitizeHeader(bruto);
+    return limpo && /^\s/.test(bruto) ? ` ${limpo}` : limpo;
   });
 }
 

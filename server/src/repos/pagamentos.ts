@@ -191,18 +191,25 @@ const BASE = `
     SELECT d.id, d.estado, d.nome, d.drive_file_id, d.created_at, d.observacao FROM preinscricao_docs d
      WHERE lead.id IS NOT NULL AND d.preinscricao_id = lead.id AND d.tipo = 'comprovativo'
      ORDER BY d.created_at DESC LIMIT 1
-  ) comp ON true`;
+  ) comp ON true
+  LEFT JOIN faturas fat ON fat.pagamento_id = p.id`;
 
 export const SITUACOES = ["a_confirmar", "pedido", "recusado", "pago", "cancelado", "reembolsado"] as const;
 export type Situacao = (typeof SITUACOES)[number];
 
-export type FiltrosPagamentos = { situacao?: Situacao; curso?: string; metodo?: string; de?: string; ate?: string; q?: string };
+export type FiltrosPagamentos = {
+  situacao?: Situacao; curso?: string; metodo?: string; de?: string; ate?: string; q?: string;
+  /** «por_emitir»: pagos sem fatura; «emitida»: com fatura. */
+  fatura?: "por_emitir" | "emitida";
+};
 
 export function filtros(f: FiltrosPagamentos, comSituacao = true) {
   const w = new Filtros();
   if (comSituacao) w.add(`(${SITUACAO}) = ?`, f.situacao);
   w.add("p.curso = ?", f.curso);
   w.add("p.metodo = ?", f.metodo);
+  if (f.fatura === "por_emitir") w.sempre("p.estado = 'Pago' AND fat.pagamento_id IS NULL");
+  else if (f.fatura === "emitida") w.sempre("fat.pagamento_id IS NOT NULL");
   w.add("COALESCE(p.pago_em, p.created_at) >= (?::date::timestamp AT TIME ZONE 'Europe/Lisbon')", f.de);
   w.add("COALESCE(p.pago_em, p.created_at) < ((?::date + 1)::timestamp AT TIME ZONE 'Europe/Lisbon')", f.ate);
   const q = padraoPesquisa(f.q);
@@ -215,6 +222,7 @@ export type LinhaPagamento = {
   criado: string; pago_em: string | null; recusado_em: string | null; recusa_motivo: string; referencia: string;
   formando_id: number | null; lead_id: number | null; lead_regime: string | null; pedido_em: string | null;
   comprovativo_id: number | null; comprovativo_nome: string | null; comprovativo_ficheiro: string | null; comprovativo_em: string | null;
+  fatura_em: string | null;
 };
 
 const ORDENS: Record<string, string> = {
@@ -232,7 +240,7 @@ export function listarPagamentos(c: Consulta, f: FiltrosPagamentos & { pagina: n
             p.created_at::text AS criado, p.pago_em::text AS pago_em, p.recusado_em::text AS recusado_em, p.recusa_motivo, p.referencia,
             p.formando_id, lead.id AS lead_id, lead.regime AS lead_regime, lead.pagamento_pedido_em::text AS pedido_em,
             comp.id AS comprovativo_id, comp.nome AS comprovativo_nome, NULLIF(comp.drive_file_id, '') AS comprovativo_ficheiro,
-            comp.created_at::text AS comprovativo_em
+            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em
        ${BASE} ${w.where}`,
     w.params,
     { pagina: f.pagina, porPagina: f.porPagina, ordem },
@@ -246,7 +254,7 @@ export function obterPagamentoDetalhe(c: Consulta, id: string) {
             p.created_at::text AS criado, p.pago_em::text AS pago_em, p.recusado_em::text AS recusado_em, p.recusa_motivo, p.referencia,
             p.formando_id, lead.id AS lead_id, lead.regime AS lead_regime, lead.pagamento_pedido_em::text AS pedido_em,
             comp.id AS comprovativo_id, comp.nome AS comprovativo_nome, NULLIF(comp.drive_file_id, '') AS comprovativo_ficheiro,
-            comp.created_at::text AS comprovativo_em
+            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em
        ${BASE} WHERE p.id = $1`,
     [id],
   );

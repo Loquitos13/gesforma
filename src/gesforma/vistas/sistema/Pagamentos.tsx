@@ -7,12 +7,14 @@ import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  Aviso, BarrasHorizontais, Botao, Cartao, ErroCarregar, Esqueleto, Filtros, Kpi, KpiFaixa, PageHeader, Paginacao, Separadores, Tabela,
+  Aviso, BarrasHorizontais, Botao, Cartao, ErroCarregar, Esqueleto, Estado, Filtros, Kpi, KpiFaixa, PageHeader, Paginacao, Separadores, Tabela,
   Vazio, data, eur, evolucao, num, useFiltrosUrl, type Coluna,
 } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 import { DetalhePagamento, EstadoPagamento } from "./pagamentos/DetalhePagamento";
 import { RegistarPagamento } from "./pagamentos/RegistarPagamento";
+
+const FATURA = [{ valor: "por_emitir", rotulo: "Por emitir (pagos sem fatura)" }, { valor: "emitida", rotulo: "Emitida" }];
 
 const SEPARADORES: { id: "" | SituacaoPagamento; rotulo: string }[] = [
   { id: "", rotulo: "Todos" },
@@ -27,14 +29,16 @@ const SEPARADORES: { id: "" | SituacaoPagamento; rotulo: string }[] = [
 export default function Pagamentos({ navigate }: VistaProps) {
   const pode = usePode();
   const confirmar = pode("pagamentos.confirmar");
-  const [f, setF, limpar] = useFiltrosUrl({ situacao: "", curso: "", metodo: "", de: "", ate: "", q: "", ordem: "", pagina: "1", sel: "" });
+  const [f, setF, limpar] = useFiltrosUrl({ situacao: "", curso: "", metodo: "", fatura: "", de: "", ate: "", q: "", ordem: "", pagina: "1", sel: "" });
   const pagina = Number(f.pagina) || 1;
-  const chave = `pagamentos:${f.situacao}:${f.curso}:${f.metodo}:${f.de}:${f.ate}:${f.q}:${f.ordem}:${pagina}`;
+  const chave = `pagamentos:${f.situacao}:${f.curso}:${f.metodo}:${f.fatura}:${f.de}:${f.ate}:${f.q}:${f.ordem}:${pagina}`;
   const { dados, erro, aCarregar, recarregar } = useRecurso(chave, signal =>
-    apiPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, de: f.de, ate: f.ate, q: f.q, ordem: f.ordem, pagina, porPagina: 25 }, signal));
+    apiPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, fatura: f.fatura, de: f.de, ate: f.ate, q: f.q, ordem: f.ordem, pagina, porPagina: 25 }, signal));
   const cursos = useOpcoes("cursos", { regime: "gold" });
   const [registar, setRegistar] = useState(false);
-  const exportar = useAccao(() => apiExportarPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, de: f.de, ate: f.ate, q: f.q }), { erro: "A exportação falhou." });
+  /** Pagamento acabado de registar como recebido: abre-se com a janela da fatura. */
+  const [faturaDe, setFaturaDe] = useState("");
+  const exportar = useAccao(() => apiExportarPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, fatura: f.fatura, de: f.de, ate: f.ate, q: f.q }), { erro: "A exportação falhou." });
 
   const ind = dados?.indicadores;
   const contagem = (s: string) => (s ? dados?.contagens.find(c => c.situacao === s)?.total ?? 0 : dados?.contagens.reduce((t, c) => t + c.total, 0));
@@ -56,8 +60,13 @@ export default function Pagamentos({ navigate }: VistaProps) {
     { id: "metodo", titulo: "Método", esconderMovel: true, celula: p => p.metodo || "—" },
     { id: "data", titulo: "Data", ordenavel: true, celula: p => data(p.pago_em ?? p.criado) },
     { id: "situacao", titulo: "Estado", celula: p => <EstadoPagamento situacao={p.situacao} /> },
+    {
+      id: "fatura", titulo: "Fatura", esconderMovel: true,
+      celula: p => (p.fatura_em ? <Estado tom="sucesso">Emitida</Estado>
+        : p.situacao === "pago" ? <span className="text-xs text-tinta-suave">Por emitir</span> : "—"),
+    },
   ];
-  const ativos = [f.curso, f.metodo, f.de, f.ate, f.q].filter(Boolean).length;
+  const ativos = [f.curso, f.metodo, f.fatura, f.de, f.ate, f.q].filter(Boolean).length;
   const linhas = dados?.linhas ?? [];
 
   return (
@@ -115,6 +124,7 @@ export default function Pagamentos({ navigate }: VistaProps) {
               selecoes={[
                 { chave: "curso", rotulo: "Curso", opcoes: cursos.selecao, valor: f.curso, onMudar: curso => setF({ curso }), vazio: "Curso: todos" },
                 { chave: "metodo", rotulo: "Método", opcoes: metodos, valor: f.metodo, onMudar: metodo => setF({ metodo }), vazio: "Método: todos" },
+                { chave: "fatura", rotulo: "Fatura", opcoes: FATURA, valor: f.fatura, onMudar: fatura => setF({ fatura }), vazio: "Fatura: todas" },
               ]}
               periodo={{ de: f.de, ate: f.ate, onMudar: (de, ate) => setF({ de, ate }) }}
               ativos={ativos}
@@ -157,8 +167,10 @@ export default function Pagamentos({ navigate }: VistaProps) {
         </Cartao>
       </div>
 
-      <DetalhePagamento id={f.sel || null} onFechar={() => setF({ sel: "", pagina: f.pagina })} podeConfirmar={confirmar} navigate={navigate} />
-      <RegistarPagamento aberto={registar} onFechar={() => setRegistar(false)} />
+      <DetalhePagamento id={f.sel || null} onFechar={() => { setFaturaDe(""); setF({ sel: "", pagina: f.pagina }); }} podeConfirmar={confirmar}
+        navigate={navigate} abrirFatura={Boolean(f.sel) && faturaDe === f.sel} />
+      <RegistarPagamento aberto={registar} onFechar={() => setRegistar(false)}
+        onRegistado={(id, pago) => { if (pago) { setFaturaDe(id); setF({ sel: id, pagina: f.pagina }); } }} />
     </div>
   );
 }

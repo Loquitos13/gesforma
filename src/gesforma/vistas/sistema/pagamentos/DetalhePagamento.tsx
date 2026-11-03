@@ -1,6 +1,6 @@
-// Modal de um pagamento: dados, comprovativo e as acções que dependem da situação.
-import { useState } from "react";
-import { useAuth } from "../../../../partilhado/AuthGate";
+// Modal de um pagamento: dados, comprovativo, dados de faturação, fatura e as acções que dependem da situação.
+import { useEffect, useState } from "react";
+import { useAuth, usePode } from "../../../../partilhado/AuthGate";
 import {
   apiApagarPagamento, apiConfirmarPagamento, apiMudarEstadoPagamento, apiPagamento, apiRecusarPagamento, apiReenviarPedidoPagamento,
   urlFicheiro, type SituacaoPagamento,
@@ -11,6 +11,7 @@ import {
   AreaTexto, Aviso, Botao, BotaoLigacao, Campo, ConfirmarPerigo, Detalhes, ErroCarregar, Esqueleto, Estado, Modal, data, dataHora, eur, type Tom,
 } from "../../../../partilhado/ui";
 import type { Navegar } from "../../../shell/tipos";
+import { AnexarFatura, DadosFaturacaoPagamento, FaturaPagamento } from "./FaturaPagamento";
 import { ReciboPagamento } from "./ReciboPagamento";
 
 const SITUACAO: Record<SituacaoPagamento, { rotulo: string; tom: Tom }> = {
@@ -29,15 +30,24 @@ export function EstadoPagamento({ situacao }: { situacao: SituacaoPagamento }) {
 
 const INVALIDAR = ["pagamentos:", "painel:", "notificacoes:", "crm:", "formandos:"];
 
-export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
+export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate, abrirFatura = false }: {
   id: string | null; onFechar: () => void; podeConfirmar: boolean; navigate: Navegar;
+  /** Abre logo a janela da fatura (pagamento acabado de registar como recebido). */
+  abrirFatura?: boolean;
 }) {
   const { user } = useAuth();
+  const pode = usePode();
+  const podeFaturar = pode("pagamentos.faturas");
+  // O pedido de pagamento é da coordenação (é ela que o pede na pré-inscrição).
+  const podeReenviar = pode("pagamentos.pedir");
   const { dados, erro, recarregar } = useRecurso(id ? `pagamentos:detalhe:${id}` : null, signal => apiPagamento(id!, signal));
   const p = dados?.pagamento;
   const [recusar, setRecusar] = useState(false);
   const [motivo, setMotivo] = useState("");
   const [perigo, setPerigo] = useState<"reembolsar" | "cancelar" | "apagar" | null>(null);
+  /** Janela da fatura: fechada, aberta pelo botão, ou aberta sozinha depois de confirmar o pagamento. */
+  const [fatura, setFatura] = useState<"" | "anexar" | "confirmado">("");
+  useEffect(() => { setFatura(abrirFatura && id && podeFaturar ? "confirmado" : ""); }, [id, abrirFatura, podeFaturar]);
 
   const confirmar = useAccao(apiConfirmarPagamento, { ok: "Pagamento confirmado.", invalidar: INVALIDAR });
   const recusa = useAccao(apiRecusarPagamento, { ok: r => (r.avisado ? "Comprovativo recusado. A pessoa foi avisada por email." : "Comprovativo recusado."), invalidar: INVALIDAR });
@@ -54,19 +64,23 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
       onFechar={onFechar}
       titulo={p ? p.nome : "Pagamento"}
       subtitulo={p ? `${p.id} · ${p.curso || "sem curso"}` : undefined}
-      rodape={p && podeConfirmar ? (
+      rodape={p && (podeConfirmar || podeReenviar) ? (
         <>
-          {pendente && p.lead_id && (
+          {pendente && p.lead_id && podeReenviar && (
             <Botao variante="secundario" aCarregar={reenviar.aCorrer} onClick={() => void reenviar.correr(p.lead_id!)}>Reenviar pedido</Botao>
           )}
-          {p.situacao === "a_confirmar" && <Botao variante="secundario" onClick={() => { setMotivo(""); setRecusar(true); }}>Recusar comprovativo</Botao>}
-          {pendente && (
-            <Botao variante="primario" aCarregar={confirmar.aCorrer} onClick={() => void confirmar.correr(p.id).then(() => recarregar())}>
+          {podeConfirmar && p.situacao === "a_confirmar" && <Botao variante="secundario" onClick={() => { setMotivo(""); setRecusar(true); }}>Recusar comprovativo</Botao>}
+          {podeConfirmar && pendente && (
+            <Botao variante="primario" aCarregar={confirmar.aCorrer} onClick={() => void confirmar.correr(p.id).then(r => {
+              recarregar();
+              // Comprovativo validado: abre logo a janela da fatura (pode ficar para mais tarde).
+              if (r && podeFaturar) setFatura("confirmado");
+            })}>
               Confirmar pagamento
             </Botao>
           )}
-          {p.situacao === "pago" && <Botao variante="secundario" onClick={() => setPerigo("reembolsar")}>Marcar como reembolsado</Botao>}
-          {p.situacao === "cancelado" && <Botao variante="secundario" aCarregar={estado.aCorrer} onClick={() => void estado.correr(p.id, "Pendente")}>Reabrir</Botao>}
+          {podeConfirmar && p.situacao === "pago" && <Botao variante="secundario" onClick={() => setPerigo("reembolsar")}>Marcar como reembolsado</Botao>}
+          {podeConfirmar && p.situacao === "cancelado" && <Botao variante="secundario" aCarregar={estado.aCorrer} onClick={() => void estado.correr(p.id, "Pendente")}>Reabrir</Botao>}
         </>
       ) : undefined}
     >
@@ -85,7 +99,7 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
           {pendente && podeConfirmar && (
             <Aviso tom="info">
               {percurso
-                ? "Ao confirmar: a pré-inscrição fica validada, é criada a ficha de formando na turma escolhida e a conta da área do formando, e a pessoa recebe o acesso por email."
+                ? "Ao confirmar: a pré-inscrição fica concluída (validada), é criada a ficha de formando na turma escolhida e a conta da área do formando, e a pessoa recebe o acesso por email. A fatura pode ser anexada logo a seguir ou mais tarde."
                 : "Ao confirmar: o pagamento fica Pago, a ficha Gold ligada passa a paga e sai o email de pagamento confirmado."}
             </Aviso>
           )}
@@ -113,6 +127,13 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
               </p>
             )}
           </section>
+
+          <DadosFaturacaoPagamento faturacao={dados?.faturacao ?? null} />
+
+          {(p.situacao === "pago" || dados?.fatura) && (
+            <FaturaPagamento pagamentoId={p.id} fatura={dados?.fatura ?? null} destinos={dados?.destinosFatura ?? []}
+              podeFaturar={podeFaturar && p.situacao === "pago"} onAnexar={() => setFatura("anexar")} />
+          )}
 
           {p.situacao === "pago" && <ReciboPagamento pagamentoId={p.id} email={p.email} podeEmitir={podeConfirmar} />}
 
@@ -162,6 +183,11 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate }: {
           {a => <AreaTexto {...a} value={motivo} maxLength={400} onChange={e => setMotivo(e.target.value)} data-autofocus />}
         </Campo>
       </Modal>
+
+      {p && podeFaturar && (
+        <AnexarFatura aberto={fatura !== ""} onFechar={() => { setFatura(""); recarregar(); }} pagamentoId={p.id}
+          destinos={dados?.destinosFatura ?? []} substituir={Boolean(dados?.fatura)} aposConfirmar={fatura === "confirmado"} />
+      )}
 
       <ConfirmarPerigo
         aberto={perigo !== null}

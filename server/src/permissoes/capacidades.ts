@@ -21,7 +21,10 @@ export const CAPACIDADES = {
   "pagamentos.registarFicha": SECRETARIA,
   // Acesso à área do formando da Gold (palavra-passe gerada): a coordenação Gold.
   "formandosGold.gerir": SECRETARIA,
-  "pagamentos.faturas": PAGAMENTOS,
+  // Anexar e enviar a fatura (PDF) de um pagamento confirmado.
+  "pagamentos.faturas": CONTABILIDADE,
+  // Pedir (e reenviar) o pagamento de uma pré-inscrição: a coordenação, que valida os documentos.
+  "pagamentos.pedir": PEDAGOGIA,
   "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
   // Histórico dos envios: as coordenações e a contabilidade, cada uma só da sua área.
   "emails.historico": [...COORDENACAO, "contabilidade"] as Perfil[],

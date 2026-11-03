@@ -1,6 +1,7 @@
 // API do domínio "pagamentos": lista com indicadores, confirmar/recusar comprovativo, registo manual.
-import { api, enviar, qs, type Pagina } from "./cliente";
+import { api, enviar, enviarFicheiro, qs, type Pagina } from "./cliente";
 import { abrirPdf, descarregar } from "./ficheiros";
+import type { DadosFaturacao } from "./publico";
 
 export type SituacaoPagamento = "a_confirmar" | "pedido" | "recusado" | "pago" | "cancelado" | "reembolsado";
 
@@ -26,6 +27,24 @@ export type LinhaPagamento = {
   comprovativo_nome: string | null;
   comprovativo_ficheiro: string | null;
   comprovativo_em: string | null;
+  /** Fatura anexada pela contabilidade (null: ainda sem fatura). */
+  fatura_em: string | null;
+};
+
+/** Fatura do pagamento (PDF anexado pela contabilidade e enviado por email). */
+export type FaturaPagamento = {
+  numero: string; nome: string; driveFileId: string; anexadaEm: string; enviadaEm: string | null; enviadaPara: string;
+};
+
+/** Dados de faturação: os confirmados pela pessoa, ou os da ficha da pré-inscrição (por confirmar). */
+export type FaturacaoPagamento = { dados: DadosFaturacao; confirmado: boolean };
+
+export type DetalhePagamentoResposta = {
+  pagamento: LinhaPagamento;
+  faturacao: FaturacaoPagamento | null;
+  fatura: FaturaPagamento | null;
+  /** Para onde vai a fatura: o email da faturação e o da pessoa (sem repetir). */
+  destinosFatura: string[];
 };
 
 export type IndicadoresPagamentos = {
@@ -47,6 +66,8 @@ export type RespostaPagamentos = Pagina<LinhaPagamento> & {
 
 export type FiltrosPagamentos = {
   situacao?: string; curso?: string; metodo?: string; de?: string; ate?: string; q?: string; pagina?: number; porPagina?: number; ordem?: string;
+  /** «por_emitir»: pagos sem fatura; «emitida»: com fatura. */
+  fatura?: string;
 };
 
 export function apiPagamentos(f: FiltrosPagamentos, signal?: AbortSignal) {
@@ -54,7 +75,18 @@ export function apiPagamentos(f: FiltrosPagamentos, signal?: AbortSignal) {
 }
 
 export function apiPagamento(id: string, signal?: AbortSignal) {
-  return api<{ pagamento: LinhaPagamento }>(`/v1/pagamentos/${encodeURIComponent(id)}`, { signal });
+  return api<DetalhePagamentoResposta>(`/v1/pagamentos/${encodeURIComponent(id)}`, { signal });
+}
+
+/** Anexa a fatura (PDF) ao pagamento; com `enviar`, segue logo por email para o email da faturação e o da pessoa. */
+export function apiAnexarFatura(id: string, ficheiro: File, opcoes: { numero: string; enviar: boolean }) {
+  return enviarFicheiro<{ fatura: FaturaPagamento; enviadaPara: string[] }>(
+    `/v1/pagamentos/${encodeURIComponent(id)}/fatura`, ficheiro, { numero: opcoes.numero, enviar: opcoes.enviar ? "1" : "0" });
+}
+
+/** Volta a enviar a fatura já anexada. */
+export function apiEnviarFatura(id: string) {
+  return enviar.post<{ fatura: FaturaPagamento; enviadaPara: string[] }>(`/v1/pagamentos/${encodeURIComponent(id)}/fatura/enviar`);
 }
 
 export function apiConfirmarPagamento(id: string) {

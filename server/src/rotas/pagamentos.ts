@@ -4,8 +4,10 @@ import { z } from "zod";
 import { config } from "../config.js";
 import { carimboUtc } from "../datas.js";
 import { normalizarEstado, validarTransicao } from "../estados.js";
+import { FaturaErro, anexarFatura, enviarFatura, faturaDoDetalhe } from "../faturas.js";
 import { aposPagamentoConfirmado } from "../inscricaoPaga.js";
 import { nextOpsId } from "../ops.js";
+import { pode } from "../permissoes/capacidades.js";
 import { METODOS_ACEITES, confirmarPagamento, findPagamentoPorReferencia, mapPagamento, PagamentoErro, recusarPagamento } from "../pagamentos.js";
 import {
   SITUACOES, actualizarPagamento, apagarPagamento, bloquearRegisto, chaveWebhookGuardada, contarPorSituacao, fichaGoldJaPaga,
@@ -39,6 +41,7 @@ const listaQuery = paginacao.merge(periodoQuery).extend({
   situacao: z.preprocess(v => (v === "" ? undefined : v), z.enum(SITUACOES).optional()),
   curso: textoQuery(200),
   metodo: textoQuery(60),
+  fatura: z.preprocess(v => (v === "" ? undefined : v), z.enum(["por_emitir", "emitida"]).optional()),
 });
 const recusaSchema = z.object({ motivo: z.string().trim().min(3).max(400) });
 
@@ -56,9 +59,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: listaQuery }, req);
     if (!v) return;
-    const { situacao, curso, metodo, de, ate, q, pagina, porPagina, ordem } = v.query;
-    const pag = await listarPagamentos(db, { situacao, curso, metodo, de, ate, q, pagina, porPagina, ordem });
-    const contagens = await contarPorSituacao(db, { curso, metodo, de, ate, q });
+    const { situacao, curso, metodo, fatura, de, ate, q, pagina, porPagina, ordem } = v.query;
+    const pag = await listarPagamentos(db, { situacao, curso, metodo, fatura, de, ate, q, pagina, porPagina, ordem });
+    const contagens = await contarPorSituacao(db, { curso, metodo, fatura, de, ate, q });
     const indicadores = await indicadoresPagamentos(db, { curso, de, ate });
     return { ...pag, contagens, indicadores, gateway: { ligado: false, estado: "por escolher" } };
   });
@@ -69,7 +72,59 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const p = await obterPagamentoDetalhe(db, v.params.id);
     if (!p) return reply.code(404).send({ error: "pagamento inexistente" });
-    return { pagamento: p };
+    const extra = await faturaDoDetalhe(db, p);
+    // Dados de faturação confirmados (NIF, morada): ficam na auditoria, como no botão «Contabilidade» da ficha.
+    if (extra.faturacao?.confirmado) await audit(db, req.actor!.id, "faturacao.ver", "pagamento", p.id, req.ip, {});
+    return { pagamento: p, ...extra };
+  });
+
+  /** Fatura (PDF) do pagamento confirmado: a contabilidade anexa-a e, com «enviar», segue logo por email. */
+  app.post("/v1/pagamentos/:id/fatura", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!pode(req.actor!.role, "pagamentos.faturas")) return reply.code(403).send({ error: "Só a contabilidade anexa faturas." });
+    const v = validar(reply, { params: idTexto }, req);
+    if (!v) return;
+    let bytes: Buffer | null = null;
+    let nome = "fatura.pdf";
+    const campos: Record<string, string> = {};
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === "file") {
+          nome = part.filename || nome;
+          bytes = await part.toBuffer();
+        } else {
+          campos[part.fieldname] = String(part.value ?? "").slice(0, 60);
+        }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "Escolha o PDF da fatura." });
+    try {
+      const r = await anexarFatura(db, v.params.id, { nome, bytes }, {
+        numero: campos.numero ?? "", enviar: campos.enviar === "1", actorId: req.actor!.id,
+      });
+      await audit(db, req.actor!.id, "pagamento.fatura", "pagamento", v.params.id, req.ip, { numero: r.fatura.numero, enviada: r.enviadaPara.length > 0 });
+      return r;
+    } catch (err) {
+      if (err instanceof FaturaErro) return reply.code(err.status).send({ error: err.message });
+      throw err;
+    }
+  });
+
+  app.post("/v1/pagamentos/:id/fatura/enviar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    if (!pode(req.actor!.role, "pagamentos.faturas")) return reply.code(403).send({ error: "Só a contabilidade envia faturas." });
+    const v = validar(reply, { params: idTexto }, req);
+    if (!v) return;
+    try {
+      const r = await enviarFatura(db, v.params.id, req.actor!.id);
+      await audit(db, req.actor!.id, "pagamento.fatura_enviada", "pagamento", v.params.id, req.ip, { para: r.enviadaPara });
+      return r;
+    } catch (err) {
+      if (err instanceof FaturaErro) return reply.code(err.status).send({ error: err.message });
+      throw err;
+    }
   });
 
   /** Registo manual (ficha criada pela secretaria, pagamento em mão ou transferência já recebida). */

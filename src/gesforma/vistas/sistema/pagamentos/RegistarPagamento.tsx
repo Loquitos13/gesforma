@@ -12,7 +12,11 @@ const VAZIO = { nome: "", email: "", curso: "", valor: "", metodo: "", recebido:
 
 const novaChave = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(36).slice(2)}`).replace(/[^\w-]/g, "");
 
-export function RegistarPagamento({ aberto, onFechar }: { aberto: boolean; onFechar: () => void }) {
+export function RegistarPagamento({ aberto, onFechar, onRegistado }: {
+  aberto: boolean; onFechar: () => void;
+  /** Registado: o id e se ficou recebido (abre-se o pagamento, com a janela da fatura). */
+  onRegistado?: (id: string, pago: boolean) => void;
+}) {
   const [f, setF] = useState(VAZIO);
   // Chave do pedido, nova a cada abertura: um duplo clique ou um reenvio não regista o pagamento duas vezes.
   const [chave, setChave] = useState(novaChave);
@@ -27,11 +31,15 @@ export function RegistarPagamento({ aberto, onFechar }: { aberto: boolean; onFec
   const valido = f.nome.trim().length > 1 && f.metodo && (oferta || (Number.isFinite(valor) && valor > 0));
 
   async function gravar() {
+    const pago = oferta || f.recebido;
     const r = await registar.correr({
       nome: f.nome.trim(), email: f.email.trim() || undefined, curso: f.curso, valor, metodo: f.metodo,
-      estado: oferta || f.recebido ? "Pago" : "Pendente", chave,
+      estado: pago ? "Pago" : "Pendente", chave,
     });
-    if (r) onFechar();
+    if (!r) return;
+    onFechar();
+    // Uma oferta (0 €) não leva fatura.
+    if (r.pagamento?.id) onRegistado?.(r.pagamento.id, pago && !oferta);
   }
 
   return (

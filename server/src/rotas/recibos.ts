@@ -14,6 +14,7 @@ const exportarQuery = periodoQuery.extend({
   situacao: z.preprocess(v => (v === "" ? undefined : v), z.enum(SITUACOES).optional()),
   curso: textoQuery(200),
   metodo: textoQuery(60),
+  fatura: z.preprocess(v => (v === "" ? undefined : v), z.enum(["por_emitir", "emitida"]).optional()),
   q: textoQuery(200),
 });
 const envioSchema = z.object({ para: z.string().trim().max(254).optional() }).default({});

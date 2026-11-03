@@ -126,24 +126,20 @@ export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: stri
 }
 
 /**
- * Documentos pedidos a uma pré-inscrição. No CCP (Gold) a escolaridade decide: com o 12.º ano pede-se o certificado de
- * habilitações e o comprovativo de 5 anos de experiência; com licenciatura ou mais, basta o certificado de habilitações.
- * Sem escolaridade (pedidos antigos), fica a lista do curso.
+ * Documentos pedidos a uma pré-inscrição. No CCP (Gold) a escolaridade só decide o comprovativo de experiência: com o
+ * 12.º ano passa a obrigatório (o da ficha do curso, ou um novo se a ficha não o tiver); com licenciatura ou mais não se
+ * pede. O certificado de habilitações e o resto ficam como estão na ficha do curso. Sem escolaridade, a lista da ficha.
  */
 export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin", escolaridade = ""): Promise<DocPedido[]> {
   const lista = await docsDaFicha(db, curso, regime);
   if (regime !== "gold" || !eCursoCcp(curso) || !escolaridade || !lista.length) return lista;
-  const doze = escolaridade === "12.º ano";
-  const superior = ensinoSuperior(escolaridade);
-  if (!doze && !superior) return lista;
-  const semRegra = lista.filter(d => d.id !== "exp" && d.id !== "ch");
-  const ch = lista.find(d => d.id === "ch");
-  const exp = lista.find(d => d.id === "exp");
-  return [
-    ...semRegra,
-    { ...(ch ?? { id: "ch", label: "Certificado de habilitações" }), required: true },
-    ...(doze ? [{ ...(exp ?? { id: "exp", label: "Comprovativo de 5 anos de experiência" }), label: "Comprovativo de 5 anos de experiência profissional", required: true }] : []),
-  ];
+  const eExperiencia = (d: DocPedido) => d.id === "exp" || /experi[eê]ncia/i.test(d.label);
+  if (ensinoSuperior(escolaridade)) return lista.filter(d => !eExperiencia(d));
+  if (escolaridade !== "12.º ano") return lista;
+  const existente = lista.find(eExperiencia);
+  return existente
+    ? lista.map(d => (d === existente ? { ...d, required: true } : d))
+    : [...lista, { id: "exp", label: "Comprovativo de 5 anos de experiência profissional", required: true }];
 }
 
 async function docsDaFicha(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {

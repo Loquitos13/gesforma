@@ -407,3 +407,8 @@ export const apiGravarFichaQualitativa = (regime: Regime, turmaId: number, forma
 export const apiPdfAvaliacaoQualitativa = (regime: Regime, turmaId: number, formandoId?: number) =>
   descarregarFicheiro(`/v1/turmas/${regime}/${turmaId}/avaliacao-qualitativa/pdf${formandoId ? `?formando=${formandoId}` : ""}`,
     "Avaliacao da aprendizagem.pdf", "application/pdf");
+
+/** Copia o cronograma de outra turma do mesmo curso a começar em `inicio`, com os planos de sessão e os sumários. */
+export const apiCopiarCronograma = (regime: Regime, turmaId: number, origemTurmaId: number, inicio: string) =>
+  api<{ cronograma: import("../turmaModel").SessaoCronograma[]; importados: number; sumarios: number; semModelo: number }>(
+    `/v1/turmas/${regime}/${turmaId}/cronograma/copiar`, { method: "POST", body: JSON.stringify({ origemTurmaId, inicio }) });

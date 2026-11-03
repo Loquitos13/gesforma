@@ -7,7 +7,7 @@ import { z } from "zod";
 import { itensDoMesmoPdf } from "../../dossieGerado.js";
 import { dtpForTurma } from "../../pedagogia/dtp.js";
 import { guardarNaPastaDaTurma } from "../../pedagogia/ficheiros.js";
-import { importarDeTurma, importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
+import { copiarCronogramaDeTurma, CopiaCronogramaErro, importarDeTurma, importarPlanosCurso, ordensComPlanoDoCurso } from "../../planosCurso.js";
 import { turmasDoMesmoCurso } from "../../repos/planosCurso.js";
 import { documentoSchema, sessaoParam, sessaoPatchSchema } from "../../pedagogia/esquemas.js";
 import { asArr, asObj } from "../../pedagogia/util.js";
@@ -317,6 +317,28 @@ export function registarSessoes(app: FastifyInstance, { db, requireAuth, audit }
       : await importarPlanosCurso(db, regime, id, { substituir: v.body.substituir });
     await audit(db, req.actor!.id, "turma.planos_importar", "turma", String(id), req.ip, { regime, ...r });
     return r;
+  });
+
+  /** Copia o cronograma de outra turma do mesmo curso (a começar em `inicio`), com os planos de sessão e os sumários. */
+  app.post("/v1/turmas/:regime/:id/cronograma/copiar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, {
+      params: regimeIdParam,
+      body: z.object({ origemTurmaId: z.number().int().positive(), inicio: z.string().regex(/^\d{4}-\d{2}-\d{2}$/) }),
+    }, req);
+    if (!v) return;
+    const { regime, id } = v.params;
+    if (!(await turmasDoMesmoCurso(db, regime, id)).some(t => Number(t.id) === v.body.origemTurmaId)) {
+      return reply.code(400).send({ error: "Só se copia de outra turma do mesmo curso." });
+    }
+    try {
+      const r = await copiarCronogramaDeTurma(db, regime, id, v.body.origemTurmaId, v.body.inicio);
+      await audit(db, req.actor!.id, "turma.cronograma_copiar", "turma", String(id), req.ip, { regime, origem: v.body.origemTurmaId, inicio: v.body.inicio, sessoes: r.cronograma.length });
+      return r;
+    } catch (err) {
+      if (err instanceof CopiaCronogramaErro) return reply.code(err.estado).send({ error: err.message });
+      throw err;
+    }
   });
 
   /** Turmas do mesmo curso de onde se podem copiar planos e sumários. */

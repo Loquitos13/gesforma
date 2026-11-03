@@ -28,6 +28,7 @@ export function CronogramaGrelha({
   accent = "gold",
   compact = false,
   identidade = "",
+  acoesExtra,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -42,6 +43,8 @@ export function CronogramaGrelha({
   accent?: "gold" | "fin";
   compact?: boolean;
   identidade?: string;
+  /** Botões a mais na barra da grelha (ex.: «Copiar de outra turma»). */
+  acoesExtra?: ReactNode;
 }) {
   const programa = useProgramaDoCurso(accent, curso);
   const moduloOpts = programa.options;
@@ -516,6 +519,7 @@ export function CronogramaGrelha({
       )}
 
       <div className="flex flex-wrap items-center gap-2">
+        {!selecionar && acoesExtra}
         {!selecionar && sessoesSemFim(sessoes).some(x => sessaoModalidade(x) !== "matricula") && (
           <button type="button" onClick={() => setSelecionar(true)} title="Marcar vários eventos e apagá-los de uma vez (também com Ctrl/⌘ + clique)."
             className="px-3 py-1.5 text-xs font-semibold rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50">

@@ -260,7 +260,8 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
               )}
               {tab === "sessoes" && vistaCrono === "grelha" && !souFormador && (
                 <CronogramaEditor layout="page" accent="fin" turmaId={t.id} identidade={`fin-${t.id}`} nome={t.nome} sessoes={t.cronograma}
-                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
+                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma}
+                  onCopiado={user.role === "formador" ? undefined : () => { recarregarTurma("fin", t.id); recarregarPlanos(); }} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
               {tab === "dtp" && staffPodeDossie(user.role) && (
                 <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}

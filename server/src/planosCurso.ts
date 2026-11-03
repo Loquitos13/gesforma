@@ -13,6 +13,8 @@ import { gravarSessao, limparHerdados, listarSessoes, renumerarSessoes } from ".
 import { turmaParaPlanos } from "./repos/planosCurso.js";
 import type { Regime } from "./repos/sql.js";
 import { sessaoLectivaN } from "./sessaoAcesso.js";
+import { copiarCronograma } from "../../src/partilhado/cronogramaCopiar.js";
+import { gravarCronograma } from "./repos/pedagogiaTurma.js";
 import { atribuirPlanos, chavePlano, modulosDoPlano, modulosEmFalta, sessaoMarcada } from "../../src/partilhado/planosModulo.js";
 
 const MOMENTOS = ["introducao", "desenvolvimento", "conclusao"] as const;
@@ -266,4 +268,32 @@ export async function importarDeTurma(db: Db, regime: Regime, turmaId: number, o
   }
   if (escreveu) await renumerarSessoes(db, regime, turmaId);
   return r;
+}
+
+export class CopiaCronogramaErro extends Error {
+  constructor(message: string, readonly estado = 400) { super(message); }
+}
+
+/**
+ * Copia o cronograma de outra turma do mesmo curso para esta, a começar em `inicio` (mesmos intervalos entre dias e
+ * mesmas horas), e depois os planos de sessão e os sumários dessa turma. Substitui o cronograma atual, por isso só se
+ * faz enquanto a turma não tem sessões com presenças ou documentos assinados.
+ */
+export async function copiarCronogramaDeTurma(db: Db, regime: Regime, turmaId: number, origemId: number, inicio: string) {
+  const [turma, origem] = await Promise.all([turmaParaPlanos(db, regime, turmaId), turmaParaPlanos(db, regime, origemId)]);
+  if (!turma || !origem) throw new CopiaCronogramaErro("Turma inexistente.", 404);
+  if (turma.fechada_em) throw new CopiaCronogramaErro("A turma está fechada.", 409);
+  const comRegisto = (await listarSessoes(db, regime, turmaId)).some(r =>
+    Object.keys(asObj(r.presencas)).length > 0 || asObj(r.sumario).assinado === true || asObj(r.plano).assinado === true);
+  if (comRegisto) {
+    throw new CopiaCronogramaErro("Esta turma já tem presenças ou documentos assinados: o cronograma não se substitui. Acerte-o na grelha.", 409);
+  }
+  const sessoes = copiarCronograma((Array.isArray(origem.cronograma) ? origem.cronograma : []) as Parameters<typeof copiarCronograma>[0], inicio);
+  if (!sessoes.length) throw new CopiaCronogramaErro("A turma escolhida não tem sessões no cronograma.");
+  await gravarCronograma(db, regime, turmaId, sessoes);
+  await renumerarSessoes(db, regime, turmaId);
+  const r = await importarDeTurma(db, regime, turmaId, origemId, { substituir: true });
+  // As sessões sem correspondência na outra turma ficam com os planos da ficha do curso, como numa turma nova.
+  await importarPlanosCurso(db, regime, turmaId, { aoGravar: true }).catch(err => console.error("[planos] copiar cronograma:", err));
+  return { cronograma: sessoes, ...r };
 }

@@ -6,6 +6,7 @@ export const regras: Regra[] = [
   ["*", "/v1/turmas/:regime/:id/sessoes/:n/assinatura/*", PEDAGOGIA_E_FORMADOR],
   ["POST", "/v1/turmas/:regime/:id/planos/importar", PEDAGOGIA],
   ["GET", "/v1/turmas/:regime/:id/planos/origens", PEDAGOGIA],
+  ["POST", "/v1/turmas/:regime/:id/cronograma/copiar", PEDAGOGIA],
   ["PUT", "/v1/turmas/:regime/:id/avaliacao", PEDAGOGIA],
   ["PUT", "/v1/turmas/:regime/:id/certificados/:formandoId", PEDAGOGIA],
   ["PUT", "/v1/turmas/:regime/:id/documentos", PEDAGOGIA],

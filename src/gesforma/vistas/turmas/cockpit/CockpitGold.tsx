@@ -163,7 +163,8 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
 
               {tab === "cronograma" && !souFormador && (
                 <CronogramaEditor layout="page" turmaId={t.id} identidade={`gold-${t.id}`} nome={t.nome} sessoes={t.cronograma}
-                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local}
+                  onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma}
+                  onCopiado={user.role === "formador" ? undefined : () => { recarregarTurma("gold", t.id); recarregarPlanos(); }} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local}
                   onLocal={local => patch({ local })} />
               )}
               {tab === "dtp" && staffPodeDossie(user.role) && (

@@ -1,6 +1,7 @@
 // Continuação de TurmaCronograma.tsx (partido para ficar abaixo das 500 linhas).
 import { useMemo, useState } from "react";
 import { CronogramaGrelha } from "./CronogramaGrelhaEditor";
+import { CopiarCronograma } from "./CopiarCronograma";
 import { sessoesSemFim } from "../partilhado/cronogramaGrelha";
 import { generateEnaCronograma } from "../partilhado/cronogramaGrelhaGerar";
 import { MultiSearchSelect } from "../partilhado/FormKit";
@@ -15,7 +16,7 @@ import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
 
 export function CronogramaEditor({
   sessoes, onChange, inicio, horario, horas, formador, formadoresTurma, curso, nome, local, accent = "gold",
-  layout = "compact", turmaId, identidade, publicar, onLocal,
+  layout = "compact", turmaId, identidade, publicar, onLocal, onCopiado,
 }: {
   sessoes: SessaoCronograma[];
   onChange: (next: SessaoCronograma[]) => void;
@@ -35,6 +36,8 @@ export function CronogramaEditor({
   publicar?: (sessoes: SessaoCronograma[]) => Promise<{ url: string }>;
   /** Mudar o local da turma a partir do cabeçalho do cronograma (Gold). */
   onLocal?: (local: string) => void;
+  /** Com ele aparece «Copiar de outra turma»; corre depois de o servidor gravar a cópia (voltar a ler a turma). */
+  onCopiado?: () => void;
 }) {
   const gold = accent === "gold";
   const page = layout === "page";
@@ -221,6 +224,9 @@ export function CronogramaEditor({
         accent={accent}
         compact={!page}
         identidade={identidade ?? (turmaId != null ? String(turmaId) : "")}
+        acoesExtra={turmaId != null && onCopiado
+          ? <CopiarCronograma regime={accent} turmaId={turmaId} inicio={inicio} temSessoes={plano.length > 0} onCopiado={onCopiado} />
+          : undefined}
       />
 
       {!page && listadas.length > 0 && (

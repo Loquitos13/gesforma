@@ -29,3 +29,19 @@ describe("vagas anunciadas no site", () => {
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/turmas-gold/${id}`, { vagasAnunciadas: 2 })).statusCode).toBe(403);
   });
 });
+
+describe("data limite de matrícula no site", () => {
+  it("a oferta pública traz a data do marcador «Matrícula» do cronograma", async () => {
+    const ctx = await arrancar();
+    const criar = await pedido(ctx, "secretaria", "POST", "/v1/turmas-gold", {
+      dataInicio: "2099-06-10", nome: `MAT ${Date.now()}`, curso: "Curso Matrícula", local: "Porto", horario: "Laboral", vagas: 10,
+    });
+    const id = (criar.json() as { turma: { id: number } }).turma.id;
+    await ctx.db.query("UPDATE turmas_gold SET cronograma = $2::jsonb WHERE id = $1", [id, JSON.stringify([
+      { id: "matricula", data: "2099-06-03", modalidade: "matricula", horaInicio: "", horaFim: "", modulos: [], formadores: [] },
+      { id: "s1", data: "2099-06-10", horaInicio: "09:00", horaFim: "13:00", modulos: [], formadores: [] },
+    ])]);
+    const turmas = ((await ctx.app.inject({ method: "GET", url: "/v1/public/oferta" })).json() as { turmas: { turmaId: number; matricula: string }[] }).turmas;
+    expect(turmas.find(t => t.turmaId === id)?.matricula).toBe("2099-06-03");
+  });
+});

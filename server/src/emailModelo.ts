@@ -74,6 +74,7 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
     nome_formando: "Ana Silva", nif: "123456789", telemovel: "910000000", email_formando: "ana@exemplo.pt",
     iban_formando: "—", valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0",
   },
+  pedido_contacto: { sobre_curso: " sobre Formação de Formadores - CCP" },
   pedido_proposta: {
     nome_contacto: "Ana Silva", empresa: "Empresa, Lda.", email_contacto: "ana@empresa.pt", telefone: "910000000",
     servico: "Formação à medida", mensagem: "Gostaria de receber uma proposta.",

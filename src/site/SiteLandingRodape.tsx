@@ -92,7 +92,8 @@ function WhatsAppAssistant() {
     const nome = String(dados.get("nome") ?? "").trim();
     const email = String(dados.get("email") ?? "").trim();
     const telf = String(dados.get("telf") ?? "").trim();
-    if (!nome || !email || !telf) return;
+    const assunto = String(dados.get("assunto") ?? "").trim();
+    if (!nome || !email || !telf || !assunto) return;
     setHandoffBusy(true);
     setHandoffErro("");
     void apiPublicPreinscricao({
@@ -100,6 +101,9 @@ function WhatsAppAssistant() {
       email,
       telf,
       origem: "WhatsApp",
+      // Pedido de contacto: a pessoa recebe só a confirmação (não a ligação para os documentos).
+      contacto: true,
+      assunto,
       consentimento: dados.get("consentimento") === "on",
       curso: chosen?.nomeOferta || chosen?.title || "Contacto pelo site",
       regime: chosen?.regime ?? "gold",
@@ -207,7 +211,7 @@ function WhatsAppAssistant() {
               </>
             )}
             {!typing && step === "handoff" && (
-              handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido registado.</strong><p className="mt-1 text-[#1C3350]/60">Ficou na base de dados e o email automático segue para o endereço indicado.</p>{(!chosen || ePreinscricao(chosen.enrollment)) && <a href="/pre-inscricao" className="mt-3 inline-flex font-bold text-[#075E54] underline">Completar a pré-inscrição</a>}</div> :
+              handoffSent ? <div className="max-w-[90%] rounded-2xl rounded-tl-sm bg-white p-4 text-sm leading-6 shadow-sm"><strong className="text-[#075E54]">Pedido de contacto recebido.</strong><p className="mt-1 text-[#1C3350]/60">Vai receber um email de confirmação e a ENA contacta-o em breve.</p></div> :
                 <div className="ml-auto max-w-[92%] space-y-2">
                 {ligacaoOperador && (
                   <a href={ligacaoOperador} target="_blank" rel="noreferrer"
@@ -220,6 +224,10 @@ function WhatsAppAssistant() {
                   <input name="nome" required defaultValue={name} placeholder="Nome" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
                   <input name="email" required type="email" placeholder="Email" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
                   <input name="telf" required type="tel" placeholder="Telemóvel (com WhatsApp)" className="w-full rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  <label className="block pt-1">
+                    <span className="mb-1 block text-xs font-semibold text-[#1C3350]/70">Assunto</span>
+                    <textarea name="assunto" required minLength={3} maxLength={500} rows={3} className="w-full resize-none rounded-lg bg-white px-3 py-2.5 text-sm outline-none" />
+                  </label>
                   <label className="flex items-start gap-2 rounded-lg bg-white px-3 py-2 text-xs leading-5"><input name="consentimento" type="checkbox" required className="mt-1 accent-[#075E54]" />Aceito que a ENA use estes dados para me contactar sobre a formação.</label>
                   {handoffErro && <p className="text-xs font-semibold text-[#A60000]">{handoffErro}</p>}
                   <button type="submit" disabled={handoffBusy} className="w-full rounded-lg bg-[#075E54] px-4 py-3 text-sm font-bold text-white disabled:opacity-40">{handoffBusy ? "A registar…" : "Pedir contacto humano"}</button>

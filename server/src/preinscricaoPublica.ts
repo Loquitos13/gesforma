@@ -1,4 +1,5 @@
 import { firePreinscricaoEmail, herdarDocsValidados } from "./docsLink.js";
+import { AVISO_CONTACTO, enviarPedidoContactoRecebido } from "./pedidoContacto.js";
 import { dentroDoLimite } from "./limitePedidos.js";
 import { fechoDaLigacao, regenerarToken } from "./ligacaoPessoal.js";
 import { gravarTurmaEscolhida } from "./repos/percurso.js";
@@ -31,6 +32,10 @@ export type PreinscricaoPublicaInput = {
   telf?: string;
   concelho?: string;
   origem?: string;
+  /** Pedido de contacto (assistente do site): só a confirmação por email, nunca a ligação dos documentos. */
+  contacto?: boolean;
+  /** O que a pessoa quer saber (pedido de contacto). */
+  assunto?: string;
   /** Gold: escolaridade e nacionalidade (gatilhos dos documentos do curso). */
   escolaridade?: string;
   nacionalidade?: string;
@@ -142,7 +147,15 @@ export async function criarPreinscricaoPublica(
   const regime = noOutro ? outro : preferido;
   const oferta = noPreferido ?? noOutro;
   const curso = oferta?.nome ?? CURSO_CONTACTO;
-  const notas = !oferta && pedidoCurso && pedidoCurso !== CURSO_CONTACTO ? `Pedido no site: ${pedidoCurso}` : "";
+  // Pedido de contacto (ou curso fora da oferta): não há documentos a pedir, só a confirmação do contacto.
+  const assunto = textoDePessoa(input.assunto || "").slice(0, 500);
+  const eContacto = Boolean(input.contacto) || !oferta;
+  const notas = [
+    !oferta && pedidoCurso && pedidoCurso !== CURSO_CONTACTO ? `Pedido no site: ${pedidoCurso}` : "",
+    assunto ? `Pedido de contacto: ${assunto}` : "",
+  ].filter(Boolean).join("\n");
+  // No email só o nome do curso da oferta: o texto livre do pedido (e o assunto) fica só na ficha.
+  const cursoDoContacto = oferta?.nome ?? "";
   const origem = await origemDaLista(db, sanitizeHeader(input.origem || ""), "Website");
   const campanha = await campanhaDoPedido(db, { campanhaId: input.campanhaId, campanha: sanitizeHeader(input.campanha || "") });
   const meio = sanitizeHeader(input.meioContacto || origem);
@@ -235,6 +248,19 @@ export async function criarPreinscricaoPublica(
     // Só os nomes dos campos: os valores nunca vão para o histórico.
     if (existente.dadosFinJuntos) await logLeadEvent(db, existente.id, undefined, "campo", "Dados pessoais recebidos no site", CAMPOS_DADOS_FIN);
     const ultimo = existente.ligacao_reenviada_em ? new Date(String(existente.ligacao_reenviada_em)).getTime() : 0;
+    if (eContacto) {
+      // Pedido de contacto repetido: fica o assunto na ficha e sai só a confirmação (sem a ligação dos documentos).
+      await logLeadEvent(db, existente.id, undefined, "contacto", "Novo pedido de contacto no site", assunto || origem);
+      if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
+        await enviarPedidoContactoRecebido(db, { email, nome: existente.nome, curso: cursoDoContacto }).catch(() => undefined);
+        await escrita.marcarLigacaoReenviada(db, existente.id);
+      }
+      return {
+        duplicado: true as const,
+        preinscricao: { id: existente.id, ref: opaqueRef("pre", existente.id, existente.public_id || null) },
+        aviso: AVISO_CONTACTO,
+      };
+    }
     if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
       // Ligação expirada (90 dias sem uso, sem documentos pendentes): reenviá-la igual mandava uma ligação que já não abre.
       if (await fechoDaLigacao(db, existente) === "expirada") await regenerarToken(db, existente.id);
@@ -266,6 +292,11 @@ export async function criarPreinscricaoPublica(
   const outros = await findDuplicados(db, email, telf, id).catch(() => []);
   if (Array.isArray(outros) && outros.length) {
     await logLeadEvent(db, id, undefined, "campo", "Possível duplicado", `Outros pedidos com o mesmo contacto: ${outros.map(o => `#${(o as { id: number }).id}`).join(", ")}`);
+  }
+  if (eContacto) {
+    if (assunto) await logLeadEvent(db, id, undefined, "contacto", "Pedido de contacto no site", assunto);
+    await enviarPedidoContactoRecebido(db, { email, nome: nomes.nome, curso: cursoDoContacto }).catch(() => undefined);
+    return { duplicado: false as const, preinscricao: { id, ref: opaqueRef("pre", id, publicId) }, aviso: AVISO_CONTACTO };
   }
   await firePreinscricaoEmail(db, { id, email, nome: nomes.nome, apelido: nomes.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);
   return {

@@ -156,7 +156,7 @@ describe("formulário público de pré-inscrição", () => {
     expect((await publico(ctx, { nome: "Lia", email, curso }, "10.30.1.1")).statusCode).toBe(429);
   });
 
-  it("curso fora da oferta: os emails dizem «Contacto pelo site» e o texto livre fica só nas notas", async () => {
+  it("curso fora da oferta: fica como pedido de contacto e o texto livre fica só nas notas", async () => {
     const ctx = await arrancar();
     const email = `${unico("fora")}@exemplo.pt`;
     const livre = "Quero um curso <b>especial</b> de qualquer coisa";
@@ -165,10 +165,10 @@ describe("formulário público de pré-inscrição", () => {
     const lead = await ctx.db.query<{ curso: string; notas: string }>("SELECT curso, notas FROM preinscricoes WHERE id = $1", [id]);
     expect(lead.rows[0]!.curso).toBe("Contacto pelo site");
     expect(lead.rows[0]!.notas).toContain("especial");
-    const eventos = await ctx.db.query<{ payload: Record<string, unknown> }>(
-      "SELECT payload FROM automation_events WHERE type = 'preinscricao.created' AND payload->>'email' = $1", [email]);
-    expect(eventos.rows.length).toBeGreaterThan(0);
-    for (const e of eventos.rows) expect(JSON.stringify(e.payload)).not.toContain("especial");
+    // Sem curso não há documentos a pedir: sai só a confirmação do contacto (pedidoContacto.test.ts), não o email da pré-inscrição.
+    const eventos = await ctx.db.query(
+      "SELECT 1 FROM automation_events WHERE type = 'preinscricao.created' AND payload->>'email' = $1", [email]);
+    expect(eventos.rows).toHaveLength(0);
     const jobs = await ctx.db.query<{ subject: string; body_text: string }>("SELECT subject, body_text FROM email_jobs WHERE lower(to_email) = $1", [email]);
     for (const j of jobs.rows) expect(`${j.subject} ${j.body_text}`).not.toContain("especial");
   });

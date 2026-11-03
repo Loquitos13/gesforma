@@ -6,7 +6,7 @@
  * Variáveis: texto simples (`{{curso}}`) ou listas (`{{…_itens}}`, uma por linha, saem com «•»). O botão usa
  * `{{link}}` (o endereço próprio de cada email: área do formando, ligação pessoal, inquérito…).
  */
-import { renderModelo } from "./automations.js";
+import { renderModelo, telefonesPorZona } from "./automations.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
@@ -40,6 +40,10 @@ export async function montarModelo(db: Db, e: Omit<EnvioModelo, "para" | "anexos
   vars.nome ??= e.nome;
   vars.link = e.link ?? "";
   const modelo = await modeloEmail(db, e.tipo, e.area ?? "gold");
+  // {{local_contactos_itens}}: os contactos guardados do local da pessoa (pela pré-inscrição do destinatário).
+  if (modelo && vars.local_contactos_itens === undefined && `${modelo.assunto} ${modelo.body_xml}`.includes("local_contactos")) {
+    vars.local_contactos_itens = (await telefonesPorZona(db, { email: e.email || null, local: vars.local || null, soDoLocal: true })).join("\n");
+  }
   if (modelo) return renderModelo({ ...modelo, template_tipo: modelo.tipo }, e.nome, vars);
   const mail = renderAutomaticEmail({
     nome: e.nome, xml: "", linhas: e.reserva.linhas, cta: e.reserva.cta ?? "", href: e.link ?? "", vars, origin: config.appOrigin,

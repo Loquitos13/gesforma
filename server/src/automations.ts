@@ -45,11 +45,18 @@ function listaDoPayload(raw: unknown): string[] {
  * por isso mudar o contacto de um local muda logo o modelo e os envios seguintes. Todos os locais activos com
  * contactos, o da pessoa primeiro. Sem nenhum, os «Telefones por zona» da entidade.
  */
-export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; local?: string | null; preinscricaoId?: number | null } = {}) {
+export async function telefonesPorZona(db: Db, alvo: {
+  regime?: string | null; local?: string | null; preinscricaoId?: number | null; email?: string | null;
+  /** Só os contactos do local da pessoa ({{local_contactos_itens}}). */
+  soDoLocal?: boolean;
+} = {}) {
   let { regime, local } = alvo;
-  if (alvo.preinscricaoId && (!regime || !local)) {
+  if ((alvo.preinscricaoId || alvo.email) && (!regime || !local)) {
     const r = await db.query<{ regime: string | null; local: string | null }>(
-      "SELECT regime, local FROM preinscricoes WHERE id = $1", [alvo.preinscricaoId]);
+      alvo.preinscricaoId
+        ? "SELECT regime, local FROM preinscricoes WHERE id = $1"
+        : "SELECT regime, local FROM preinscricoes WHERE lower(btrim(email)) = lower(btrim($1)) ORDER BY id DESC LIMIT 1",
+      [alvo.preinscricaoId || alvo.email]);
     regime ||= r.rows[0]?.regime ?? null;
     local ||= r.rows[0]?.local ?? null;
   }
@@ -69,9 +76,10 @@ export async function telefonesPorZona(db: Db, alvo: { regime?: string | null; l
   // Todos os locais (a pessoa pode ter escolhido o local errado), com o seu primeiro.
   const todas = [...linhas.values()];
   const primeiro = local ? todas.filter(l => chave(l.local) === chave(local)) : [];
+  if (alvo.soDoLocal) return primeiro.map(l => l.linha);
   const escolhidas = [...primeiro, ...todas.filter(l => !primeiro.includes(l))];
-  if (escolhidas.length) return escolhidas.map(l => l.linha);
-  return (await lerEntidade(db)).telefonesZona.split("\n").filter(Boolean);
+  // Sempre os contactos guardados nos locais: sem nenhum, o parágrafo dos contactos não sai.
+  return escolhidas.map(l => l.linha);
 }
 
 /** Monta assunto, texto e HTML de um modelo com as variáveis dadas (o mesmo que sai no envio real). */
@@ -121,6 +129,13 @@ export async function ingestEvent(
       ? await telefonesPorZona(db, { regime: String(payload.regime ?? "") || null, local: String(payload.local ?? "") || null, preinscricaoId: Number(payload.preinscricaoId) || null })
       : [],
   });
+  // Os contactos do local da pessoa (lidos no envio, dos locais guardados).
+  if (regras.some(r => `${r.assunto} ${r.body_xml ?? ""} ${JSON.stringify(r.body_lines ?? "")}`.includes("local_contactos"))) {
+    (vars as Record<string, string>).local_contactos_itens = (await telefonesPorZona(db, {
+      regime: String(payload.regime ?? "") || null, local: String(payload.local ?? "") || null,
+      preinscricaoId: Number(payload.preinscricaoId) || null, email, soDoLocal: true,
+    })).join("\n");
+  }
   for (const [k, v] of Object.entries(opts.vars ?? {})) (vars as Record<string, string>)[k] = sanitizeText(String(v ?? ""), 2000);
   let queued = 0;
   for (const regra of regras) {
@@ -271,7 +286,7 @@ export async function varsDeExemplo(db: Db, curso: string | null, para: { email:
   const { lead, turma } = await exemploReal(db, curso);
   const cursoEx = curso || lead?.curso || turma?.curso || "(curso)";
   const docs = lead?.docs_token ? `${origem()}/documentos/${lead.docs_token}` : `${origem()}/documentos/(ligação-pessoal)`;
-  return buildCtaVars({
+  const vars = buildCtaVars({
     nome: para.nome,
     email: para.email,
     curso: cursoEx,
@@ -287,6 +302,8 @@ export async function varsDeExemplo(db: Db, curso: string | null, para: { email:
     recusadosItens: ["(documento recusado): (motivo indicado pela secretaria)"],
     telefonesItens: await telefonesPorZona(db),
   });
+  // Exemplo dos contactos do local da pessoa: o primeiro local com contactos.
+  return { ...vars, local_contactos_itens: (await telefonesPorZona(db)).slice(0, 1).join("\n") };
 }
 
 /** Envia já o modelo da regra para um email de teste. Não avança o CRM nem respeita o atraso. */

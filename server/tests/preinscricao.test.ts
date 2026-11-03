@@ -343,11 +343,11 @@ describe("lembretes", () => {
     const { renderModelo, telefonesPorZona } = await import("../src/automations.js");
     const { buildCtaVars } = await import("../src/emailCta.js");
     const { modeloEmail } = await import("../src/repos/emails.js");
-    const linhas = "223781100 se pretende realizar o curso no Porto/Gaia\r\n\r\n223781101 se pretende realizar o curso em Braga ou Aveiro\n223781102 se pretende realizar o curso em Lisboa";
+    // Os contactos vêm sempre dos locais guardados: o texto antigo de Configurações › Entidade já não entra.
+    const linhas = "223781100 se pretende realizar o curso no Porto/Gaia\n223781101 se pretende realizar o curso em Braga ou Aveiro\n223781102 se pretende realizar o curso em Lisboa";
     expect((await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", telefonesZona: linhas } })).statusCode).toBe(200);
-    const telefones = await telefonesPorZona(ctx.db);
-    expect(telefones).toHaveLength(3);
-    expect(telefones[0]).toMatch(/^223781100 /);
+    expect((await telefonesPorZona(ctx.db)).join("\n")).not.toContain("se pretende realizar o curso");
+    const telefones = linhas.split("\n");
     for (const tipo of ["welcome", "lembrete_docs", "lembrete_docs_final"]) {
       const m = await modeloEmail(ctx.db, tipo);
       expect(m, tipo).toBeTruthy();

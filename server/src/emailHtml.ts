@@ -86,7 +86,8 @@ export function renderAutomaticEmail(input: {
   const paraHtml = corpo.map(p => `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#334155;">${renderInner(p, input.vars)}</p>`).join("");
   const contactosHtml = contactos.length ? quadroContactos(introContactos.map(p => renderInner(p, input.vars)), contactos) : "";
   const cta = fillVars(input.cta, input.vars).trim();
-  const href = safeHref(input.href);
+  // Um botão é sempre um botão: sem endereço próprio (ex.: envio de teste), leva ao site.
+  const href = safeHref(input.href) || (cta ? safeHref(input.origin) : "");
   const button = cta && href
     ? `<table role="presentation" cellpadding="0" cellspacing="0" style="margin:8px 0 16px;"><tr><td bgcolor="#f59e0b" style="border-radius:8px;"><a href="${esc(href)}" style="display:inline-block;padding:12px 18px;font-family:Arial,Helvetica,sans-serif;font-size:14px;font-weight:700;color:#ffffff;text-decoration:none;">${esc(cta)}</a></td></tr></table><p style="margin:0 0 16px;font-size:12px;line-height:1.4;color:#94a3b8;word-break:break-all;">${esc(href)}</p>`
     : cta
@@ -104,7 +105,7 @@ export function renderAutomaticEmail(input: {
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
 <tr><td style="padding:28px 28px 8px;font-family:Arial,Helvetica,sans-serif;">
-<img src="${esc(logo)}" alt="ENA" height="28" style="display:block;height:28px;width:auto;border:0;margin-bottom:18px;" />
+<img src="${esc(logo)}" alt="ENA" width="140" style="display:block;width:140px;max-width:140px;height:auto;border:0;outline:none;text-decoration:none;margin-bottom:18px;" />
 <p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">Olá ${first},</p>
 ${paraHtml}
 ${button}

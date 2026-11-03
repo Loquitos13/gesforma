@@ -255,7 +255,18 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         await comprovativoRecebido(db, lead, { driveFileId: file.id, nome: file.name, mime: up.mime, bytes: up.bytes })
           .catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
       }
-      await avisarDocumentoRecebido(db, lead, rotulo, file.id).catch(err => console.error("[emails] aviso de documento recebido:", err));
+      // Aviso à equipa: o comprovativo logo; os documentos só quando estão todos os obrigatórios (um email, não um por ficheiro).
+      if (comprovativo) {
+        await avisarDocumentoRecebido(db, lead, rotulo, file.id).catch(err => console.error("[emails] aviso de documento recebido:", err));
+      } else {
+        const agora = await listarDocsLead(db, leadId);
+        const entregue = (id: string) => agora.some(d => d.tipo === id && d.estado !== "recusado");
+        const obrigatorios = pedidos.filter(p => p.required);
+        if (obrigatorios.length && obrigatorios.every(p => entregue(p.id))) {
+          const lista = `Todos os documentos obrigatórios: ${obrigatorios.map(p => p.label).join(", ")}`;
+          await avisarDocumentoRecebido(db, lead, lista, file.id).catch(err => console.error("[emails] aviso de documentos recebidos:", err));
+        }
+      }
       await syncLigacao(db, leadId);
       await abrirAlerta(db, leadId);
       return { ok: true, nome: file.name };

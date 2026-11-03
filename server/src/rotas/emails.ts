@@ -54,7 +54,7 @@ const AMBITOS = [
 ];
 const VARIAVEIS = [
   "nome", "email", "curso", "turma", "documentos_url", "comprovativo_url", "preinscricao_url", "secretaria_url", "valor", "documentos_lista",
-  "documentos_itens", "documentos_em_falta_itens", "documentos_recusados_itens", "telefones_itens", "cronogramas_itens", "faturacao_url",
+  "documentos_itens", "documentos_em_falta_itens", "documentos_recusados_itens", "telefones_itens", "local_contactos_itens", "cronogramas_itens", "faturacao_url",
 ];
 
 const regraSchema = z.object({

@@ -9,6 +9,8 @@ describe("WhatsApp geral", () => {
     const id = 990000 + Math.floor(Math.random() * 9000);
     await ctx.db.query("INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1, 'locais', 'gold', $2::jsonb)",
       [id, JSON.stringify({ nome: "Penafiel Teste", telemovel: "917565561", whatsapp: "917565561" })]);
+    await ctx.db.query("INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1, 'locais', 'gold', $2::jsonb)",
+      [id + 1, JSON.stringify({ nome: "Sem Contactos Teste", morada: "Rua X" })]);
     await ctx.db.query(
       `INSERT INTO app_settings (id, values) VALUES ('site', '{"evaNome": "Eva"}'::jsonb)
        ON CONFLICT (id) DO UPDATE SET values = app_settings.values || '{"evaNome": "Eva"}'::jsonb`);
@@ -23,6 +25,9 @@ describe("WhatsApp geral", () => {
 
     const local = (await ctx.db.query<{ payload: Record<string, string> }>("SELECT payload FROM catalog_items WHERE kind = 'locais' AND id = $1", [id])).rows[0]!.payload;
     expect(local).toMatchObject({ nome: "Penafiel Teste", telemovel: "917565561", whatsapp: "962215550" });
+    // Um local sem contactos continua sem eles (não passa a aparecer nos telefones por zona dos emails).
+    const semContactos = (await ctx.db.query<{ payload: Record<string, string> }>("SELECT payload FROM catalog_items WHERE kind = 'locais' AND id = $1", [id + 1])).rows[0]!.payload;
+    expect(semContactos.whatsapp).toBeUndefined();
     const site = (await ctx.db.query<{ values: Record<string, string> }>("SELECT values FROM app_settings WHERE id = 'site'")).rows[0]!.values;
     expect(site).toMatchObject({ evaNome: "Eva", evaWhatsapp: "351962215550" });
     const ficha = (await ctx.db.query<{ payload: { contactosLocais: Record<string, Record<string, string>> } }>(

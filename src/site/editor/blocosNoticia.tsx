@@ -99,7 +99,7 @@ export const NoticiaCabecalho: ComponentConfig<CabecalhoProps> = {
     tTitulo: campoTipografia("Tipografia do título"),
     aparencia: campoAparencia(),
   },
-  defaultProps: { voltar: "Todas as notícias", excerto: true, leitura: true, partilhar: true, tEtiqueta: tipoVazia(), tTitulo: tipoVazia(), aparencia: estiloVazio() },
+  defaultProps: { voltar: "Todas as notícias e artigos", excerto: true, leitura: true, partilhar: true, tEtiqueta: tipoVazia(), tTitulo: tipoVazia(), aparencia: estiloVazio() },
   render: p => (
     <CaixaNoticia p={p}>
       {n => {
@@ -110,7 +110,7 @@ export const NoticiaCabecalho: ComponentConfig<CabecalhoProps> = {
         return (
           <div className="mx-auto max-w-[760px]">
             {p.voltar && <a href="/noticias" className="text-sm font-bold text-[var(--c-destaque)]">← {p.voltar}</a>}
-            <p className={juntar("mt-6 text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]", e.className)} style={e.style}>{n.tematica || "Notícia"} · {dataPt(n.data)}</p>
+            <p className={juntar("mt-6 text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]", e.className)} style={e.style}>{n.tematica || "Artigo"} · {dataPt(n.data)}</p>
             <h1 className={juntar("mt-3 font-serif text-4xl font-bold", t.className)} style={t.style}>{n.titulo}</h1>
             {p.excerto !== false && meta?.excerto && <p className="mt-4 text-xl leading-8 opacity-75">{meta.excerto}</p>}
             {(p.leitura !== false || p.partilhar !== false) && (
@@ -162,7 +162,7 @@ export const NoticiaOutras: ComponentConfig<OutrasProps> = {
           <div className="ena-grelha" style={{ gap: "16px", ["--cols" as string]: String(p.colunas || 3), ["--cols-tab" as string]: "2", ["--cols-tel" as string]: "1" }}>
             {outras.map(o => (
               <a key={o.slug} href={`/noticias/${encodeURIComponent(o.slug)}`} className="flex flex-col gap-2 border-t-[3px] border-[var(--c-acento)] bg-white p-5 hover:shadow-md">
-                <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{o.tematica || "Notícia"} · {dataPt(o.data)}</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">{o.tematica || "Artigo"} · {dataPt(o.data)}</span>
                 <strong className="text-lg leading-snug text-[var(--c-primaria)]">{o.titulo}</strong>
               </a>
             ))}

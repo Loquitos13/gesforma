@@ -30,7 +30,7 @@ export const BLOCOS_SITE = [
   "CursoBanner", "CursoSintese", "CursoDados", "CursoObjetivos", "CursoPrograma", "CursoFuncionamento", "CursoTurmas", "CursoRelevantes", "CursoInscricao",
   "CursoEscolhaLocal", "CursoTexto", "CursoImagem", "CursoBotaoInscricao", "CursoVideo",
   "ServicoBanner", "ServicoDetalhe", "ServicoGaleria", "ServicoVideo", "ServicoLogos", "ServicoCartoes", "ServicoChamada", "FormularioProposta",
-  "NoticiaCabecalho", "NoticiaCorpo", "NoticiaOutras", "NoticiaImagem", "NoticiaCurso", "RedesSociais",
+  "NoticiaCabecalho", "NoticiaCorpo", "NoticiaOutras", "NoticiaImagem", "NoticiaCurso", "RedesSociais", "Mapa",
 ] as const;
 
 export type BlocoSite = typeof BLOCOS_SITE[number];

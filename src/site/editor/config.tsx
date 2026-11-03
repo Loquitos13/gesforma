@@ -18,6 +18,7 @@ import { FormularioProposta } from "./blocosFormulario";
 import { campoPrevisualizarNoticia, NoticiaCabecalho, NoticiaCorpo, NoticiaCurso, NoticiaImagem, NoticiaOutras, RaizNoticia } from "./blocosNoticia";
 import { RedesSociais } from "./blocosRedes";
 import { Botao, Coluna, Espaco, Imagem, Logotipos, Pilares, Seccao, Separador, Texto, Titulo } from "./blocosBase";
+import { Mapa } from "./blocosMapa";
 import { CursosDestaque, OfertaFormativa } from "./blocosCursos";
 import { Cabecalho, CabecalhoSite, Rodape, RodapeSite, type CabecalhoProps, type RodapeProps } from "./blocosMoldura";
 import { campoCor, campoFonte, campoNumero } from "./campos";
@@ -149,13 +150,13 @@ const componentes = Object.fromEntries(Object.entries({
   CursoBanner, CursoSintese, CursoDados, CursoObjetivos, CursoPrograma, CursoFuncionamento, CursoTurmas, CursoRelevantes, CursoInscricao,
   CursoEscolhaLocal, CursoTexto, CursoImagem, CursoBotaoInscricao, CursoVideo,
   ServicoBanner, ServicoDetalhe, ServicoGaleria, ServicoVideo, ServicoLogos, ServicoCartoes, ServicoChamada, FormularioProposta,
-  NoticiaCabecalho, NoticiaCorpo, NoticiaOutras, NoticiaImagem, NoticiaCurso, RedesSociais,
+  NoticiaCabecalho, NoticiaCorpo, NoticiaOutras, NoticiaImagem, NoticiaCurso, RedesSociais, Mapa,
   // Cada bloco do editor tem de estar em BLOCOS_SITE (o servidor recusa publicar blocos que não conhece): falha no build.
 } satisfies Record<BlocoSite, unknown>).map(([k, c]) => [k, responsivo(c as ComponentConfig<any>)])) as Config["components"];
 
 const categoriasBase = {
   estrutura: { title: "Estrutura", components: ["Seccao", "Coluna", "Espaco", "Separador"] },
-  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos", "RedesSociais", "FormularioProposta"] },
+  conteudo: { title: "Conteúdo", components: ["Titulo", "Texto", "Botao", "Imagem", "Pilares", "Servicos", "Testemunhos", "Logotipos", "RedesSociais", "Mapa", "FormularioProposta"] },
   cursos: { title: "Cursos", components: ["CursosDestaque", "OfertaFormativa", "Catalogo"] },
   especiais: { title: "Notícias e área do formando", components: ["ListaNoticias", "AreaFormando"] },
   // Blocos que só fazem sentido na página do curso (lêem o curso da página).

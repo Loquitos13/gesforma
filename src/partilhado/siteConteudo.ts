@@ -9,7 +9,7 @@ export const SITE_OMISSAO = {
   inscVerCronograma: "Ver cronograma",
   inscCheia: "Novas datas em breve",
   inscRecebido: "Pedido recebido",
-  inscRecebidoTexto: "A secretaria da ENA entra em contacto consigo.",
+  inscRecebidoTexto: "A ENA agradece a sua pré-inscrição, que ficou associada a {email}. Iremos entrar em contacto consigo para a formalizar, num período máximo de 2 dias úteis.",
   // Páginas da ligação pessoal (documentos e pagamento).
   ligCorDestaque: "#ffa900",
   ligCorFundo: "#f4f1ea",
@@ -20,7 +20,7 @@ export const SITE_OMISSAO = {
   marcaLinha1: "Escola de",
   marcaLinha2: "Negócios e Administração",
   navFormacao: "Formação",
-  navNoticias: "Notícias",
+  navNoticias: "Notícias e artigos",
   navEmpresas: "Empresas",
   navFormando: "Área de formando",
   navEntrar: "Iniciar Sessão",

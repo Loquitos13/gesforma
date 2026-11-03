@@ -92,7 +92,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
     setErrosFin({});
     setErro("");
     setAviso("");
-    setLocal(localInicial);
+    // Sem local pré-escolhido: a pessoa vê todos os locais e escolhe (com um só, fica escolhido sozinho).
+    setLocal("");
     setTrocarLocal(false);
     setHorario("");
     setDataInicio("");
@@ -321,7 +322,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#FFA900]">{txt("inscRecebido")}</p>
               <p className="mt-3 text-lg leading-8 text-[color:var(--insc-p)]/75">
-                {aviso || txt("inscRecebidoTexto")} O pedido ficou associado a {email}.
+                {txt("inscRecebidoTexto").replace("{email}", email)}
               </p>
               {(() => {
                 // Os contactos do local escolhido (Edição de cursos › Locais, ou a ficha do curso).

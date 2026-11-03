@@ -286,6 +286,8 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     .filter(t => /^\d{4}-\d{2}-\d{2}$/.test(t.dataInicio) && t.dataInicio >= hoje));
   const inicios = new Map<string, { data: string; local: string }>();
   const cheias = new Set<string>();
+  // Locais com turmas abertas e vagas, por curso: com mais de um, o cartão diz «Em várias localizações».
+  const locaisAbertos = new Map<string, Set<string>>();
   const sessoes = new Map<string, Array<{ iso: string; data: string; local: string; horario: string; cheia: boolean; matricula: string; regime: string }>>();
   for (const t of abertas) {
     const data = t.dataInicio;
@@ -294,6 +296,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     if (cheia) cheias.add(key);
     const actual = inicios.get(key);
     if (!cheia && (!actual || data < actual.data)) inicios.set(key, { data, local: t.local || "" });
+    if (!cheia && t.local) locaisAbertos.set(key, (locaisAbertos.get(key) ?? new Set()).add(chave(t.local)));
     const lista = sessoes.get(key) ?? [];
     const sessao = { iso: data, data: dataCurta(data), local: t.local || "", horario: t.horario || "", cheia, matricula: t.matricula, regime: t.regime };
     if (!lista.some(item => item.data === sessao.data && item.local === sessao.local && item.horario === sessao.horario)) {
@@ -378,7 +381,9 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       modalidade: modo,
       horasLabel,
       inicio: inicio
-        ? `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
+        ? new Set(curso.chaves.flatMap(key => [...(locaisAbertos.get(key) ?? [])])).size > 1
+          ? "Em várias localizações"
+          : `${dataCurta(inicio.data)}${inicio.local ? ` · ${inicio.local}` : ""}`
         : curso.chaves.some(key => cheias.has(key)) ? "Novas datas em breve"
         : modo === "E-learning" ? "Acesso imediato" : "Data a anunciar",
       proximaComVagas: inicio?.data ?? "",

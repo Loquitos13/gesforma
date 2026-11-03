@@ -111,7 +111,7 @@ export function modeloInicio(): Data {
   return {
     root: { props: { ...temaPadrao } },
     content: [
-      bloco("Cabecalho", cabecalhoPadrao, { ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }] }),
+      bloco("Cabecalho", cabecalhoPadrao, { ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias e artigos", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }] }),
       hero, oferta, metodo, seccaoTestemunhos(), empresas,
       bloco("Rodape", rodapePadrao),
     ],
@@ -149,7 +149,7 @@ function modeloNoticias(): Data {
       aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
       conteudo: [
         kicker("ENA"),
-        bloco("Titulo", Titulo.defaultProps, { texto: "Notícias", nivel: "h1" }),
+        bloco("Titulo", Titulo.defaultProps, { texto: "Notícias e artigos", nivel: "h1" }),
         bloco("Texto", Texto.defaultProps, { texto: "Novidades, eventos e artigos da ENA." }),
         bloco("ListaNoticias", ListaNoticias.defaultProps, { aparencia: estiloVazio({ margem: lados(24, 0, 0, 0) }) }),
       ],

@@ -10,6 +10,9 @@ assertSecureConfig();
 const db = await createDb();
 await migrate(db);
 await seed(db);
+// Mudanças de conteúdo pedidas para as páginas do site já gravadas (menu, rodapé, secções): uma vez cada.
+const { aplicarAjustesSite } = await import("./db/ajustesSite.js");
+await aplicarAjustesSite(db).catch(err => console.warn("Aviso: ajustes ao conteúdo do site não concluíram.", err));
 const { backfillPiiEncryption } = await import("./piiBackfill.js");
 await backfillPiiEncryption(db).catch(err => {
   console.warn("Aviso: backfill PII não concluiu.", err);

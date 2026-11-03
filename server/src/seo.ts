@@ -187,10 +187,10 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
   }
   if (caminho === "/noticias") {
     const lista = await noticiasPublicas(db).catch(() => []);
-    const titulo = comNome(limpar(seo.noticiasTitulo) || "Notícias");
+    const titulo = comNome(limpar(seo.noticiasTitulo) || "Notícias e artigos");
     const descricao = limpar(seo.noticiasDescricao) || `Novidades, eventos e artigos da ${nome}.`;
     return base({
-      titulo, descricao, jsonLd: [migalhas(origem, [["Início", "/"], ["Notícias", "/noticias"]])],
+      titulo, descricao, jsonLd: [migalhas(origem, [["Início", "/"], ["Notícias e artigos", "/noticias"]])],
       corpo: `<h1>Notícias</h1><p>${esc(descricao)}</p><ul>${lista.slice(0, 50).map(n => `<li><a href="/noticias/${encodeURIComponent(n.slug)}">${esc(n.titulo)}</a></li>`).join("")}</ul>`,
     });
   }
@@ -206,7 +206,7 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     return base({
       titulo: comNome(n.titulo), descricao, tipo: "article", imagem: imagemArtigo,
       jsonLd: [
-        migalhas(origem, [["Início", "/"], ["Notícias", "/noticias"], [n.titulo, `/noticias/${n.slug}`]]),
+        migalhas(origem, [["Início", "/"], ["Notícias e artigos", "/noticias"], [n.titulo, `/noticias/${n.slug}`]]),
         {
           "@type": "BlogPosting", headline: cortar(n.titulo, 110), description: descricao, datePublished: n.data || undefined,
           articleSection: n.tematica || undefined, inLanguage: "pt-PT", mainEntityOfPage: `${origem}/noticias/${n.slug}`,

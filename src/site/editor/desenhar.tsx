@@ -17,6 +17,9 @@ function Bloco({ item, config }: { item: Item; config: Config }) {
   if (!def) return null;
   const props: Record<string, unknown> = {};
   const campos = (def.fields ?? {}) as Record<string, { type?: string }>;
+  // Como no editor (completarPadroes): opções que o bloco gravado ainda não tinha ficam com o valor por omissão.
+  const padrao = (def.defaultProps ?? {}) as Record<string, unknown>;
+  for (const [k, v] of Object.entries(padrao)) if (item.props[k] === undefined && !Array.isArray(v)) props[k] = v;
   for (const [k, v] of Object.entries(item.props)) {
     if (campos[k]?.type === "slot" || ehSlot(v)) {
       const filhos = Array.isArray(v) ? v.filter(ehItem) : [];

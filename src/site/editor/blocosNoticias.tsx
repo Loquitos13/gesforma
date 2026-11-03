@@ -52,7 +52,7 @@ function ListaVista(p: Props & { refRaiz?: ((el: Element | null) => void) | null
           <a key={i.slug} href={`/noticias/${encodeURIComponent(i.slug)}`} className={juntar(k.className, "block transition hover:brightness-95")} style={k.style}>
             {(p.mostrarTema || p.mostrarData) && (
               <span className="text-xs font-bold uppercase tracking-wider text-[var(--c-destaque)]">
-                {[p.mostrarTema ? i.tematica || "Notícia" : "", p.mostrarData ? dataPt(i.data) : ""].filter(Boolean).join(" · ")}
+                {[p.mostrarTema ? i.tematica || "Artigo" : "", p.mostrarData ? dataPt(i.data) : ""].filter(Boolean).join(" · ")}
               </span>
             )}
             <h2 className={juntar("mt-3", t.className)} style={t.style}>{i.titulo}</h2>

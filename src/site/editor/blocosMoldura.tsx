@@ -99,7 +99,7 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
 export const cabecalhoPadrao: CabecalhoProps = {
   logo: "/imagens/ena_logo.svg", alturaLogo: 40, linha1: "Escola de", linha2: "Negócios e Administração",
   logoAlt: "ENA – Escola de Negócios e Administração", logoLigacao: "/", linhasNoTelemovel: false, botaoNovaJanela: false, corMenuTel: "", corTextoMenuTel: "",
-  ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }],
+  ligacoes: [{ rotulo: "Formação", ligacao: "/formacao" }, { rotulo: "Notícias e artigos", ligacao: "/noticias" }, { rotulo: "Empresas", ligacao: "/empresas" }],
   redes: [], botao: "Área do formando", botaoSessao: "A minha área", botaoLigacao: "/area-formando",
   fixo: false, corFundo: "#ffffff", corTexto: "var(--c-primaria)", corHover: "var(--c-destaque)", corBotao: "var(--c-destaque)", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia({ tamanho: 14, peso: "600" }),
@@ -154,6 +154,8 @@ export type RodapeProps = {
   /** Logótipo no lugar do quadrado da marca (vazio = o quadrado com o texto). */
   marcaImagem: string; alturaMarca: number | null; corMarca: string;
   texto: string; colunas: ColunaRodape[]; direitos: string; lema: string; redes?: LigacaoRede[];
+  /** Logótipos de certificação (DGERT, IEFP, SIGO…), numa fila por cima dos direitos. */
+  logos?: { imagem: string; alt: string; ligacao?: string }[]; tituloLogos?: string;
   corFundo: string; corTexto: string; corTitulos: string; corBarra: string; barra: number | null;
   tipografia: Tipografia; aparencia: Estilo;
 };
@@ -197,6 +199,16 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
             </div>
           ))}
         </div>
+        {(p.logos ?? []).some(l => l.imagem) && (
+          <div className="flex flex-wrap items-center gap-x-8 gap-y-4 border-b border-white/15 py-6">
+            {p.tituloLogos && <span className="text-xs font-semibold uppercase tracking-wider opacity-80">{p.tituloLogos}</span>}
+            {(p.logos ?? []).filter(l => l.imagem).map((l, i) => {
+              const img = <img src={l.imagem} alt={l.alt || ""} className="h-14 w-auto rounded bg-white p-1.5" />;
+              const href = l.ligacao ? ligacaoSegura(l.ligacao) : "";
+              return href ? <a key={i} href={href} target="_blank" rel="noreferrer" title={l.alt}>{img}</a> : <span key={i}>{img}</span>;
+            })}
+          </div>
+        )}
         <div className="flex flex-col justify-between gap-3 pt-6 text-xs opacity-80 sm:flex-row">
           <span>{p.direitos.replace(/\{ano\}/g, ano)}</span>
           <span>{p.lema}</span>
@@ -206,19 +218,34 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
   );
 }
 
+/** Contactos da sede (do site antigo): morada, telefones, email e horário da secretaria. */
+export const CONTACTOS_RODAPE = [
+  "R. do Conselheiro Veloso da Cruz 524, 4400-705 Vila Nova de Gaia",
+  "Telefone: 223 781 100 | tel:+351223781100",
+  "Telemóvel: 912 744 205 | tel:+351912744205",
+  "geral@ena.pt | mailto:geral@ena.pt",
+  "Secretaria: 2ª a 6ª, 9h00–13h00 e 14h00–18h00",
+].join("\n");
+
+export const LOGOS_CERTIFICACAO = [
+  { imagem: "/imagens/certificacoes/dgert.jpg", alt: "DGERT – Entidade formadora certificada", ligacao: "https://www.dgert.gov.pt/" },
+  { imagem: "/imagens/certificacoes/iefp.jpg", alt: "IEFP – Instituto do Emprego e Formação Profissional", ligacao: "https://www.iefp.pt/" },
+];
+
 export const rodapePadrao: RodapeProps = {
   marca: "ENA", marcaImagem: "", alturaMarca: 48, corMarca: "", texto: "Capacitamos pessoas e organizações através de experiências de aprendizagem relevantes, práticas e transformadoras.",
   colunas: [
-    { titulo: "Contactos", linhas: "2ª a 6ª, 09h—18h" },
+    { titulo: "Contactos", linhas: CONTACTOS_RODAPE },
     {
       titulo: "Ligações úteis",
       linhas: [
-        "Formação | /formacao", "Notícias | /noticias",
+        "Formação | /formacao", "Notícias e artigos | /noticias",
         "Política de privacidade | https://ena.pt/politica-de-privacidade", "Livro de reclamações | https://www.livroreclamacoes.pt/Inicio/",
       ].join("\n"),
     },
   ],
   direitos: "© {ano} ENA. Todos os direitos reservados.", lema: "Aprender. Evoluir. Transformar.", redes: [],
+  logos: LOGOS_CERTIFICACAO, tituloLogos: "Entidade certificada",
   corFundo: "#0E1C2E", corTexto: "#D7E0EA", corTitulos: "#ffffff", corBarra: "var(--c-acento)", barra: 4,
   tipografia: tipoVazia(),
   aparencia: estiloVazio({ preenchimento: lados(56, 32), preenchimentoTel: lados(40, 20) }),
@@ -239,6 +266,13 @@ export const Rodape: ComponentConfig<RodapeProps> = {
       getItemSummary: c => c.titulo || "Coluna",
     },
     redes: campoRedes as never,
+    tituloLogos: { type: "text", label: "Texto antes dos logótipos de certificação" },
+    logos: {
+      type: "array", label: "Logótipos de certificação (DGERT, IEFP, SIGO…)",
+      arrayFields: { imagem: campoImagem("Imagem") as never, alt: { type: "text", label: "Nome" }, ligacao: { type: "text", label: "Ligação (opcional)" } },
+      defaultItemProps: { imagem: "", alt: "", ligacao: "" },
+      getItemSummary: (l: { alt?: string }) => l.alt || "Logótipo",
+    } as never,
     direitos: { type: "text", label: "Direitos ({ano} = ano actual)" },
     lema: { type: "text", label: "Lema" },
     corFundo: campoCor("Fundo"),

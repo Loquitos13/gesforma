@@ -3,12 +3,13 @@
  * automáticos contam), com documentos em falta ou que não passaram a formando. O email leva os
  * cronogramas das próximas turmas do curso e a ligação pessoal; cada envio fica registado como contacto.
  */
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import { flushQueuedJobs, ingestEvent } from "./automations.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { hojeLisboa } from "./datas.js";
-import { docsDoCurso } from "./docsCurso.js";
+import { aplicarGatilhos, docsDoCurso } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken, listarDocsLead } from "./docsLink.js";
 import { fmtDataPt, listOfertaFin, listOfertaGold, type OfertaTurma } from "./ofertaGold.js";
 import * as repo from "./repos/campanhasEmail.js";
@@ -21,11 +22,12 @@ export type Criterios = repo.CriteriosCampanha & { soDocsEmFalta?: boolean };
 type PedidosPorCurso = Map<string, Promise<Awaited<ReturnType<typeof docsDoCurso>>>>;
 
 /** Documentos obrigatórios ainda por enviar (ou recusados) desta pré-inscrição. */
-async function docsEmFalta(db: Db, lead: { id: number; curso: string; regime: string; escolaridade?: string }, cache: PedidosPorCurso) {
+async function docsEmFalta(db: Db, lead: { id: number; curso: string; regime: string } & DadosGatilho, cache: PedidosPorCurso) {
   const regime = lead.regime === "fin" ? "fin" : "gold";
-  const chave = `${regime}:${lead.curso.trim().toLowerCase()}:${lead.escolaridade ?? ""}`;
-  if (!cache.has(chave)) cache.set(chave, docsDoCurso(db, lead.curso, regime, lead.escolaridade ?? ""));
-  const pedidos = await cache.get(chave)!;
+  const chave = `${regime}:${lead.curso.trim().toLowerCase()}`;
+  if (!cache.has(chave)) cache.set(chave, docsDoCurso(db, lead.curso, regime));
+  // A lista do curso lê-se uma vez; os gatilhos (escolaridade, local…) aplicam-se a cada pessoa.
+  const pedidos = aplicarGatilhos(await cache.get(chave)!, lead);
   const ficheiros = new Map((await listarDocsLead(db, lead.id)).map(f => [f.tipo, f]));
   return pedidos.filter(d => d.required).filter(d => {
     const f = ficheiros.get(d.id);

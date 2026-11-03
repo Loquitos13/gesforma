@@ -73,13 +73,19 @@ export type DocPreinscricaoCurso = {
   pedido: boolean;
   origem: "base" | "extra" | "dossie";
   modelo?: string;
+  /** Pedido só a quem cumpre o gatilho (escolaridade, nacionalidade, local, horário); sem gatilho, sempre. */
+  gatilho?: import("./gatilhosDocs").GatilhoDoc | null;
 };
 export const apiDocsPreinscricao = (regime: Regime, cursoId: number) =>
   api<{ aplica: boolean; tipo: string; docs: DocPreinscricaoCurso[] }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`);
 export const apiSaveDocsPreinscricao = (
   regime: Regime,
   cursoId: number,
-  body: { ocultos: string[]; extra: { id?: string; label: string; required: boolean }[] },
+  body: {
+    ocultos: string[];
+    extra: { id?: string; label: string; required: boolean; gatilho?: import("./gatilhosDocs").GatilhoDoc | null }[];
+    condicoes?: Record<string, import("./gatilhosDocs").GatilhoDoc>;
+  },
 ) => api<{ ok: boolean }>(`/v1/cursos/${regime}/${cursoId}/docs-preinscricao`, { method: "PUT", body: JSON.stringify(body) });
 export async function apiDocsPreinscricaoUpload(regime: Regime, cursoId: number, docId: string, file: File) {
   const fd = new FormData();

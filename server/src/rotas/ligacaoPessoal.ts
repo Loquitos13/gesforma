@@ -4,6 +4,7 @@
  * pendentes) não mostra dados.
  * Inclui a ligação de documentos do formando financiado (`/formando-documentos/:token`).
  */
+import type { DadosGatilho } from "../../../src/partilhado/gatilhosDocs.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logLeadEvent } from "../crmDossier.js";
@@ -192,7 +193,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (erroFicheiro) return reply.code(400).send({ error: erroFicheiro });
     const leadId = Number(lead.id);
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, String(lead.escolaridade ?? ""));
+    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
     const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
     // O comprovativo só entra com o passo de pagamento aberto (pagamento pedido pela secretaria).

@@ -1,3 +1,4 @@
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import { enviarModelo } from "./emailModelo.js";
 import { garantirToken } from "./ligacaoPessoal.js";
 import { transferirDocsDoLead } from "./docsParaFormando.js";
@@ -32,7 +33,7 @@ export async function firePreinscricaoEmail(
   const url = documentosUrl(token);
   const nome = `${lead.nome} ${lead.apelido ?? ""}`.trim();
   const regime = lead.regime === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, lead.curso, regime, String((lead as { escolaridade?: unknown }).escolaridade ?? ""));
+  const pedidos = await docsDoCurso(db, lead.curso, regime, lead as DadosGatilho);
   const lista = pedidos.filter(d => d.required).map(d => d.label).join(", ");
   const r = await ingestEvent(db, type, {
     email,
@@ -99,7 +100,7 @@ export async function syncLigacao(db: Db, leadId: number) {
   const row = await leads.lead(db, leadId) as { curso: string; regime: string } | null;
   if (!row) return false;
   const regime = row.regime === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, row.curso, regime, String((row as { escolaridade?: unknown }).escolaridade ?? ""));
+  const pedidos = await docsDoCurso(db, row.curso, regime, row as DadosGatilho);
   const required = pedidos.filter(d => d.required);
   const ficheiros = await listarDocsLead(db, leadId);
   const byTipo = new Map(ficheiros.map(f => [f.tipo, f]));
@@ -184,7 +185,7 @@ export async function herdarDocsValidados(db: Db, leadId: number) {
   const email = normalizeEmail(String(lead.email ?? ""));
   if (!isEmail(email)) return 0;
   const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-  const pedidos = (await docsDoCurso(db, String(lead.curso ?? ""), regime, String((lead as { escolaridade?: unknown }).escolaridade ?? ""))).filter(p => !p.modelo && p.id !== COMPROVATIVO.id);
+  const pedidos = (await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho)).filter(p => !p.modelo && p.id !== COMPROVATIVO.id);
   if (!pedidos.length) return 0;
   const atuais = new Map((await docs.docsDoLead(db, leadId)).map(d => [d.tipo, d]));
   const tipos = pedidos.map(p => p.id).filter(t => {

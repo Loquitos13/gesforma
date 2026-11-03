@@ -19,6 +19,7 @@ export type Lead = {
   concelho: string;
   /** Gold: escolaridade do formulário (decide os documentos do CCP). */
   escolaridade?: string;
+  nacionalidade?: string;
   local: string;
   curso: string;
   preco: number;

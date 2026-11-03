@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
-import { ESCOLARIDADES } from "../partilhado/escolaridade";
+import { ESCOLARIDADES, PAISES } from "../partilhado/escolaridade";
 import { ApiError, apiPublicOferta, apiPublicPrecoOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { CursoOfertaCampos } from "../partilhado/CursoOfertaCampos";
 import { SearchSelect } from "../partilhado/FormKit";
@@ -23,6 +23,7 @@ export function PublicPreinscricao() {
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [concelho, setConcelho] = useState("");
   const [escolaridade, setEscolaridade] = useState("");
+  const [nacionalidade, setNacionalidade] = useState("Portugal");
   const [origem, setOrigem] = useState("");
   const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos");
@@ -93,7 +94,7 @@ export function PublicPreinscricao() {
         email: email.trim(),
         concelho,
         origem,
-        ...(fin ? {} : { escolaridade }),
+        ...(fin ? {} : { escolaridade, nacionalidade }),
         curso: oferta.curso,
         local: oferta.local,
         horario: oferta.horario,
@@ -165,6 +166,12 @@ export function PublicPreinscricao() {
               <label>
                 <span className={labelCls}>Email</span>
                 <input className={fieldCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+              </label>
+              <label>
+                <span className={labelCls}>Nacionalidade</span>
+                <select className={fieldCls} value={nacionalidade} onChange={e => setNacionalidade(e.target.value)}>
+                  {PAISES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
               </label>
               <label>
                 <span className={labelCls}>Escolaridade</span>

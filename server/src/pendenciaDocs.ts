@@ -1,3 +1,4 @@
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
 import { docsDoCurso } from "./docsCurso.js";
 import * as repo from "./repos/leadDocs.js";
@@ -7,7 +8,7 @@ export type RecusaDoc = { id: number; tipo: string; label: string; observacao: s
 /** O que falta na documentação obrigatória da pré-inscrição: documentos por enviar e documentos recusados. */
 export async function pendenciaDocsLead(db: Db, lead: { id: number; curso?: unknown; regime?: unknown }) {
   const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, String((lead as { escolaridade?: unknown }).escolaridade ?? ""));
+  const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
   const ficheiros = await repo.docsDoLead(db, Number(lead.id));
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
   const faltam: string[] = [];

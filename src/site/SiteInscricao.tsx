@@ -4,7 +4,7 @@ import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/
 import { SearchSelect } from "../partilhado/FormKit";
 import { ofertaFiltrada, turmaCheia, turmasParaMostrar, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import { useSiteTexto, type Course } from "./SiteLanding";
-import { ESCOLARIDADES } from "../partilhado/escolaridade";
+import { ESCOLARIDADES, PAISES } from "../partilhado/escolaridade";
 import { corSegura } from "./editor/estilos";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
@@ -70,6 +70,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const [email, setEmail] = useState("");
   const [concelho, setConcelho] = useState("");
   const [escolaridade, setEscolaridade] = useState("");
+  const [nacionalidade, setNacionalidade] = useState("Portugal");
   const [origem, setOrigem] = useState("");
   const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos", aberto);
@@ -259,7 +260,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
         email: email.trim(),
         concelho,
         origem,
-        ...(fin ? {} : { escolaridade }),
+        ...(fin ? {} : { escolaridade, nacionalidade }),
         curso: turma?.curso || curso.nomeOferta || curso.title,
         local: turma?.local || local,
         horario: turma?.horario || horario,
@@ -471,6 +472,11 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                   <Campo label="Apelido"><input className={inputCls} value={apelido} onChange={e => setApelido(e.target.value)} autoComplete="family-name" required /></Campo>
                   <Campo label="Telemóvel"><input className={inputCls} value={telf} onChange={e => setTelf(e.target.value)} autoComplete="tel" inputMode="tel" required /></Campo>
                   <Campo label="Email"><input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></Campo>
+                  <Campo label="Nacionalidade">
+                    <select className={inputCls} value={nacionalidade} onChange={e => setNacionalidade(e.target.value)} required>
+                      {PAISES.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </Campo>
                   <Campo label="Escolaridade">
                     <select className={inputCls} value={escolaridade} onChange={e => setEscolaridade(e.target.value)} required>
                       <option value="">Seleccione a escolaridade</option>

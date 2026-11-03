@@ -72,6 +72,7 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     inicioCurso: String(r.inicio_curso ?? "-"),
     concelho: String(r.concelho ?? ""),
     escolaridade: String(r.escolaridade ?? ""),
+    nacionalidade: String(r.nacionalidade ?? ""),
     local: String(r.local ?? ""),
     curso: String(r.curso ?? ""),
     preco: num(r.preco),

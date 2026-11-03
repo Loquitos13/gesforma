@@ -31,8 +31,9 @@ export type PreinscricaoPublicaInput = {
   telf?: string;
   concelho?: string;
   origem?: string;
-  /** Gold: escolaridade (decide os documentos do CCP). */
+  /** Gold: escolaridade e nacionalidade (gatilhos dos documentos do curso). */
   escolaridade?: string;
+  nacionalidade?: string;
   curso?: string;
   local?: string;
   inicioCurso?: string;
@@ -199,6 +200,9 @@ export async function criarPreinscricaoPublica(
       if (eEscolaridade(input.escolaridade ?? "")) {
         await q("UPDATE preinscricoes SET escolaridade = $2 WHERE id = $1 AND escolaridade = ''", [aberto.id, input.escolaridade]);
       }
+      if (input.nacionalidade?.trim()) {
+        await q("UPDATE preinscricoes SET nacionalidade = $2 WHERE id = $1 AND nacionalidade = ''", [aberto.id, textoDePessoa(input.nacionalidade).slice(0, 80)]);
+      }
       // Pedido repetido com os dados pessoais: só entram se o pedido aberto ainda não os tem (nunca substituem).
       if (finPack && aberto.regime === "fin") {
         const linha = await escrita.piiDoPedido(q, aberto.id);
@@ -218,6 +222,7 @@ export async function criarPreinscricaoPublica(
       piiEnc: piiPack.pii_enc ?? "", publicId,
       consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
       notas, escolaridade: eEscolaridade(input.escolaridade ?? "") ? input.escolaridade : "",
+      nacionalidade: textoDePessoa(input.nacionalidade || "").slice(0, 80),
     });
     return null;
   });

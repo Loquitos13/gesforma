@@ -1,9 +1,9 @@
 import type { Db } from "./db/pool.js";
 import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
 import * as repo from "./repos/leadDocs.js";
-import { eCursoCcp, ensinoSuperior } from "../../src/partilhado/escolaridade.js";
+import { avaliarGatilho, limparGatilho, type DadosGatilho, type GatilhoDoc } from "../../src/partilhado/gatilhosDocs.js";
 
-export type DocPedido = { id: string; label: string; required: boolean; modelo?: string };
+export type DocPedido = { id: string; label: string; required: boolean; modelo?: string; gatilho?: GatilhoDoc };
 
 const GOLD: DocPedido[] = [
   { id: "cc", label: "Cartão de Cidadão", required: true },
@@ -62,9 +62,11 @@ export type DocExtraPreinscricao = { id: string; label: string; required: boolea
 export type DocsPreinscricaoCfg = {
   ocultos: string[];
   extra: DocExtraPreinscricao[];
+  /** Gatilho de cada documento (pelo id): pedido só a quem o cumpre. */
+  condicoes?: Record<string, GatilhoDoc>;
 };
 
-const CFG_VAZIA: DocsPreinscricaoCfg = { ocultos: [], extra: [] };
+const CFG_VAZIA: DocsPreinscricaoCfg = { ocultos: [], extra: [], condicoes: {} };
 
 export function cursoPedeDocsPreinscricao(regime: "gold" | "fin", tipo: string) {
   if (regime === "fin") return true;
@@ -80,7 +82,7 @@ function parseCfg(raw: unknown): DocsPreinscricaoCfg {
   if (!raw) return CFG_VAZIA;
   const v = typeof raw === "string" ? (() => { try { return JSON.parse(raw); } catch { return null; } })() : raw;
   if (!v || typeof v !== "object") return CFG_VAZIA;
-  const row = v as { ocultos?: unknown; extra?: unknown };
+  const row = v as { ocultos?: unknown; extra?: unknown; condicoes?: unknown };
   const ocultos = Array.isArray(row.ocultos) ? row.ocultos.map(String) : [];
   const extra = Array.isArray(row.extra)
     ? row.extra.flatMap(item => {
@@ -92,7 +94,14 @@ function parseCfg(raw: unknown): DocsPreinscricaoCfg {
       return [{ id, label, required: Boolean(x.required) }];
     })
     : [];
-  return { ocultos, extra };
+  const condicoes: Record<string, GatilhoDoc> = {};
+  if (row.condicoes && typeof row.condicoes === "object") {
+    for (const [id, g] of Object.entries(row.condicoes as Record<string, unknown>)) {
+      const limpo = limparGatilho(g);
+      if (limpo && id.trim()) condicoes[id.trim().slice(0, 60)] = limpo;
+    }
+  }
+  return { ocultos, extra, condicoes };
 }
 
 export async function lerDocsPreinscricao(db: Db, regime: "gold" | "fin", cursoId: number): Promise<DocsPreinscricaoCfg> {
@@ -126,20 +135,22 @@ export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: stri
 }
 
 /**
- * Documentos pedidos a uma pré-inscrição. No CCP (Gold) a escolaridade só decide o comprovativo de experiência: com o
- * 12.º ano passa a obrigatório (o da ficha do curso, ou um novo se a ficha não o tiver); com licenciatura ou mais não se
- * pede. O certificado de habilitações e o resto ficam como estão na ficha do curso. Sem escolaridade, a lista da ficha.
+ * Documentos pedidos a uma pré-inscrição. Os documentos com gatilho (ficha do curso › Documentos) só se pedem a quem o
+ * cumpre, e aí são obrigatórios; sem o dado na pré-inscrição (pedidos antigos) ficam opcionais. Sem `pessoa` (ex.: ver
+ * se um documento existe no curso) a lista vem toda, como está na ficha.
  */
-export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin", escolaridade = ""): Promise<DocPedido[]> {
+export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin", pessoa?: DadosGatilho | null): Promise<DocPedido[]> {
   const lista = await docsDaFicha(db, curso, regime);
-  if (regime !== "gold" || !eCursoCcp(curso) || !escolaridade || !lista.length) return lista;
-  const eExperiencia = (d: DocPedido) => d.id === "exp" || /experi[eê]ncia/i.test(d.label);
-  if (ensinoSuperior(escolaridade)) return lista.filter(d => !eExperiencia(d));
-  if (escolaridade !== "12.º ano") return lista;
-  const existente = lista.find(eExperiencia);
-  return existente
-    ? lista.map(d => (d === existente ? { ...d, required: true } : d))
-    : [...lista, { id: "exp", label: "Comprovativo de 5 anos de experiência profissional", required: true }];
+  return pessoa ? aplicarGatilhos(lista, pessoa) : lista;
+}
+
+/** Aplica os gatilhos da lista do curso a uma pessoa (ver `docsDoCurso`). */
+export function aplicarGatilhos(lista: DocPedido[], pessoa: DadosGatilho): DocPedido[] {
+  return lista.flatMap(d => {
+    if (!d.gatilho) return [d];
+    const r = avaliarGatilho(d.gatilho, pessoa);
+    return r === "nao" ? [] : [{ ...d, required: r === "pede" }];
+  });
 }
 
 async function docsDaFicha(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
@@ -169,9 +180,11 @@ async function docsDaFicha(db: Db, curso: string, regime: "gold" | "fin"): Promi
   }
   const modelos = await listarModelosConsentimento(db, regime, found.id);
   const porNome = new Map(modelos.map(m => [m.requisito_id, m.nome]));
+  const condicoes = cfg.condicoes ?? {};
   return kept.map(d => {
     const nome = porNome.get(d.id);
-    return nome ? { ...d, modelo: nome, required: true } : d;
+    const comModelo = nome ? { ...d, modelo: nome, required: true } : d;
+    return condicoes[d.id] ? { ...comModelo, gatilho: condicoes[d.id] } : comModelo;
   });
 }
 

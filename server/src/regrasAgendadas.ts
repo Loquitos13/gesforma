@@ -50,8 +50,9 @@ async function turmasAbertas(db: Db) {
 }
 
 async function leadsPorConcluir(db: Db, t: Turma) {
-  return (await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string; escolaridade: string }>(
-    `SELECT p.id, COALESCE(p.nome, '') AS nome, COALESCE(p.apelido, '') AS apelido, p.email, COALESCE(p.curso, '') AS curso, COALESCE(p.escolaridade, '') AS escolaridade
+  return (await db.query<{ id: number; nome: string; apelido: string; email: string; curso: string; escolaridade: string; nacionalidade: string; local: string; horario: string }>(
+    `SELECT p.id, COALESCE(p.nome, '') AS nome, COALESCE(p.apelido, '') AS apelido, p.email, COALESCE(p.curso, '') AS curso, COALESCE(p.escolaridade, '') AS escolaridade,
+            COALESCE(p.nacionalidade, '') AS nacionalidade, COALESCE(p.local, '') AS local, COALESCE(p.horario, '') AS horario
        FROM preinscricoes p
       WHERE p.turma_id = $1 AND COALESCE(p.regime, 'gold') = $2 AND p.email <> ''
         AND p.estado NOT IN ('Pago', 'Formando', 'Desistiu')`, [t.id, t.regime])).rows;
@@ -86,7 +87,7 @@ export async function enviarRegrasComPrazo(db: Db, fim = 0) {
           if (!isEmail(email)) continue;
           let emFalta: string[] = [];
           if (docs) {
-            const pedidos = (await docsDoCurso(db, l.curso || t.curso, t.regime, l.escolaridade)).filter(d => d.required);
+            const pedidos = (await docsDoCurso(db, l.curso || t.curso, t.regime, { ...l, local: l.local || t.local, horario: l.horario || t.horario })).filter(d => d.required);
             const ficheiros = new Map((await listarDocsLead(db, l.id)).map(f => [f.tipo, f]));
             emFalta = pedidos.filter(d => !ficheiros.get(d.id) || ficheiros.get(d.id)!.estado === "recusado").map(d => d.label);
             if (!emFalta.length) continue;

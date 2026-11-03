@@ -2,6 +2,7 @@
  * Validação da pré-inscrição pela secretaria, sugestão por turma cheia e ligação ao formando Gold.
  * Separado de `percurso.ts` (escolha pública e documentos).
  */
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import { enviarModelo } from "./emailModelo.js";
 import { InscricaoErro, garantirVaga } from "./inscricao.js";
 import * as docsRepo from "./repos/leadDocs.js";
@@ -51,7 +52,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
   const row = await leads.lead(db, leadId);
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   const regime = regimeDe(row.regime);
-  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime, String((row as { escolaridade?: unknown }).escolaridade ?? ""));
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime, row as DadosGatilho);
   const ficheiros = await listarDocsLead(db, leadId);
   let turmaId = Number(row.turma_escolhida_id || 0);
   const transferir = Boolean(turmaDestinoId && turmaDestinoId !== turmaId);

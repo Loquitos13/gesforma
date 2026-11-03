@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { limparGatilho, type GatilhoDoc } from "../../../src/partilhado/gatilhosDocs.js";
 import { randomBytes } from "node:crypto";
 import { z } from "zod";
 import { codigoCursoValido, normalizarCodigoCurso } from "../../../src/partilhado/codigoCurso.js";
@@ -62,13 +63,22 @@ const fichaSchema = z.object({
   criterios: z.array(z.object({ id: z.string().max(60), label: z.string().max(200) })).max(40).optional(),
 }).refine(v => v.payload || v.criterios, { message: "vazio" });
 
+const gatilhoSchema = z.object({
+  escolaridade: z.array(z.string().max(40)).max(10).optional(),
+  nacionalidade: z.array(z.string().max(20)).max(2).optional(),
+  local: z.array(z.string().max(120)).max(40).optional(),
+  horario: z.array(z.string().max(120)).max(40).optional(),
+}).nullable().optional();
 const docsPreSchema = z.object({
   ocultos: z.array(z.string().max(60)).max(40).default([]),
   extra: z.array(z.object({
     id: z.string().max(48).optional(),
     label: z.string().trim().min(3).max(160),
     required: z.boolean(),
+    gatilho: gatilhoSchema,
   })).max(30).default([]),
+  /** Gatilhos dos documentos de base (pelo id). */
+  condicoes: z.record(gatilhoSchema).optional().default({}),
 });
 
 const idsCurso = z.object({ regime: regimeEnum, id: idNum });
@@ -402,8 +412,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const modelo = (await packDoCurso(db, regime, id)).efectivo;
     const base = docsBase(regime);
     const docs = [
-      ...base.map(d => ({ id: d.id, label: d.label, required: d.required, pedido: !ocultos.has(d.id), origem: "base" as const })),
-      ...cfg.extra.map(d => ({ id: d.id, label: d.label, required: d.required, pedido: true, origem: "extra" as const })),
+      ...base.map(d => ({ id: d.id, label: d.label, required: d.required, pedido: !ocultos.has(d.id), origem: "base" as const, gatilho: cfg.condicoes?.[d.id] ?? null })),
+      ...cfg.extra.map(d => ({ id: d.id, label: d.label, required: d.required, pedido: true, origem: "extra" as const, gatilho: cfg.condicoes?.[d.id] ?? null })),
       ...modelo.extra
         .filter(d => d.ambito === "formando")
         .filter(d => !cfg.extra.some(x => x.id === d.id) && !base.some(b => b.id === d.id))
@@ -424,15 +434,23 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const baseIds = new Set(docsBase(regime).map(d => d.id));
     const ocultos = [...new Set(v.body.ocultos.filter(x => baseIds.has(x)))];
     const usados = new Set(baseIds);
+    // Gatilhos: os dos documentos de base vêm por id; os dos extra vêm com cada um (o id novo só se sabe aqui).
+    const condicoes: Record<string, GatilhoDoc> = {};
+    for (const [docId, g] of Object.entries(v.body.condicoes)) {
+      const limpo = baseIds.has(docId) ? limparGatilho(g) : null;
+      if (limpo) condicoes[docId] = limpo;
+    }
     const extra = v.body.extra.map(item => {
       let docId = (item.id ?? "").trim();
       if (!docId || baseIds.has(docId)) docId = slugDoc(item.label);
       const raiz = docId;
       for (let n = 2; usados.has(docId); n += 1) docId = `${raiz}-${n}`;
       usados.add(docId);
+      const limpo = limparGatilho(item.gatilho);
+      if (limpo) condicoes[docId] = limpo;
       return { id: docId, label: item.label, required: item.required };
     });
-    await gravarDocsPreinscricao(db, regime, id, { ocultos, extra });
+    await gravarDocsPreinscricao(db, regime, id, { ocultos, extra, condicoes });
     const activos = [...docsBase(regime).filter(d => !ocultos.includes(d.id)).map(d => d.id), ...extra.map(d => d.id)];
     await limparModelosFora(db, regime, id, activos);
     await audit(db, req.actor?.id, "curso.docs_preinscricao", "curso", String(id), req.ip, { regime, extra: extra.length });

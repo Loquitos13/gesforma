@@ -12,6 +12,7 @@ import {
   marcarFalha, porNaFila, regraComModelo, regrasActivasPara, registarEvento, reservarPendentes, turmasQueComecam,
   type EnvioReservado, type RegraComModelo,
 } from "./repos/emails.js";
+import { enviarRegrasComPrazo } from "./regrasAgendadas.js";
 import { CRM_ESTADO_RANK, crmEstadoFromEvent, EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 import { hojeLisboa, somarDias } from "./datas.js";
 
@@ -84,7 +85,14 @@ export function renderModelo(m: Modelo, nome: string, vars: Record<string, strin
   return { subject, ...mail };
 }
 
-export async function ingestEvent(db: Db, type: string, payload: Record<string, unknown>, idempotencyKey: string) {
+/**
+ * `opts.soRegraId`: só essa regra (as regras com prazo disparam uma a uma, cada uma com os seus dias).
+ * `opts.vars`: variáveis a mais para o modelo (datas, local, horário, `link` do botão…).
+ */
+export async function ingestEvent(
+  db: Db, type: string, payload: Record<string, unknown>, idempotencyKey: string,
+  opts: { soRegraId?: number; vars?: Record<string, string> } = {},
+) {
   const email = normalizeEmail(String(payload.email ?? ""));
   if (!isEmail(email)) throw new Error("Email do destinatário inválido.");
   const id = await registarEvento(db, randomUUID(), type, idempotencyKey, payload);
@@ -93,7 +101,7 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
   const nome = sanitizeHeader(String(payload.nome ?? "Formando"));
   const curso = sanitizeHeader(String(payload.curso ?? ""));
   const turma = sanitizeHeader(String(payload.turma ?? "-"));
-  const regras = await regrasActivasPara(db, EVENT_ALIASES[type] ?? [type]);
+  const regras = (await regrasActivasPara(db, EVENT_ALIASES[type] ?? [type])).filter(r => !opts.soRegraId || r.id === opts.soRegraId);
   const vars = buildCtaVars({
     nome, email, curso, turma,
     documentosUrl: String(payload.documentos_url ?? ""),
@@ -110,6 +118,7 @@ export async function ingestEvent(db: Db, type: string, payload: Record<string, 
       ? await telefonesPorZona(db, { regime: String(payload.regime ?? "") || null, local: String(payload.local ?? "") || null, preinscricaoId: Number(payload.preinscricaoId) || null })
       : [],
   });
+  for (const [k, v] of Object.entries(opts.vars ?? {})) (vars as Record<string, string>)[k] = sanitizeText(String(v ?? ""), 2000);
   let queued = 0;
   for (const regra of regras) {
     if (regra.curso && curso && regra.curso.trim().toLowerCase() !== curso.trim().toLowerCase()) continue;
@@ -242,6 +251,7 @@ export async function flushQueuedJobs(db: Db, limit = 20, orcamentoMs = 0, event
 export async function processDueJobs(db: Db, fim = 0) {
   await enqueueTurmaReminders(db).catch(() => undefined);
   await enqueueCrmReminders(db, fim).catch(() => undefined);
+  await enviarRegrasComPrazo(db, fim).catch(err => console.error("[emails] regras com prazo:", err));
   const interrompidos = await libertarReservasPresas(db, RESERVA_PRESA_MIN).catch(() => []);
   const resta = fim - Date.now();
   const r = !fim ? await flushQueuedJobs(db, 20)

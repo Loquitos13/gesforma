@@ -2,6 +2,7 @@
  * Turmas Gold e Financiada: lista (GET /v1/turmas), criar, alterar, apagar e regras de abertura automática.
  * O SQL está em repos/turmas.ts; aqui só se valida, verifica o perfil e chama os serviços.
  */
+import { avisarFormadoresNovos } from "../avisosEquipa.js";
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { generateCronograma } from "../cronograma.js";
@@ -259,6 +260,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await audit(db, req.actor!.id, "turma.criar", "turma_gold", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "gold", id);
     if (row) await sincronizarDrive(deps, "gold", id, row);
+    // O formador que passa a estar na turma recebe o aviso (regra «Formador atribuído a uma turma»).
+    await avisarFormadoresNovos(db, "gold", id, null, row).catch(err => console.error("[emails] formador atribuído:", err));
     return { turma: row ? mapTurmaGold(row) : { id } };
   });
 
@@ -326,6 +329,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
     const row = await repo.obterTurma(db, "gold", id);
     if (row) await sincronizarDrive(deps, "gold", id, row);
+    // O formador que passa a estar na turma recebe o aviso (regra «Formador atribuído a uma turma»).
+    await avisarFormadoresNovos(db, "gold", id, antes, row).catch(err => console.error("[emails] formador atribuído:", err));
     return { turma: row ? mapTurmaGold(row) : null };
   });
 
@@ -372,6 +377,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await audit(db, req.actor!.id, "turma.criar", "turma_fin", String(id), req.ip, { nome: d.nome });
     const row = await repo.obterTurma(db, "fin", id);
     if (row) await sincronizarDrive(deps, "fin", id, row);
+    // O formador que passa a estar na turma recebe o aviso (regra «Formador atribuído a uma turma»).
+    await avisarFormadoresNovos(db, "fin", id, null, row).catch(err => console.error("[emails] formador atribuído:", err));
     return { turma: row ? { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") } : { id } };
   });
 
@@ -441,6 +448,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
     const row = await repo.obterTurma(db, "fin", id);
     if (row) await sincronizarDrive(deps, "fin", id, row);
+    // O formador que passa a estar na turma recebe o aviso (regra «Formador atribuído a uma turma»).
+    await avisarFormadoresNovos(db, "fin", id, antes, row).catch(err => console.error("[emails] formador atribuído:", err));
     return { turma: row ? { ...mapTurmaFin(row), financiador: String(row.financiador ?? "") } : null };
   });
 

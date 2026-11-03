@@ -16,6 +16,7 @@ export const CAMPOS_ENTIDADE: CampoDefinicao[] = [
   { chave: "telefonesZona", rotulo: "Telefones por zona (reserva dos emails)", tipo: "linhas", largo: true, ajuda: "Os emails usam os contactos de cada local (Edição de Cursos › Locais). Estes só aparecem se nenhum local tiver contactos. Um por linha." },
   { chave: "iban", rotulo: "IBAN para transferências", ajuda: "Aparece no pedido de pagamento e no passo de pagamento da ligação pessoal." },
   { chave: "titularConta", rotulo: "Titular da conta" },
+  { chave: "emailContabilidade", rotulo: "Email da contabilidade", ajuda: "Recebe cada comprovativo de pagamento, com o nome, NIF, telemóvel, email e IBAN da pessoa e o ficheiro em anexo." },
 ];
 
 export const CAMPOS_REGRAS: CampoDefinicao[] = [

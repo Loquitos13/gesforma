@@ -47,7 +47,7 @@ export async function actualizarModelo(c: Consulta, id: number, p: {
 
 export type RegraEmail = {
   id: number; nome: string; trigger_key: string; gatilho_label: string; template_tipo: string; template_nome: string | null;
-  delay_seconds: number; curso: string | null; ativo: boolean;
+  delay_seconds: number; curso: string | null; ativo: boolean; dias: number | null;
   envios: number; abertos: number; falhados: number; em_fila: number; ultimo_envio: string | null;
 };
 
@@ -55,7 +55,7 @@ export type RegraEmail = {
 export function listarRegras(c: Consulta) {
   return many<RegraEmail>(
     c,
-    `SELECT r.id, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.ativo,
+    `SELECT r.id, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.ativo, r.dias,
             COALESCE(j.envios, 0)::int AS envios, COALESCE(j.abertos, 0)::int AS abertos,
             COALESCE(j.falhados, 0)::int AS falhados, COALESCE(j.em_fila, 0)::int AS em_fila, j.ultimo_envio
        FROM email_rules r
@@ -75,27 +75,29 @@ export function listarRegras(c: Consulta) {
   );
 }
 
-export async function criarRegra(c: Consulta, r: { nome: string; triggerKey: string; gatilho: string; templateTipo: string; atrasoSeg: number; curso: string | null; ativo: boolean }) {
+export async function criarRegra(c: Consulta, r: { nome: string; triggerKey: string; gatilho: string; templateTipo: string; atrasoSeg: number; curso: string | null; ativo: boolean; dias?: number | null }) {
   const id = await valor<number>(
     c,
-    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo)
-     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.curso, r.ativo],
+    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo, dias)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
+    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.curso, r.ativo, r.dias ?? null],
   );
   return Number(id);
 }
 
 export async function actualizarRegra(c: Consulta, id: number, r: {
   nome?: string; gatilho?: string; triggerKey?: string; templateTipo?: string; atrasoSeg?: number; curso?: string | null; ativo?: boolean;
+  dias?: number | null;
 }) {
   await one(
     c,
     `UPDATE email_rules SET nome = COALESCE($2, nome), gatilho_label = COALESCE($3, gatilho_label), trigger_key = COALESCE($4, trigger_key),
        template_tipo = COALESCE($5, template_tipo), delay_seconds = COALESCE($6, delay_seconds),
-       curso = CASE WHEN $8::boolean THEN $7 ELSE curso END, ativo = COALESCE($9, ativo)
+       curso = CASE WHEN $8::boolean THEN $7 ELSE curso END, ativo = COALESCE($9, ativo),
+       dias = CASE WHEN $11::boolean THEN $10::int ELSE dias END
      WHERE id = $1`,
     [id, r.nome ?? null, r.gatilho ?? null, r.triggerKey ?? null, r.templateTipo ?? null, r.atrasoSeg ?? null,
-      r.curso ?? null, r.curso !== undefined, r.ativo ?? null],
+      r.curso ?? null, r.curso !== undefined, r.ativo ?? null, r.dias ?? null, r.dias !== undefined],
   );
 }
 

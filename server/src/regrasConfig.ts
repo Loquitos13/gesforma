@@ -51,6 +51,8 @@ export type Entidade = {
   /** Conta para transferências: aparece no passo de pagamento da ligação pessoal. */
   iban: string;
   titularConta: string;
+  /** Recebe cada comprovativo de pagamento (com os dados da pessoa e o ficheiro em anexo). Vazio: não se envia. */
+  emailContabilidade: string;
   /** Contactos telefónicos por zona, um por linha (ex.: «223781100 se pretende realizar o curso no Porto/Gaia»): vão nos emails. */
   telefonesZona: string;
 };
@@ -68,6 +70,7 @@ export const ENTIDADE_OMISSAO: Entidade = {
   certificacaoDgert: "",
   iban: "",
   titularConta: "",
+  emailContabilidade: "",
   telefonesZona: "",
 };
 
@@ -211,6 +214,8 @@ export function validarDefinicoes(
     if (nif && !/^\d{9}$/.test(nif)) return { ok: false, erro: "NIF: 9 dígitos." };
     const iban = (values.iban ?? "").replace(/\s/g, "").toUpperCase();
     if (iban && !/^[A-Z]{2}\d{2}[A-Z0-9]{11,30}$/.test(iban)) return { ok: false, erro: "IBAN inválido." };
+    const contab = (values.emailContabilidade ?? "").trim();
+    if (contab && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(contab)) return { ok: false, erro: "Email da contabilidade inválido." };
     const e = parseEntidade({ ...values, nif, iban });
     return { ok: true, values: { ...e } };
   }

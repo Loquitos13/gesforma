@@ -117,6 +117,14 @@ export const TRIGGER_MAP: Record<string, string> = {
   "Formando marcado como concluído": "formando.completed",
   "30 dias sem compra": "lead.stale_30d",
   "Sumário da sessão assinado": "sessao.summary_signed",
+  // Com prazo (dias configuráveis em cada regra; o cron verifica uma vez por dia).
+  "Antes da data limite de matrícula": "matricula.antes_limite",
+  "Antes do prazo dos documentos": "documentos.antes_prazo",
+  "Pagamento pedido sem comprovativo": "pagamento.sem_comprovativo",
+  "Antes do início da turma (integração)": "turma.integracao",
+  // Avisos internos.
+  "Documentos ou comprovativo recebidos (aviso à equipa)": "equipa.documentos_recebidos",
+  "Formador atribuído a uma turma": "formador.atribuido",
 };
 
 export const EVENT_ALIASES: Record<string, string[]> = {
@@ -135,6 +143,12 @@ export const EVENT_ALIASES: Record<string, string[]> = {
   "turma.starts_in_24h": ["turma.starts_in_24h"],
   "lead.stale_30d": ["lead.stale_30d"],
   "campanha.preinscritos": ["campanha.preinscritos"],
+  "matricula.antes_limite": ["matricula.antes_limite"],
+  "documentos.antes_prazo": ["documentos.antes_prazo"],
+  "pagamento.sem_comprovativo": ["pagamento.sem_comprovativo"],
+  "turma.integracao": ["turma.integracao"],
+  "equipa.documentos_recebidos": ["equipa.documentos_recebidos"],
+  "formador.atribuido": ["formador.atribuido"],
 };
 
 /** Ordem do funil CRM. Só avança; Pago e Formando não recuam. */

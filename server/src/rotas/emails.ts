@@ -10,6 +10,7 @@ import {
   actualizarModelo, actualizarRegra, apagarRegra, cancelarEmFila, criarRegra, destinatarioConhecido, emailDaPreinscricao,
   estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto, obterEnvio, obterModelo, reenviarFalhado,
 } from "../repos/emails.js";
+import { GATILHOS_COM_PRAZO } from "../regrasAgendadas.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
 import { enviarAvisosDocumentos } from "../avisosDocumentos.js";
@@ -35,6 +36,12 @@ const DESCRICAO_GATILHO: Record<string, string> = {
   "Formando marcado como concluído": "Conclusão do curso e certificado.",
   "30 dias sem compra": "Reengajamento de leads parados.",
   "Sumário da sessão assinado": "Aviso interno ao formador.",
+  "Antes da data limite de matrícula": "Às pré-inscrições da turma ainda por concluir, X dias antes da data limite de matrícula do cronograma.",
+  "Antes do prazo dos documentos": "A quem ainda tem documentos em falta, X dias antes da data limite de matrícula (ou do início da turma).",
+  "Pagamento pedido sem comprovativo": "X dias depois de pedido o pagamento, se ainda não chegou o comprovativo.",
+  "Antes do início da turma (integração)": "Aos formandos da turma, X dias antes do início: local, horário e área do formando.",
+  "Documentos ou comprovativo recebidos (aviso à equipa)": "Vai para o email do local da pessoa (ou o da entidade) quando chega um documento ou o comprovativo.",
+  "Formador atribuído a uma turma": "Vai para o formador quando é atribuído a uma turma (ficha da turma ou cronograma).",
 };
 const ATRASOS = ["Imediatamente", "1 hora depois", "24 horas depois", "3 dias depois"];
 const AMBITOS = [
@@ -55,6 +62,8 @@ const regraSchema = z.object({
   atraso: z.string().max(40).optional(),
   curso: z.string().max(200).optional().nullable(),
   ativo: z.boolean().optional(),
+  /** Regras com prazo: dias antes (ou depois) da data de referência; vazio = o valor por omissão do gatilho. */
+  dias: z.number().int().min(0).max(365).nullable().optional(),
 });
 const modeloSchema = z.object({
   nome: z.string().trim().min(2).max(120).optional(),
@@ -131,6 +140,7 @@ function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
     atraso: delayLabelFromSeconds(r.delay_seconds),
     curso: r.curso,
     ativo: r.ativo,
+    dias: r.dias,
     envios: r.envios,
     abertos: r.abertos,
     falhados: r.falhados,
@@ -157,6 +167,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return {
       gatilhos: Object.keys(TRIGGER_MAP).map(valor => ({ valor, evento: TRIGGER_MAP[valor], descricao: DESCRICAO_GATILHO[valor] ?? "" })),
       atrasos: ATRASOS,
+      // Gatilhos com prazo: os dias por omissão e a que data se referem (o ecrã mostra o campo «dias»).
+      prazos: GATILHOS_COM_PRAZO,
       modelos: modelos.map(m => ({ tipo: m.tipo, nome: m.nome })),
       ambitos: AMBITOS,
       variaveis: VARIAVEIS,
@@ -224,6 +236,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = await criarRegra(db, {
       nome: v.body.nome, triggerKey: key, gatilho: v.body.gatilho, templateTipo: v.body.templateTipo,
       atrasoSeg: delaySecondsFromLabel(v.body.atraso ?? "Imediatamente"), curso: v.body.curso || null, ativo: v.body.ativo ?? true,
+      dias: GATILHOS_COM_PRAZO[key] ? v.body.dias ?? null : null,
     });
     await audit(db, actor(req).id, "email.rule_create", "email_rule", String(id), req.ip);
     return { id };
@@ -240,7 +253,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await actualizarRegra(db, v.params.id, {
       nome: d.nome, gatilho: d.gatilho, triggerKey: key, templateTipo: d.templateTipo,
       atrasoSeg: d.atraso != null ? delaySecondsFromLabel(d.atraso) : undefined,
-      curso: d.curso === undefined ? undefined : (d.curso || null), ativo: d.ativo,
+      curso: d.curso === undefined ? undefined : (d.curso || null), ativo: d.ativo, dias: d.dias,
     });
     await audit(db, actor(req).id, "email.rule_update", "email_rule", String(v.params.id), req.ip, { ...d });
     return { ok: true };

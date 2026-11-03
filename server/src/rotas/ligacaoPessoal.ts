@@ -8,6 +8,8 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { logLeadEvent } from "../crmDossier.js";
 import { ficheiroModelo, situacaoPagamento } from "../docsCurso.js";
+import { enviarComprovativoContabilidade } from "../comprovativoContabilidade.js";
+import { avisarDocumentoRecebido } from "../avisosEquipa.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "../docsLink.js";
 import { garantirPastaPendente } from "../driveArvore.js";
 import { formandoFinPorToken, uploadDocFormandoFin } from "../formandoFinDocs.js";
@@ -228,6 +230,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }
       await docsRepo.substituirDoc(db, { leadId, tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "" });
       await logLeadEvent(db, leadId, undefined, "campo", comprovativo ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`, file.name);
+      // O comprovativo segue também para a contabilidade (com o ficheiro); uma falha no email não recusa o envio.
+      if (comprovativo) {
+        await enviarComprovativoContabilidade(db, lead, { nome: file.name, mime: up.mime, bytes: up.bytes })
+          .catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
+      }
+      await avisarDocumentoRecebido(db, lead, rotulo, file.id).catch(err => console.error("[emails] aviso de documento recebido:", err));
       await syncLigacao(db, leadId);
       await abrirAlerta(db, leadId);
       return { ok: true, nome: file.name };

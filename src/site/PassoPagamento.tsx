@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { PagamentoPercurso } from "../partilhado/api";
 import { CampoFicheiro } from "./PercursoPartes";
 import { eur } from "../partilhado/ui/formatos";
@@ -22,6 +22,11 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
   const comp = pagamento.comprovativo;
   const recusado = comp?.estado === "recusado";
   const aguarda = Boolean(comp) && !recusado && !substituir;
+  const zona = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!aguarda) zona.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    // Só ao abrir a página.
+  }, []);
 
   async function submeter(e: FormEvent) {
     e.preventDefault();
@@ -51,8 +56,10 @@ export function PassoPagamento({ nome, curso, pagamento, busy, error, ok, onEnvi
           {pagamento.titular && <dd className="mt-1 text-[#5c564c]">Titular: {pagamento.titular}</dd>}
         </div>
       </dl>
-      <div className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
+      {/* Enquanto falta o comprovativo, a zona fica em destaque e o ecrã leva lá (o botão do email abre esta página). */}
+      <div ref={zona} id="comprovativo" className={`border-t border-[#efeae1] px-6 py-5 sm:px-8 ${!aguarda ? "bg-[#fff6e0] ring-2 ring-inset ring-[#ffa900]" : ""}`}>
         <p className="text-sm font-semibold">Comprovativo de pagamento</p>
+        {!aguarda && <p className="mt-1 text-sm text-[#5c564c]">Depois de fazer a transferência, anexe aqui o comprovativo (PDF ou imagem).</p>}
         {aguarda && comp && (
           <div className="mt-2 rounded-xl bg-[#fffaf2] px-4 py-3 text-sm ring-1 ring-[#efeae1]">
             <p className="truncate text-emerald-800">{comp.nome}</p>

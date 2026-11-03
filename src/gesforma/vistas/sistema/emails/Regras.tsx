@@ -37,6 +37,13 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
   const remover = useAccao(apiApagarRegra, { ok: "Regra apagada.", invalidar: INVALIDAR });
 
   const regras = useMemo(() => dados?.rules ?? [], [dados]);
+  // Regras com prazo mostram os dias («2 dias antes»); as outras, o atraso.
+  const quando = (r: RegraEmail) => {
+    const p = opcoes?.prazos?.[r.evento];
+    if (!p) return r.atraso.toLowerCase();
+    const n = r.dias ?? p.dias;
+    return `${n} ${n === 1 ? "dia" : "dias"} ${p.sentido}`;
+  };
   const grupos = useMemo(() => {
     const outras = regras.filter(r => !FASES.some(f => f.teste(r.evento)));
     return [...FASES.map(f => ({ id: f.id, titulo: f.titulo, lista: regras.filter(r => f.teste(r.evento)) })), { id: "outras", titulo: "Outras", lista: outras }]
@@ -91,7 +98,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
                     >
                       <div className="min-w-0">
                         <p className="m-0 text-[13px] font-semibold text-tinta truncate">{r.nome}</p>
-                        <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {r.atraso.toLowerCase()}{r.curso ? ` · só ${r.curso}` : ""}</p>
+                        <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {quando(r)}{r.curso ? ` · só ${r.curso}` : ""}</p>
                       </div>
                       <div className="text-xs text-tinta-suave text-right">
                         <span className="block font-semibold text-tinta">{num(r.envios)} enviados</span>
@@ -113,7 +120,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
               <div className="px-4 py-3.5 border-b border-linha flex items-start gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
                   <h2 className="m-0 text-[15px] font-semibold text-tinta">{sel.nome}</h2>
-                  <p className="m-0 mt-0.5 text-xs text-tinta-suave">Modelo: {sel.templateNome ?? sel.template} · {sel.gatilho} · {sel.atraso.toLowerCase()}</p>
+                  <p className="m-0 mt-0.5 text-xs text-tinta-suave">Modelo: {sel.templateNome ?? sel.template} · {sel.gatilho} · {quando(sel)}</p>
                   <p className="num m-0 mt-1 text-xs text-tinta-suave">
                     {num(sel.envios)} enviados · {sel.envios ? `${num(sel.taxaAbertura)} % abertos` : "sem envios"}
                     {sel.emFila ? ` · ${num(sel.emFila)} em fila` : ""} · último: {sel.ultimoEnvio ? dataHora(sel.ultimoEnvio) : "nunca"}

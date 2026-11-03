@@ -15,6 +15,7 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
     atraso: regra?.atraso ?? opcoes.atrasos[0] ?? "",
     curso: regra?.curso ?? "",
     ativo: regra?.ativo ?? true,
+    dias: regra?.dias == null ? "" : String(regra.dias),
   });
   const cursos = useOpcoes("cursos");
   const criar = useAccao(apiCriarRegra, { ok: "Regra criada.", invalidar: ["emails:"] });
@@ -24,10 +25,12 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
     signal => apiPrevisualizarEmail({ tipo: f.templateTipo, curso: f.curso || null }, signal),
   );
   const gatilho = opcoes.gatilhos.find(g => g.valor === f.gatilho);
+  // Regras com prazo: em vez do atraso, os dias antes (ou depois) da data de referência.
+  const prazo = gatilho ? opcoes.prazos?.[gatilho.evento] : undefined;
   const valido = f.nome.trim().length > 1 && f.gatilho && f.templateTipo;
 
   async function gravar() {
-    const corpo = { ...f, nome: f.nome.trim(), curso: f.curso || null };
+    const corpo = { ...f, nome: f.nome.trim(), curso: f.curso || null, dias: prazo && f.dias.trim() !== "" ? Math.max(0, Math.min(365, Number(f.dias) || 0)) : null };
     const r = regra ? await alterar.correr(regra.id, corpo) : await criar.correr(corpo);
     if (r) onFechar();
   }
@@ -51,9 +54,15 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
           <Campo rotulo="Quando" obrigatorio ajuda={gatilho?.descricao}>
             {a => <Selecao {...a} vazio="Escolha o momento" opcoes={opcoes.gatilhos.map(g => ({ valor: g.valor, rotulo: g.valor }))} value={f.gatilho} onChange={e => setF({ ...f, gatilho: e.target.value })} />}
           </Campo>
-          <Campo rotulo="Atraso" ajuda="Os envios com atraso saem na volta diária seguinte (07:00 UTC, ≈ 08:00 em Lisboa no verão): um atraso de horas pode chegar só no dia seguinte.">
-            {a => <Selecao {...a} opcoes={opcoes.atrasos.map(v => ({ valor: v, rotulo: v }))} value={f.atraso} onChange={e => setF({ ...f, atraso: e.target.value })} />}
-          </Campo>
+          {prazo ? (
+            <Campo rotulo={`Dias ${prazo.sentido} ${prazo.referencia}`} ajuda={`Vazio: ${prazo.dias} ${prazo.dias === 1 ? "dia" : "dias"}. O envio sai na volta diária dos emails; cada pessoa recebe esta regra uma só vez.`}>
+              {a => <Entrada {...a} type="number" min={0} max={365} placeholder={String(prazo.dias)} value={f.dias} onChange={e => setF({ ...f, dias: e.target.value })} />}
+            </Campo>
+          ) : (
+            <Campo rotulo="Atraso" ajuda="Os envios com atraso saem na volta diária seguinte (07:00 UTC, ≈ 08:00 em Lisboa no verão): um atraso de horas pode chegar só no dia seguinte.">
+              {a => <Selecao {...a} opcoes={opcoes.atrasos.map(v => ({ valor: v, rotulo: v }))} value={f.atraso} onChange={e => setF({ ...f, atraso: e.target.value })} />}
+            </Campo>
+          )}
           <Campo rotulo="Modelo" obrigatorio>
             {a => <Selecao {...a} vazio="Escolha o modelo" opcoes={opcoes.modelos.map(m => ({ valor: m.tipo, rotulo: m.nome }))} value={f.templateTipo} onChange={e => setF({ ...f, templateTipo: e.target.value })} />}
           </Campo>

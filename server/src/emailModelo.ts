@@ -70,6 +70,10 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
   plano_aprovado: { sessao: "3", data_sessao: " (12-11-2026)", revisto_por: " (Coordenação)", comentario_itens: "Bom trabalho.", link: "(sessões da turma)" },
   plano_devolvido: { sessao: "3", data_sessao: " (12-11-2026)", revisto_por: " (Coordenação)", comentario_itens: "Falta o tempo da conclusão.", link: "(sessões da turma)" },
   inquerito_turma: { publico: "Formandos", inqueritos_itens: "Inquérito de satisfação: https://…", link: "(inquérito)" },
+  comprovativo_contabilidade: {
+    nome_formando: "Ana Silva", nif: "123456789", telemovel: "910000000", email_formando: "ana@exemplo.pt",
+    iban_formando: "—", valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0",
+  },
   pedido_proposta: {
     nome_contacto: "Ana Silva", empresa: "Empresa, Lda.", email_contacto: "ana@empresa.pt", telefone: "910000000",
     servico: "Formação à medida", mensagem: "Gostaria de receber uma proposta.",

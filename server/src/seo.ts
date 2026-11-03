@@ -30,6 +30,8 @@ type Seo = Record<(typeof CHAVES_SEO)[number], string>;
 export type MetaPagina = {
   estado: 200 | 404;
   titulo: string;
+  /** Nome do site (og:site_name), o mesmo em todas as páginas. */
+  site: string;
   descricao: string;
   canonico: string;
   imagem: string;
@@ -147,7 +149,7 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
   const imagemBase = absoluto(origem, seo.imagem || "/imagens/ena-logo-nobg.png");
   const comNome = (t: string) => (t.includes(nome) ? t : `${t} | ${nome}`);
   const base = (p: Partial<MetaPagina>): MetaPagina => ({
-    estado: 200, titulo: nome, descricao: descricaoBase, canonico: `${origem}${caminho === "/" ? "/" : caminho}`, imagem: imagemBase,
+    estado: 200, titulo: nome, site: nome, descricao: descricaoBase, canonico: `${origem}${caminho === "/" ? "/" : caminho}`, imagem: imagemBase,
     tipo: "website", indexar: indexarSite, corpo: "", ...p,
     jsonLd: [{ "@context": "https://schema.org", "@graph": [org, site, ...(p.jsonLd ?? [])] }],
   });
@@ -307,7 +309,7 @@ export async function htmlDaPagina(db: Db, caminho: string, host?: string): Prom
     `<meta name="robots" content="${robots}" />`,
     m.indexar && m.estado === 200 ? `<link rel="canonical" href="${esc(m.canonico)}" />` : "",
     `<meta property="og:type" content="${m.tipo}" />`,
-    `<meta property="og:site_name" content="${esc(m.titulo.split(" | ").pop() ?? m.titulo)}" />`,
+    `<meta property="og:site_name" content="${esc(m.site)}" />`,
     `<meta property="og:locale" content="pt_PT" />`,
     `<meta property="og:title" content="${esc(m.titulo)}" />`,
     `<meta property="og:description" content="${esc(m.descricao)}" />`,

@@ -26,9 +26,11 @@ describe("SEO do site", () => {
 
   it("cada página leva título, descrição, canónico, partilha e dados estruturados; a app continua a carregar", async () => {
     const ctx = await preparar();
-    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt" } });
+    await pedido(ctx, "admin", "PUT", "/v1/settings/seo", { values: { indexar: "1", url: "https://ena.pt", nomeSite: "ENA" } });
     const r = await pagina(ctx, "/");
     expect(r.statusCode).toBe(200);
+    // O nome do site é o mesmo em todas as páginas (na inicial, o título «ENA | Formação certificada» não o muda).
+    expect(r.body).toContain('<meta property="og:site_name" content="ENA" />');
     expect(r.headers["content-type"]).toContain("text/html");
     expect(r.headers["cache-control"]).toContain("s-maxage");
     expect(r.body).toContain('<html lang="pt-PT"');
@@ -45,6 +47,7 @@ describe("SEO do site", () => {
     expect(rc.statusCode).toBe(200);
     expect(rc.body).toContain(`<link rel="canonical" href="`);
     expect(rc.body).toContain(`/formacao/${c.id}"`);
+    expect(rc.body).toContain('<meta property="og:site_name" content="ENA" />');
     const curso = jsonLd(rc.body)["@graph"].find(x => x["@type"] === "Course")!;
     expect(curso).toMatchObject({ name: c.titulo, provider: expect.any(Object) });
     expect(curso.hasCourseInstance).toBeTruthy();

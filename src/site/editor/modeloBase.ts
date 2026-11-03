@@ -481,6 +481,13 @@ export function modeloPagina(pagina: PaginaSite): Data {
   if (pagina === "curso") return modeloCurso();
   if (pagina === "servico") return modeloServico();
   if (pagina === "noticia") return modeloNoticia();
+  // Página livre: um título e um texto para começar.
+  if (pagina.startsWith("livre-")) {
+    return { root: { props: {} }, content: [bloco("Seccao", Seccao.defaultProps, { conteudo: [
+      bloco("Titulo", Titulo.defaultProps, { texto: "Título da página" }),
+      bloco("Texto", Texto.defaultProps, { texto: "Escreva aqui o conteúdo da página." }),
+    ] })] } as Data;
+  }
   const unico = pagina === "catalogo" ? bloco("Catalogo", Catalogo.defaultProps)
     : bloco("AreaFormando", AreaFormando.defaultProps);
   return { root: { props: {} }, content: [unico] } as Data;

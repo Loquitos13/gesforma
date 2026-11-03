@@ -293,3 +293,22 @@ export function SiteLanding() {
 export function PaginaDoSite({ pagina, slug = null }: { pagina: PaginaSiteNome; slug?: string | null }) {
   return <SiteFrame pagina={pagina} slug={slug} />;
 }
+
+/** Endereço de uma página livre (/sobre-nos): a página publicada ou, sem ela, a página inicial (como antes). */
+export function PaginaLivreOuInicio({ endereco }: { endereco: string }) {
+  const [estado, setEstado] = useState<"a-carregar" | "livre" | "inicio">("a-carregar");
+  useEffect(() => {
+    let vivo = true;
+    fetch(`/api/v1/public/site/paginas/livre-${encodeURIComponent(endereco)}`, { cache: "no-store" })
+      .then(r => (r.ok ? r.json() as Promise<{ dados: unknown; titulo?: string | null }> : { dados: null }))
+      .then(r => {
+        if (!vivo) return;
+        if (r.dados && "titulo" in r && r.titulo) document.title = r.titulo;
+        setEstado(r.dados ? "livre" : "inicio");
+      })
+      .catch(() => { if (vivo) setEstado("inicio"); });
+    return () => { vivo = false; };
+  }, [endereco]);
+  if (estado === "a-carregar") return null;
+  return estado === "livre" ? <SiteFrame pagina={`livre-${endereco}`} slug={null} /> : <SiteLanding />;
+}

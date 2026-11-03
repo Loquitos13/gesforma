@@ -4,7 +4,7 @@ import { usePode } from "../../../partilhado/AuthGate";
 import { apiDefinicoes, apiGravarDefinicao } from "../../../partilhado/api/site";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
-import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
+import { paginaValida, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { SITE_OMISSAO } from "../../../partilhado/siteConteudo";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, ErroCarregar, Esqueleto, Interruptor, cx } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
@@ -21,7 +21,7 @@ export default function Site(_props: VistaProps) {
   // A página em edição fica no endereço (?pagina=catalogo), para voltar a ela ao recarregar.
   const [pagina, setPagina] = useState<PaginaSite>(() => {
     const p = new URLSearchParams(window.location.search).get("pagina");
-    return (PAGINAS_SITE as readonly string[]).includes(p ?? "") ? p as PaginaSite : "inicio";
+    return p && paginaValida(p) ? p : "inicio";
   });
   const mudarPagina = (p: PaginaSite) => {
     setPagina(p);

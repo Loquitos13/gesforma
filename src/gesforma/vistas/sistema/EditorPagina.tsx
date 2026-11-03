@@ -4,8 +4,9 @@
 import "@puckeditor/core/no-external.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Puck, type Config, type Data, type Dictionary, type Plugin, type PuckAction, type Viewports } from "@puckeditor/core";
-import { apiPaginaSite, apiPublicarPagina, apiRascunhoPagina, type PaginaEditor } from "../../../partilhado/api/site";
-import { PAGINAS_SITE, type PaginaSite } from "../../../partilhado/siteBlocos";
+import { apiApagarPaginaLivre, apiCriarPaginaLivre, apiPaginaSite, apiPaginasLivres, apiPublicarPagina, apiRascunhoPagina, type PaginaEditor } from "../../../partilhado/api/site";
+import { useRecurso } from "../../../partilhado/dados/useRecurso";
+import { ENDERECO_LIVRE, ENDERECOS_RESERVADOS, enderecoDaLivre, eFixa, PAGINAS_SITE, type PaginaFixa, type PaginaSite } from "../../../partilhado/siteBlocos";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { ConfirmarPerigo, ErroCarregar, Esqueleto } from "../../../partilhado/ui";
 import { molduraDoSite } from "../../../site/PaginaSite";
@@ -44,7 +45,7 @@ const PT: Dictionary = {
   "layout-maximize": "maximizar", "layout-minimize": "minimizar", "loader-loading": "a carregar",
 };
 
-export const PAGINAS: Record<PaginaSite, { titulo: string; endereco: string; nota: string }> = {
+export const PAGINAS: Record<PaginaFixa, { titulo: string; endereco: string; nota: string }> = {
   inicio: { titulo: "Página inicial", endereco: "/", nota: "Também guarda o tema (cores e fontes) de todo o site." },
   moldura: { titulo: "Cabeçalho e rodapé", endereco: "/", nota: "O cabeçalho (logótipo, menu, botão) e o rodapé de todas as páginas do site." },
   catalogo: { titulo: "Catálogo", endereco: "/formacao", nota: "Lista de cursos com pesquisa e filtros." },
@@ -62,6 +63,71 @@ const IconePaginas = (
   </svg>
 );
 
+/** Título, endereço e nota de uma página (as livres ficam com o endereço próprio). */
+export function infoPagina(p: PaginaSite) {
+  if (eFixa(p)) return PAGINAS[p];
+  const e = enderecoDaLivre(p);
+  return { titulo: `Página /${e}`, endereco: `/${e}`, nota: "Página livre, feita com blocos." };
+}
+
+/** Páginas livres: lista, criar (título e endereço) e apagar. */
+function PaginasLivres({ atual, ir }: { atual: PaginaSite; ir: (p: PaginaSite) => void }) {
+  const { dados, recarregar } = useRecurso("site:paginas-livres", apiPaginasLivres);
+  const [titulo, setTitulo] = useState("");
+  const [endereco, setEndereco] = useState("");
+  const [apagar, setApagar] = useState<{ pagina: string; titulo: string } | null>(null);
+  const [erro, setErro] = useState("");
+  const sugestao = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+  const end = endereco || sugestao(titulo);
+  const invalido = !end ? "" : !ENDERECO_LIVRE.test(end) ? "Só letras minúsculas, números e hífenes." : ENDERECOS_RESERVADOS.has(end) ? "Este endereço já é usado pelo site." : "";
+  async function criar() {
+    setErro("");
+    try {
+      const r = await apiCriarPaginaLivre(titulo.trim(), end);
+      setTitulo(""); setEndereco("");
+      recarregar();
+      ir(r.pagina as PaginaSite);
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : "Não foi possível criar a página.");
+    }
+  }
+  return (
+    <>
+      <p className="mb-1 mt-4 px-1 text-[11px] font-bold uppercase tracking-wider text-[#6b7685]">Páginas livres</p>
+      {(dados?.paginas ?? []).map(p => (
+        <div key={p.pagina} className={`flex items-stretch rounded-md border ${p.pagina === atual ? "border-[#3b6fd8] bg-[#eef3fd]" : "border-[#e1e5ea] bg-white"}`}>
+          <button type="button" onClick={() => ir(p.pagina as PaginaSite)} aria-current={p.pagina === atual ? "page" : undefined} className="min-w-0 flex-1 px-3 py-2.5 text-left">
+            <span className="block truncate text-[13px] font-semibold text-[#1c2633]">{p.titulo || `/${p.endereco}`}</span>
+            <span className="block text-[11px] text-[#6b7685]">/{p.endereco}{p.publicadoEm ? "" : " · por publicar"}</span>
+          </button>
+          <button type="button" onClick={() => setApagar({ pagina: p.pagina, titulo: p.titulo || `/${p.endereco}` })} title="Apagar a página" aria-label={`Apagar ${p.titulo}`}
+            className="px-2 text-[13px] text-[#b42318] hover:bg-[#fdecea]">✕</button>
+        </div>
+      ))}
+      <div className="mt-2 flex flex-col gap-1.5 rounded-md border border-dashed border-[#c9d1dc] bg-white p-2.5">
+        <span className="text-[12px] font-semibold text-[#1c2633]">Nova página</span>
+        <input value={titulo} onChange={e => setTitulo(e.target.value.slice(0, 120))} placeholder="Título (ex.: Sobre nós)" className="rounded border border-[#d4d8de] px-2 py-1.5 text-[13px]" />
+        <div className="flex items-center gap-1 text-[13px] text-[#6b7685]">
+          <span>/</span>
+          <input value={endereco} onChange={e => setEndereco(e.target.value.toLowerCase().slice(0, 60))} placeholder={sugestao(titulo) || "sobre-nos"} className="min-w-0 flex-1 rounded border border-[#d4d8de] px-2 py-1.5" />
+        </div>
+        {(invalido || erro) && <span className="text-[11px] text-[#b42318]">{invalido || erro}</span>}
+        <button type="button" disabled={titulo.trim().length < 2 || !end || Boolean(invalido)} onClick={() => void criar()}
+          className="rounded bg-[#3b6fd8] px-2.5 py-1.5 text-[12px] font-semibold text-white disabled:opacity-40">Criar página</button>
+      </div>
+      <ConfirmarPerigo aberto={apagar != null} onFechar={() => setApagar(null)} titulo={`Apagar «${apagar?.titulo ?? ""}»?`}
+        descricao="A página sai do site e o endereço deixa de abrir. Não se pode desfazer." acao="Apagar página"
+        onConfirmar={async () => {
+          if (!apagar) return;
+          await apiApagarPaginaLivre(apagar.pagina);
+          setApagar(null);
+          recarregar();
+          if (apagar.pagina === atual) ir("inicio");
+        }} />
+    </>
+  );
+}
+
 function pluginPaginas(atual: PaginaSite, ir: (p: PaginaSite) => void): Plugin {
   return {
     name: "paginas",
@@ -77,6 +143,7 @@ function pluginPaginas(atual: PaginaSite, ir: (p: PaginaSite) => void): Plugin {
             <span className="block text-[11px] text-[#6b7685]">{PAGINAS[p].endereco} · {PAGINAS[p].nota}</span>
           </button>
         ))}
+        <PaginasLivres atual={atual} ir={ir} />
       </nav>
     ),
   };
@@ -220,7 +287,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
       await apiPublicarPagina(pagina, d);
       setEstado("guardado");
       setPublicadoEm(new Date().toISOString());
-      toastOk(`${PAGINAS[pagina].titulo} publicada. O site já mostra esta versão.`);
+      toastOk(`${infoPagina(pagina).titulo} publicada. O site já mostra esta versão.`);
     } catch (e) {
       toastError(e instanceof Error ? e.message : "Não foi possível publicar.");
     } finally {
@@ -271,7 +338,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
       <span className={estado === "erro" ? "text-[#a60000]" : "text-[#6b7685]"} aria-live="polite">{textoEstado}</span>
       <span className="hidden text-[#6b7685] xl:inline">{publicadoEm ? `· publicada ${fmtDataHoraLisboa(publicadoEm)}` : "· ainda não publicada"}</span>
       <button type="button" onClick={() => setRepor(true)} className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Repor modelo base</button>
-      <a href={PAGINAS[pagina].endereco} target="_blank" rel="noreferrer" className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Ver no site ↗</a>
+      <a href={infoPagina(pagina).endereco} target="_blank" rel="noreferrer" className="rounded border border-[#d4d8de] px-2.5 py-1.5 font-semibold text-[#3d4a5a] hover:bg-[#f2f4f7]">Ver no site ↗</a>
       <button type="button" disabled={aPublicar} onClick={() => void publicarRef.current(state.data as Data)}
         className="rounded bg-[#a60000] px-3.5 py-1.5 font-bold text-white hover:bg-[#14263d] disabled:opacity-60">{aPublicar ? "A publicar…" : "Publicar"}</button>
     </div>
@@ -302,7 +369,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
             data={inicial}
             onChange={onChange}
             onPublish={onPublish}
-            headerTitle={PAGINAS[pagina].titulo}
+            headerTitle={infoPagina(pagina).titulo}
             viewports={VIEWPORTS}
             iframe={IFRAME}
             dictionary={PT}
@@ -314,7 +381,7 @@ export function EditorPagina({ pagina, onMudarPagina }: { pagina: PaginaSite; on
         </div>
         <ConfirmarPerigo
           aberto={repor}
-          titulo={`Repor o modelo base de «${PAGINAS[pagina].titulo}»?`}
+          titulo={`Repor o modelo base de «${infoPagina(pagina).titulo}»?`}
           descricao="O rascunho desta página volta ao modelo base. O site só muda quando publicar."
           acao="Repor"
           onFechar={() => setRepor(false)}

@@ -18,6 +18,7 @@ const AssinarContrato = lazy(() => import("./site/AssinarContrato").then(m => ({
 const VerificarAssinatura = lazy(() => import("./site/VerificarAssinatura").then(m => ({ default: m.VerificarAssinatura })));
 const SiteLanding = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.SiteLanding })));
 const PaginaDoSite = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaDoSite })));
+const PaginaLivreOuInicio = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaLivreOuInicio })));
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
 const legacyEntrar = path === "/entrar" || path.startsWith("/entrar/");
@@ -46,6 +47,8 @@ const assinarToken = path.startsWith("/assinar/") ? decodeURIComponent(path.slic
 const verificar = path === "/verificar" || path.startsWith("/verificar/");
 const verificarCodigo = path.startsWith("/verificar/") ? decodeURIComponent(path.slice("/verificar/".length).split("/")[0] ?? "") : "";
 const faturacaoToken = path.startsWith("/faturacao/") ? decodeURIComponent(path.slice("/faturacao/".length).split("/")[0] ?? "") : "";
+// Página livre do site (Sistema › Site › Páginas livres): um só segmento, ex.: /sobre-nos.
+const enderecoLivre = /^\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(path) ? path.slice(1) : "";
 const inqToken = path.startsWith("/inquerito/") ? decodeURIComponent(path.slice("/inquerito/".length).split("/")[0] ?? "") : "";
 
 createRoot(document.getElementById("root")!).render(
@@ -83,6 +86,8 @@ createRoot(document.getElementById("root")!).render(
         <PaginaDoSite pagina="curso" slug={slugCurso} />
       ) : catalogo ? (
         <PaginaDoSite pagina="catalogo" />
+      ) : enderecoLivre ? (
+        <PaginaLivreOuInicio endereco={enderecoLivre} />
       ) : (
         <SiteLanding />
       )}

@@ -1,7 +1,28 @@
 // Páginas do site feitas no editor visual: nomes dos blocos e validação do JSON (servidor e browser).
 
 export const PAGINAS_SITE = ["inicio", "moldura", "catalogo", "curso", "noticias", "noticia", "empresas", "servico", "area"] as const;
-export type PaginaSite = typeof PAGINAS_SITE[number];
+export type PaginaFixa = typeof PAGINAS_SITE[number];
+/** As páginas fixas e as páginas livres («livre-sobre-nos» está no site em /sobre-nos). */
+export type PaginaSite = PaginaFixa | `livre-${string}`;
+
+/** Endereço de uma página livre: letras minúsculas, números e hífenes (ex.: «sobre-nos»). */
+export const ENDERECO_LIVRE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+/** Endereços que o site já usa (não podem ser páginas livres). */
+export const ENDERECOS_RESERVADOS = new Set([
+  "formacao", "noticias", "empresas", "gesforma", "entrar", "area-formando", "pre-inscricao", "documentos", "documentos-formando",
+  "cronograma", "assinar", "verificar", "faturacao", "inquerito", "api", "imagens", "assets", "sitemap.xml", "robots.txt",
+]);
+
+export const paginaLivre = (endereco: string) => `livre-${endereco}` as const;
+export const enderecoDaLivre = (pagina: string) => (pagina.startsWith("livre-") ? pagina.slice("livre-".length) : "");
+export const eFixa = (p: string): p is PaginaFixa => (PAGINAS_SITE as readonly string[]).includes(p);
+
+/** Página fixa ou livre com um endereço válido e não reservado. */
+export function paginaValida(p: string): p is PaginaSite {
+  if (eFixa(p)) return true;
+  const e = enderecoDaLivre(p);
+  return Boolean(e) && e.length <= 60 && ENDERECO_LIVRE.test(e) && !ENDERECOS_RESERVADOS.has(e);
+}
 
 export const BLOCOS_SITE = [
   "Cabecalho", "Rodape", "Seccao", "Coluna", "Titulo", "Texto", "Botao", "Imagem", "Espaco", "Separador",

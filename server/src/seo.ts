@@ -241,6 +241,15 @@ export async function metaDaPagina(db: Db, caminhoBruto: string, host?: string):
     });
   }
   if (caminho === "/area-formando" || caminho.startsWith("/area-formando/")) return privada("Área do formando");
+  // Página livre do site (/sobre-nos): publicada, indexa-se com o título dela.
+  if (/^\/[a-z0-9]+(?:-[a-z0-9]+)*$/.test(caminho)) {
+    const { lerPublicada, tituloDaLivre } = await import("./repos/sitePaginas.js");
+    const pagina = `livre-${caminho.slice(1)}` as const;
+    if (await lerPublicada(db, pagina)) {
+      const t = (await tituloDaLivre(db, pagina)) || nome;
+      return base({ titulo: comNome(t), corpo: `<h1>${esc(t)}</h1>` });
+    }
+  }
   // Backoffice, ligações pessoais, assinaturas, verificação de documentos, pré-inscrição: não se indexam.
   return privada(nome);
 }

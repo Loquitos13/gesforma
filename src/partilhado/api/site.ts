@@ -56,3 +56,11 @@ export type PedidoProposta = { id: number; nome: string; empresa: string; email:
 export const apiPedidosProposta = (estado?: EstadoPedido, signal?: AbortSignal) =>
   api<{ pedidos: PedidoProposta[] }>(`/v1/pedidos-proposta${estado ? `?estado=${estado}` : ""}`, { signal });
 export const apiEstadoPedido = (id: number, estado: EstadoPedido) => enviar.patch<{ id: number; estado: EstadoPedido }>(`/v1/pedidos-proposta/${id}`, { estado });
+
+/** Páginas livres do site (endereço próprio, ex.: /sobre-nos). */
+export type PaginaLivre = { pagina: string; endereco: string; titulo: string; publicadoEm: string | null };
+export const apiPaginasLivres = (signal?: AbortSignal) => api<{ paginas: PaginaLivre[] }>("/v1/site/paginas-livres", { signal });
+export const apiCriarPaginaLivre = (titulo: string, endereco: string) =>
+  enviar.post<{ pagina: string; endereco: string }>("/v1/site/paginas-livres", { titulo, endereco });
+export const apiApagarPaginaLivre = (pagina: string) =>
+  enviar.delete<{ ok: boolean }>(`/v1/site/paginas-livres/${encodeURIComponent(pagina)}`);

@@ -4,6 +4,7 @@
  * refazer as páginas no editor. Cada ajuste só acrescenta ou troca o que encontra; se a página não existe, não faz nada.
  */
 import type { Db } from "./pool.js";
+import { PAGINAS_LEGAIS, type PaginaLegal } from "./paginasLegais.js";
 
 type No = { type: string; props: Record<string, unknown> };
 type Pagina = { root?: unknown; content?: No[] };
@@ -163,6 +164,19 @@ export const AJUSTES: Ajuste[] = [
     },
   },
   {
+    // Rodapé: «Termos e condições» logo a seguir à «Política de privacidade» (páginas novas do site).
+    id: "2026-11-rodape-termos",
+    paginas: ["moldura", "inicio"],
+    aplicar: p => cadaBloco(p.content, b => {
+      if (b.type !== "Rodape" || !Array.isArray(b.props.colunas)) return;
+      b.props.colunas = (b.props.colunas as { linhas?: string }[]).map(c => {
+        const linhas = String(c.linhas ?? "");
+        if (!/^Política de privacidade\s*\|/mi.test(linhas) || /termos-e-condicoes/i.test(linhas)) return c;
+        return { ...c, linhas: linhas.replace(/^(Política de privacidade\s*\|[^\n]*)$/mi, "$1\nTermos e condições | /termos-e-condicoes") };
+      });
+    }),
+  },
+  {
     // «Notícias» passa a «Notícias e artigos» (título da página e regresso à lista).
     id: "2026-11-noticias-artigos",
     paginas: ["noticias", "noticia"],
@@ -192,5 +206,62 @@ export async function aplicarAjustesSite(db: Db, ajustes: Ajuste[] = AJUSTES) {
         [pagina, JSON.stringify(mudar(r.rascunho)), JSON.stringify(mudar(r.publicado))]);
     }
     await db.query("INSERT INTO ajustes_site (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [a.id]);
+  }
+}
+
+const tipografia = (extra: Record<string, unknown>) => ({
+  fonte: "", tamanho: null, tamanhoTel: null, peso: "", alturaLinha: null, espacamento: null,
+  cor: "", alinhamento: "", transformacao: "", italico: false, ...extra,
+});
+
+/** Página de texto (título, secções, parágrafos e listas) numa coluna estreita, como se fosse feita no editor. */
+export function paginaDeTexto(p: PaginaLegal): Pagina {
+  let n = 0;
+  const bid = (tipo: string) => `${tipo}-${p.endereco}-${++n}`;
+  const blocos: No[] = [{ type: "Titulo", props: { id: bid("Titulo"), texto: p.titulo, nivel: "h1" } }];
+  for (const parte of p.partes) {
+    if (parte[0] === "titulo" || parte[0] === "subtitulo") {
+      const seccao = parte[0] === "titulo";
+      blocos.push({ type: "Titulo", props: {
+        id: bid("Titulo"), texto: parte[1], nivel: seccao ? "h2" : "h3",
+        tipografia: tipografia({ fonte: "tema-titulos", tamanho: seccao ? 24 : 19, tamanhoTel: seccao ? 20 : 17, peso: "700", alturaLinha: 1.25, cor: "var(--c-primaria)" }),
+        aparencia: estilo({ margem: { t: seccao ? 20 : 6, r: null, b: null, l: null } }),
+      } });
+    } else if (parte[0] === "texto") {
+      blocos.push({ type: "Texto", props: { id: bid("Texto"), texto: parte[1] } });
+    } else if (parte[0] === "lista") {
+      blocos.push({ type: "Texto", props: { id: bid("Texto"), texto: parte[1].map(i => `• ${i}`).join("\n") } });
+    } else {
+      blocos.push({ type: "Titulo", props: {
+        id: bid("Titulo"), texto: parte[1], nivel: "p", ligacao: parte[2],
+        tipografia: tipografia({ tamanho: 17, alturaLinha: 1.65, peso: "600", cor: "var(--c-destaque)" }),
+      } });
+    }
+  }
+  return {
+    root: { props: {} },
+    content: [{ type: "Seccao", props: {
+      id: bid("Seccao"), espaco: 12, aparencia: estilo({ preenchimento: lados(64, 32), preenchimentoTel: lados(40, 20) }),
+      conteudo: [{ type: "Coluna", props: {
+        id: bid("Coluna"), espaco: 12, conteudo: blocos,
+        aparencia: estilo({ largura: { valor: 100, unidade: "%" }, larguraMax: { valor: 860, unidade: "px" }, alinhar: "centro" }),
+      } }],
+    } }],
+  };
+}
+
+/**
+ * Páginas novas do site (páginas livres), criadas uma vez e já publicadas. Se o endereço já tiver página, fica a
+ * que lá está; depois de criadas, editam-se em Sistema › Site como as outras.
+ */
+export async function criarPaginasSite(db: Db, paginas: PaginaLegal[] = PAGINAS_LEGAIS) {
+  const feitos = new Set((await db.query<{ id: string }>("SELECT id FROM ajustes_site")).rows.map(r => r.id));
+  for (const p of paginas) {
+    if (feitos.has(p.id)) continue;
+    await db.query(
+      `INSERT INTO site_paginas (pagina, titulo, rascunho, publicado, publicado_em, atualizado_em)
+       VALUES ($1, $2, $3::jsonb, $3::jsonb, now(), now()) ON CONFLICT (pagina) DO NOTHING`,
+      [`livre-${p.endereco}`, p.titulo, JSON.stringify(paginaDeTexto(p))]);
+    await db.query("INSERT INTO ajustes_site (id) VALUES ($1) ON CONFLICT (id) DO NOTHING", [p.id]);
   }
 }

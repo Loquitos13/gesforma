@@ -250,7 +250,7 @@ function WhatsAppAssistant() {
  * Moldura do site público. Com `pagina`, desenha essa página do editor visual (a inicial traz o cabeçalho
  * e o rodapé; as outras recebem-nos dela). Sem `pagina` (página de curso, artigo), envolve `children`.
  */
-export function SiteFrame({ children, pagina, slug = null }: { children?: ReactNode; pagina?: PaginaSiteNome; slug?: string | null }) {
+export function SiteFrame({ children, pagina, slug = null, tituloPagina = "" }: { children?: ReactNode; pagina?: PaginaSiteNome; slug?: string | null; tituloPagina?: string }) {
   const oferta = useOfertaState();
   const texto = useSiteTextoState();
   const inicio = usePagina("inicio");
@@ -260,11 +260,12 @@ export function SiteFrame({ children, pagina, slug = null }: { children?: ReactN
   const dados = pagina === "inicio" ? inicio : propria;
   const ecra = useDispositivo();
   const titulo = texto.ler("tituloSeparador");
+  // Uma página com título próprio (página livre) mantém-no; as outras levam o título do separador (Sistema › Site).
   useEffect(() => {
     const prev = document.title;
-    document.title = titulo || "ENA";
+    document.title = tituloPagina || titulo || "ENA";
     return () => { document.title = prev; };
-  }, [titulo]);
+  }, [titulo, tituloPagina]);
   useEffect(() => { document.documentElement.classList.add("ena-publico"); }, []);
   return (
     <OfertaCtx.Provider value={oferta}>
@@ -305,18 +306,19 @@ export function PaginaDoSite({ pagina, slug = null }: { pagina: PaginaSiteNome; 
 /** Endereço de uma página livre (/sobre-nos): a página publicada ou, sem ela, a página inicial (como antes). */
 export function PaginaLivreOuInicio({ endereco }: { endereco: string }) {
   const [estado, setEstado] = useState<"a-carregar" | "livre" | "inicio">("a-carregar");
+  const [titulo, setTitulo] = useState("");
   useEffect(() => {
     let vivo = true;
     fetch(`/api/v1/public/site/paginas/livre-${encodeURIComponent(endereco)}`, { cache: "no-store" })
       .then(r => (r.ok ? r.json() as Promise<{ dados: unknown; titulo?: string | null }> : { dados: null }))
       .then(r => {
         if (!vivo) return;
-        if (r.dados && "titulo" in r && r.titulo) document.title = r.titulo;
+        setTitulo(r.dados && "titulo" in r && r.titulo ? `${r.titulo} | ENA` : "");
         setEstado(r.dados ? "livre" : "inicio");
       })
       .catch(() => { if (vivo) setEstado("inicio"); });
     return () => { vivo = false; };
   }, [endereco]);
   if (estado === "a-carregar") return null;
-  return estado === "livre" ? <SiteFrame pagina={`livre-${endereco}`} slug={null} /> : <SiteLanding />;
+  return estado === "livre" ? <SiteFrame pagina={`livre-${endereco}`} slug={null} tituloPagina={titulo} /> : <SiteLanding />;
 }

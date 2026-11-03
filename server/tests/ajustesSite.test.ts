@@ -83,7 +83,12 @@ describe("ajustes ao conteúdo do site", () => {
     };
     const politica = await publica("politica-de-privacidade");
     expect(politica.titulo).toBe("Privacidade");
-    expect(JSON.stringify(politica.dados)).toContain("3. Direito de Retificação");
+    const textoPolitica = JSON.stringify(politica.dados);
+    expect(textoPolitica).toContain("3. Direito de Retificação");
+    // Responsável: a VIVERAPRENDER (NIF e sede do registo da empresa); nada da empresa nem do site de onde o texto antigo veio.
+    expect(textoPolitica).toContain("VIVERAPRENDER - Escola de Negócios e Administração, Lda.");
+    expect(textoPolitica).toContain("NIPC 505654296");
+    expect(textoPolitica).not.toMatch(/cyber|escolamagica/i);
     const dadosTermos = (await publica("termos-e-condicoes")).dados as { content: { props: { conteudo: { props: { conteudo: { props: Record<string, unknown> }[] } }[] } }[] };
     const blocosTermos = dadosTermos.content[0]!.props.conteudo[0]!.props.conteudo.map(b => b.props);
     expect(blocosTermos[0]).toMatchObject({ nivel: "h1", texto: "Termos e condições de inscrição e acesso" });

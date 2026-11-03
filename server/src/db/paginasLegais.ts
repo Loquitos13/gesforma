@@ -1,6 +1,8 @@
 /**
- * «Política de privacidade» e «Termos e condições»: o texto do site antigo (antigo.ena.pt), copiado como estava
- * (só com gralhas evidentes corrigidas). Criam-se uma vez, no arranque, como páginas livres já publicadas
+ * «Política de privacidade» e «Termos e condições»: o texto do site antigo (antigo.ena.pt), com gralhas evidentes
+ * corrigidas. A responsável é a VIVERAPRENDER - Escola de Negócios e Administração, Lda. (NIF 505654296, sede na
+ * R. do Conselheiro Veloso da Cruz, 524, 4400-093 Vila Nova de Gaia, como no registo da empresa); a política antiga
+ * trazia os dados de outra empresa e de outro site. Criam-se uma vez, no arranque, como páginas livres já publicadas
  * (Sistema › Site); depois editam-se em blocos como as outras.
  */
 
@@ -14,8 +16,8 @@ const POLITICA: PaginaLegal = {
   titulo: "Política de privacidade",
   partes: [
     ["titulo", "Identificação do responsável"],
-    ["texto", "O presente “Website” é propriedade e é gerido por CYBER DIGITAL BUSINESS LDA. - Escola Profissional de Novas Tecnologias de Informação e Comunicação, com sede na Rua do Baiunco, n.º 1, 5225-100 Sendim, Miranda do Douro, instalações físicas em Rua Conselheiro Veloso da Cruz n.º 524, 4400-092 Vila Nova de Gaia, e com o NIPC 506872262, doravante designada por Cyber Digital Business."],
-    ["texto", "Enquanto responsável pela recolha e tratamento da informação relativa ao sítio, a Cyber Digital Business procurará garantir que os dados pessoais recolhidos sejam:"],
+    ["texto", "O presente “Website” é propriedade e é gerido por VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia, e com o NIPC 505654296, doravante designada por ENA."],
+    ["texto", "Enquanto responsável pela recolha e tratamento da informação relativa ao sítio, a ENA procurará garantir que os dados pessoais recolhidos sejam:"],
     ["lista", [
       "Objeto de tratamento legal, lícito, leal e transparente;",
       "Não sejam utilizados para outros meios que não os estritamente relacionados com a utilização do sítio;",
@@ -23,24 +25,24 @@ const POLITICA: PaginaLegal = {
       "Conservados pelos períodos necessários às finalidades para que são recolhidos e tratados;",
       "Tratados de forma a garantir a sua confidencialidade e integridade.",
     ]],
-    ["texto", "A CYBER DIGITAL BUSINESS LDA pode ser contactada pelos seguintes meios:"],
+    ["texto", "A ENA pode ser contactada pelos seguintes meios:"],
     ["lista", [
-      "Via postal: Rua Conselheiro Veloso da Cruz 524, 4400-092 V. N. de Gaia",
-      "Correio eletrónico: info@cyberdigitalb.com",
+      "Via postal: Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia",
+      "Correio eletrónico: geral@ena.pt",
     ]],
     ["titulo", "Recolha e tratamento de dados pessoais"],
     ["lista", [
-      "Os dados pessoais recolhidos e tratados pela Cyber Digital Business são os que voluntariamente colocar nos formulários neste Website. No entanto, o preenchimento de alguns destes pode ser necessário para o acesso ou obtenção de determinados conteúdos ou serviços.",
+      "Os dados pessoais recolhidos e tratados pela ENA são os que voluntariamente colocar nos formulários neste Website. No entanto, o preenchimento de alguns destes pode ser necessário para o acesso ou obtenção de determinados conteúdos ou serviços.",
       "Os dados pessoais recolhidos são, nomeadamente: nome completo, apelido, telemóvel, correio eletrónico, ano de escolaridade e escola que frequenta ou onde leciona.",
     ]],
     ["titulo", "Finalidade do tratamento de dados pessoais"],
-    ["texto", "A finalidade da recolha e tratamento de dados pessoais são aquelas para as quais a Cyber Digital Business recolheu o consentimento, sem qualquer tipo de reserva. São ainda indispensáveis à execução de um contrato celebrado entre a Cyber e os clientes ou utilizadores. Os dados poderão ser tratados para finalidades de marketing direto relacionada com a divulgação do sítio, esta finalidade determinada, explícita e legítima, não sendo posteriormente tratados de forma incompatível com esta. Os dados recolhidos e tratados são os adequados, pertinentes e não excessivos em relação a esta finalidade."],
+    ["texto", "A finalidade da recolha e tratamento de dados pessoais são aquelas para as quais a ENA recolheu o consentimento, sem qualquer tipo de reserva. São ainda indispensáveis à execução de um contrato celebrado entre a ENA e os clientes ou utilizadores. Os dados poderão ser tratados para finalidades de marketing direto relacionada com a divulgação do sítio, esta finalidade determinada, explícita e legítima, não sendo posteriormente tratados de forma incompatível com esta. Os dados recolhidos e tratados são os adequados, pertinentes e não excessivos em relação a esta finalidade."],
     ["titulo", "Marketing direto e comunicação de dados a terceiros"],
-    ["texto", "Ao colocar uma cruz e carregando no botão “Aceito” (ou equivalente) nos formulários, estará a consentir receber comunicações eletrónicas de marketing direto (para os contactos que introduzir nos formulários, designadamente por correio eletrónico, telefone, telemóvel e SMS/MMS) realizadas pela Cyber Digital Business."],
+    ["texto", "Ao colocar uma cruz e carregando no botão “Aceito” (ou equivalente) nos formulários, estará a consentir receber comunicações eletrónicas de marketing direto (para os contactos que introduzir nos formulários, designadamente por correio eletrónico, telefone, telemóvel e SMS/MMS) realizadas pela ENA."],
     ["subtitulo", "1. Direito de Retirar o Consentimento"],
-    ["texto", "Nos casos em que os Clientes e Utilizadores transmitiram à Cyber Digital Business os seus dados pessoais e consentiram, livre e expressamente, no seu tratamento para uma ou diversas finalidades, é-lhes conferido o direito de, em qualquer altura, retirar o consentimento anteriormente prestado, não podendo a Cyber Digital Business continuar o tratamento de tais dados a partir desse momento, exceto se a isso estiver legal ou contratualmente obrigada."],
+    ["texto", "Nos casos em que os Clientes e Utilizadores transmitiram à ENA os seus dados pessoais e consentiram, livre e expressamente, no seu tratamento para uma ou diversas finalidades, é-lhes conferido o direito de, em qualquer altura, retirar o consentimento anteriormente prestado, não podendo a ENA continuar o tratamento de tais dados a partir desse momento, exceto se a isso estiver legal ou contratualmente obrigada."],
     ["subtitulo", "2. Direito de Acesso"],
-    ["texto", "Os Clientes e Utilizadores podem, a todo o tempo, contactar a Cyber Digital Business e requerer confirmação de que dados pessoais de que são titulares são objeto de tratamento e, em caso afirmativo, de ser informados relativamente:"],
+    ["texto", "Os Clientes e Utilizadores podem, a todo o tempo, contactar a ENA e requerer confirmação de que dados pessoais de que são titulares são objeto de tratamento e, em caso afirmativo, de ser informados relativamente:"],
     ["lista", [
       "às categorias de dados pessoais em questão;",
       "às finalidades do tratamento dos seus dados;",
@@ -50,37 +52,37 @@ const POLITICA: PaginaLegal = {
       "à existência de decisões automatizadas, incluindo a definição de perfis.",
     ]],
     ["subtitulo", "3. Direito de Retificação"],
-    ["texto", "Sempre que os dados pessoais objeto de tratamento estejam desatualizados, incompletos ou incorretos, os Clientes e Utilizadores poderão solicitar à Cyber Digital Business a sua retificação no mais curto prazo de tempo possível."],
+    ["texto", "Sempre que os dados pessoais objeto de tratamento estejam desatualizados, incompletos ou incorretos, os Clientes e Utilizadores poderão solicitar à ENA a sua retificação no mais curto prazo de tempo possível."],
     ["subtitulo", "4. Direito de Apagamento"],
-    ["texto", "Aos Clientes e Utilizadores é garantido o direito de requerer o apagamento dos seus dados pessoais, aquando do exercício do Direito de Retirar o Consentimento ou em momento posterior, devendo a Cyber Digital Business proceder em conformidade."],
+    ["texto", "Aos Clientes e Utilizadores é garantido o direito de requerer o apagamento dos seus dados pessoais, aquando do exercício do Direito de Retirar o Consentimento ou em momento posterior, devendo a ENA proceder em conformidade."],
     ["subtitulo", "5. Direito à Limitação"],
-    ["texto", "Na eventualidade de os Clientes e Utilizadores não solicitarem à Cyber Digital Business o apagamento dos dados pessoais de que são titulares, mas tiverem interesse em que o tratamento desses dados a partir de tal momento, à exceção da conservação, dependa de novo consentimento, poderão solicitá-lo à Cyber Digital Business, a todo o tempo."],
+    ["texto", "Na eventualidade de os Clientes e Utilizadores não solicitarem à ENA o apagamento dos dados pessoais de que são titulares, mas tiverem interesse em que o tratamento desses dados a partir de tal momento, à exceção da conservação, dependa de novo consentimento, poderão solicitá-lo à ENA, a todo o tempo."],
     ["subtitulo", "6. Direito de Portabilidade"],
     ["texto", "Os Clientes e Utilizadores têm ainda os direitos de:"],
     ["lista", [
-      "receber da Cyber Digital Business os dados pessoais que lhe digam respeito, num formato de uso corrente e leitura automática;",
-      "transmitir esses dados a terceiros alheios à Cyber Digital Business, sob sua exclusiva responsabilidade;",
-      "solicitar à Cyber Digital Business que transmita aqueles dados, no formato indicado, aos referidos terceiros.",
+      "receber da ENA os dados pessoais que lhe digam respeito, num formato de uso corrente e leitura automática;",
+      "transmitir esses dados a terceiros alheios à ENA, sob sua exclusiva responsabilidade;",
+      "solicitar à ENA que transmita aqueles dados, no formato indicado, aos referidos terceiros.",
     ]],
     ["subtitulo", "7. Direito de Reclamação"],
-    ["texto", "Não obstante a Cyber Digital Business adotar as melhores práticas em matéria de proteção de dados pessoais, aos Clientes e Utilizadores é conferido o direito de apresentar reclamação à Comissão Nacional de Proteção de Dados (www.cnpd.pt) relativamente ao tratamento dos dados realizado pela Cyber Digital Business, por qualquer das vias permitidas pela referida Autoridade de Controlo."],
+    ["texto", "Não obstante a ENA adotar as melhores práticas em matéria de proteção de dados pessoais, aos Clientes e Utilizadores é conferido o direito de apresentar reclamação à Comissão Nacional de Proteção de Dados (www.cnpd.pt) relativamente ao tratamento dos dados realizado pela ENA, por qualquer das vias permitidas pela referida Autoridade de Controlo."],
     ["titulo", "Segurança"],
-    ["texto", "A Cyber Digital Business utiliza as medidas de segurança adequadas à proteção dos seus dados pessoais contra a destruição, acidental ou ilícita, a perda acidental, a alteração, a difusão ou o acesso não autorizados, e contra qualquer outra forma de tratamento ilícito. No entanto, como a Internet não é totalmente segura, advertimos que os seus dados pessoais podem circular na rede sem condições de segurança, correndo o risco de serem vistos e utilizados por terceiros não autorizados."],
+    ["texto", "A ENA utiliza as medidas de segurança adequadas à proteção dos seus dados pessoais contra a destruição, acidental ou ilícita, a perda acidental, a alteração, a difusão ou o acesso não autorizados, e contra qualquer outra forma de tratamento ilícito. No entanto, como a Internet não é totalmente segura, advertimos que os seus dados pessoais podem circular na rede sem condições de segurança, correndo o risco de serem vistos e utilizados por terceiros não autorizados."],
     ["titulo", "Conservação dos dados"],
-    ["texto", "Os seus dados são conservados pela Cyber Digital Business para as finalidades aqui descritas e para comprovar o seu registo neste Website, assim como para o exercício dos seus direitos, dentro dos prazos admissíveis segundo as orientações da Comissão Nacional de Proteção de Dados (CNPD)."],
+    ["texto", "Os seus dados são conservados pela ENA para as finalidades aqui descritas e para comprovar o seu registo neste Website, assim como para o exercício dos seus direitos, dentro dos prazos admissíveis segundo as orientações da Comissão Nacional de Proteção de Dados (CNPD)."],
     ["titulo", "Perfis"],
-    ["texto", "No tratamento dos dados pessoais dos Clientes e Utilizadores pela Cyber Digital Business, podem ser tomadas decisões exclusivamente com base no tratamento automatizado de tais dados pessoais."],
-    ["texto", "A definição de perfis dos Clientes ou Utilizadores será efetuada com base no consentimento esclarecido do utilizador, expresso e inequívoco, e terá como finalidade a garantia de qualidade do serviço que a Cyber Digital Business presta, designadamente através da personalização das funcionalidades das plataformas oferecidas e da disponibilização de conteúdos, produtos e serviços adequados aos interesses concretos dos Clientes e Utilizadores."],
+    ["texto", "No tratamento dos dados pessoais dos Clientes e Utilizadores pela ENA, podem ser tomadas decisões exclusivamente com base no tratamento automatizado de tais dados pessoais."],
+    ["texto", "A definição de perfis dos Clientes ou Utilizadores será efetuada com base no consentimento esclarecido do utilizador, expresso e inequívoco, e terá como finalidade a garantia de qualidade do serviço que a ENA presta, designadamente através da personalização das funcionalidades das plataformas oferecidas e da disponibilização de conteúdos, produtos e serviços adequados aos interesses concretos dos Clientes e Utilizadores."],
     ["titulo", "Outras considerações"],
-    ["texto", "A Cyber Digital Business não se responsabiliza por quaisquer atos ou omissões de terceiros, designadamente quanto a ligações para outros sítios da Internet e os conteúdos destes."],
-    ["texto", "Em caso de eventuais alterações legislativas ou comerciais, a Cyber Digital Business reserva o direito de alterar a presente Política a todo o tempo, pelo que deverá consultá-la sempre que utilizar este Website."],
-    ["texto", "A Cyber Digital Business poderá alterar ou atualizar a presente Política de Privacidade em função de novas exigências legais ou regulamentares, bem como na sequência de melhorias da qualidade dos seus serviços e desenvolvimento do seu compromisso em matéria de proteção de dados pessoais."],
-    ["texto", "Para mais informações, por favor contacte-nos por correio eletrónico para o endereço “info@cyberdigitalb.com”."],
+    ["texto", "A ENA não se responsabiliza por quaisquer atos ou omissões de terceiros, designadamente quanto a ligações para outros sítios da Internet e os conteúdos destes."],
+    ["texto", "Em caso de eventuais alterações legislativas ou comerciais, a ENA reserva o direito de alterar a presente Política a todo o tempo, pelo que deverá consultá-la sempre que utilizar este Website."],
+    ["texto", "A ENA poderá alterar ou atualizar a presente Política de Privacidade em função de novas exigências legais ou regulamentares, bem como na sequência de melhorias da qualidade dos seus serviços e desenvolvimento do seu compromisso em matéria de proteção de dados pessoais."],
+    ["texto", "Para mais informações, por favor contacte-nos por correio eletrónico para o endereço “geral@ena.pt”."],
     ["titulo", "Utilização e Política de Cookies"],
-    ["texto", "Durante a sua permanência no site www.escolamagica.pt, diferentes tipos de arquivos são armazenados no seu navegador para que na sua próxima visita ao site estes sejam recuperados para melhorar a sua utilização. Ao entrar em www.escolamagica.pt está a aceitar o uso de cookies, de acordo com a Política de Cookies. Não pretendendo a sua utilização, por favor altere as configurações do seu navegador."],
+    ["texto", "Durante a sua permanência no site www.ena.pt, diferentes tipos de arquivos são armazenados no seu navegador para que na sua próxima visita ao site estes sejam recuperados para melhorar a sua utilização. Ao entrar em www.ena.pt está a aceitar o uso de cookies, de acordo com a Política de Cookies. Não pretendendo a sua utilização, por favor altere as configurações do seu navegador."],
     ["texto", "Na generalidade, os arquivos de cookie transportam o nome do domínio, o tempo de armazenamento e o seu ID. Esta recolha de cookies só é permitida caso o seu navegador assim o permita, sendo que cada navegador só permite que um determinado site aceda aos cookies criados no servidor de domínio, salvaguardando assim que domínios diferentes acedam a informação de outros websites."],
     ["texto", "Todos os utilizadores podem controlar a recolha de arquivos de cookies no seu navegador, visto que, por norma, estes permitem a recolha dos arquivos dos sites visitados. Pode facilmente alterar esta situação nas configurações do seu navegador; no entanto, deve ter em mente que estas alterações podem afetar o ideal funcionamento de diversos sites. Para mais informações de configuração, aceda à página de ajuda do seu navegador: Internet Explorer, Mozilla Firefox, Chrome, Opera, Safari."],
-    ["texto", "Para melhor funcionamento do site www.escolamagica.pt, existem essencialmente 2 tipos de cookies, internos e externos."],
+    ["texto", "Para melhor funcionamento do site www.ena.pt, existem essencialmente 2 tipos de cookies, internos e externos."],
     ["texto", "Os cookies internos são usados para:"],
     ["lista", [
       "Recolher informação sobre qualquer tipo de abuso nos comentários, mantendo assim a integridade do conteúdo do site;",
@@ -107,7 +109,7 @@ const TERMOS: PaginaLegal = {
   titulo: "Termos e condições de inscrição e acesso",
   partes: [
     ["titulo", "Preâmbulo"],
-    ["texto", "Os Termos e Condições de Inscrição e Acesso são acordados entre Viveraprender – Escola de Negócios e Administração, com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-092 V. N. de Gaia, Porto, com o NIPC 505654296, doravante designada por Escola de Negócios e Administração, e as pessoas que desejem inscrever-se nos cursos no site www.ena.pt, doravante designadas por utilizador."],
+    ["texto", "Os Termos e Condições de Inscrição e Acesso são acordados entre VIVERAPRENDER - Escola de Negócios e Administração, Lda., com sede na Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia, com o NIPC 505654296, doravante designada por Escola de Negócios e Administração, e as pessoas que desejem inscrever-se nos cursos no site www.ena.pt, doravante designadas por utilizador."],
     ["titulo", "Definição do Serviço"],
     ["texto", "A Escola de Negócios e Administração disponibiliza serviços e cursos de formação para ambiente e-learning e b-learning. Os serviços e cursos compreendem:"],
     ["lista", [
@@ -137,7 +139,7 @@ const TERMOS: PaginaLegal = {
     ["texto", "A inscrição de acesso e contrato para aceder ao serviço Escola de Negócios e Administração poderá ser livremente resolvido com base nos termos do art. 9.º da Lei n.º 47/2014, de 28 de julho, devendo para tal o utilizador comunicar a sua intenção de rescisão no prazo máximo de 15 dias a contar da data da disponibilização do serviço."],
     ["texto", "O utilizador deverá comunicar a sua intenção de rescindir livremente o contrato através de uma das seguintes formas:"],
     ["lista", [
-      "Carta registada com aviso de receção para a morada Rua Conselheiro Veloso da Cruz n.º 524, 4400-092 Vila Nova de Gaia;",
+      "Carta registada com aviso de receção para a morada Rua do Conselheiro Veloso da Cruz, n.º 524, 4400-093 Vila Nova de Gaia;",
       "Email, para o email geral@ena.pt;",
       "Telefone 916 355 576.",
     ]],

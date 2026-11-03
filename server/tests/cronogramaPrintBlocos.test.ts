@@ -56,4 +56,17 @@ describe("cronograma comprido no PDF", () => {
     expect(html.split('<tr class="tempo">').length - 1).toBe(11);
     if (process.env.CRONOGRAMA_HTML2) writeFileSync(process.env.CRONOGRAMA_HTML2, html);
   });
+
+  it("o cabeçalho leva os dados da entidade, sem nenhum email", () => {
+    (globalThis as { window?: unknown }).window ??= { location: { origin: "http://localhost" } };
+    // Como na aplicação: chega a entidade inteira (Configurações › Entidade), com o email.
+    const entidade = { nome: "Escola Teste", morada: "Rua A, 1", codigoPostal: "1000-001", localidade: "Lisboa", telefone: "210000000", email: "pessoa@exemplo.pt", site: "exemplo.pt" };
+    const html = buildCronogramaPrintHtml({
+      horario: "Laboral manhã", curso: "Excel", nome: "T1", local: { localizacao: "Lisboa", morada: "" } as never,
+      dates: ["2026-09-01"], linhas: [], sessoes: [], embutido: true, entidade,
+    });
+    expect(html).toContain("Rua A, 1 - 1000-001 Lisboa :: Telf: 210000000 :: Site: exemplo.pt");
+    expect(html).not.toContain("pessoa@exemplo.pt");
+    expect(html).not.toContain("E-mail:");
+  });
 });

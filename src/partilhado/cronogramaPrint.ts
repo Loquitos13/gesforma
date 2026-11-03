@@ -20,8 +20,8 @@ export type CronogramaPrintInput = {
   embutido?: boolean;
   /** Gold (modelo do CCP): aulas presenciais a amarelo (as datas limite de avaliação são sempre a vermelho). */
   cores?: "gold" | "fin";
-  /** Dados da entidade (Configurações › Entidade) para o cabeçalho. */
-  entidade?: Partial<Record<"nome" | "morada" | "codigoPostal" | "localidade" | "telefone" | "email" | "site", string>>;
+  /** Dados da entidade (Configurações › Entidade) para o cabeçalho: nome, morada, telefone e site (nenhum email). */
+  entidade?: Partial<Record<"nome" | "morada" | "codigoPostal" | "localidade" | "telefone" | "site", string>>;
 };
 
 function cabecalhoEntidade(e: CronogramaPrintInput["entidade"]) {
@@ -30,7 +30,6 @@ function cabecalhoEntidade(e: CronogramaPrintInput["entidade"]) {
   const contactos = [
     morada,
     v("telefone") ? `Telf: ${v("telefone")}` : "",
-    v("email") ? `E-mail: ${v("email")}` : "",
     v("site") ? `Site: ${v("site")}` : "",
   ].filter(Boolean).join(" :: ");
   return { nome: v("nome") || "ENA", contactos };

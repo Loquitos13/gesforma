@@ -68,5 +68,7 @@ describe("cronograma comprido no PDF", () => {
     expect(html).toContain("Rua A, 1 - 1000-001 Lisboa :: Telf: 210000000 :: Site: exemplo.pt");
     expect(html).not.toContain("pessoa@exemplo.pt");
     expect(html).not.toContain("E-mail:");
+    // A auto-aprendizagem tem de se notar em papel (o cinzento claro de antes desaparecia na impressão).
+    expect(html).toContain(".auto { background: #737373; color: #fff; }");
   });
 });

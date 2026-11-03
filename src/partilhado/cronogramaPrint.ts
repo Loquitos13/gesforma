@@ -360,7 +360,8 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .cell { font-size: 7px; font-weight: 700; height: auto; line-height: 1.1; text-align: center; white-space: normal; word-break: keep-all; overflow-wrap: normal; padding: 1px; }
     .pres { background: ${input.cores === "gold" ? "#ffc000; color: #111" : "#a60000; color: #fff"}; }
     .sinc { background: #1d4ed8; color: #fff; }
-    .auto { background: #d4d4d4; color: #111; }
+    /* Auto-aprendizagem: cinzento escuro com texto branco (o cinzento claro não se notava em papel). */
+    .auto { background: #737373; color: #fff; }
     .aval { background: #e00000; color: #fff; }
     .mat { background: #15803d; color: #fff; }
     tr.tempo { height: ${TEMPO_MM}mm; }

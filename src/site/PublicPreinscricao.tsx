@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { ESCOLARIDADES } from "../partilhado/escolaridade";
 import { ApiError, apiPublicOferta, apiPublicPrecoOferta, apiPublicPreinscricao } from "../partilhado/api";
 import { CursoOfertaCampos } from "../partilhado/CursoOfertaCampos";
 import { SearchSelect } from "../partilhado/FormKit";
@@ -21,6 +22,7 @@ export function PublicPreinscricao() {
   const [telf, setTelf] = useState("");
   const [email, setEmail] = useState(params.get("email") ?? "");
   const [concelho, setConcelho] = useState("");
+  const [escolaridade, setEscolaridade] = useState("");
   const [origem, setOrigem] = useState("");
   const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos");
@@ -67,7 +69,7 @@ export function PublicPreinscricao() {
       if (!email.trim()) erros.email = "Indique o email.";
       setErrosFin(erros);
       if (Object.keys(erros).length) { setError("Corrija os campos assinalados."); return; }
-    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
+    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem || !escolaridade) {
       setError("Preencha os seus dados para a secretaria o poder contactar.");
       return;
     }
@@ -91,6 +93,7 @@ export function PublicPreinscricao() {
         email: email.trim(),
         concelho,
         origem,
+        ...(fin ? {} : { escolaridade }),
         curso: oferta.curso,
         local: oferta.local,
         horario: oferta.horario,
@@ -162,6 +165,13 @@ export function PublicPreinscricao() {
               <label>
                 <span className={labelCls}>Email</span>
                 <input className={fieldCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" />
+              </label>
+              <label>
+                <span className={labelCls}>Escolaridade</span>
+                <select className={fieldCls} value={escolaridade} onChange={e => setEscolaridade(e.target.value)}>
+                  <option value="">Seleccione a escolaridade</option>
+                  {ESCOLARIDADES.map(v => <option key={v} value={v}>{v}</option>)}
+                </select>
               </label>
               <label>
                 <span className={labelCls}>Concelho</span>

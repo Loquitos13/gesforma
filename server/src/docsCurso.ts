@@ -1,6 +1,7 @@
 import type { Db } from "./db/pool.js";
 import { comporModelo, DTP_MODELO_VAZIO, parseDtpModelo } from "./dtpModel.js";
 import * as repo from "./repos/leadDocs.js";
+import { eCursoCcp, ensinoSuperior } from "../../src/partilhado/escolaridade.js";
 
 export type DocPedido = { id: string; label: string; required: boolean; modelo?: string };
 
@@ -124,7 +125,28 @@ export async function ficheiroModelo(db: Db, regime: "gold" | "fin", curso: stri
   return { nome: found.nome, driveFileId: found.drive_file_id };
 }
 
-export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
+/**
+ * Documentos pedidos a uma pré-inscrição. No CCP (Gold) a escolaridade decide: com o 12.º ano pede-se o certificado de
+ * habilitações e o comprovativo de 5 anos de experiência; com licenciatura ou mais, basta o certificado de habilitações.
+ * Sem escolaridade (pedidos antigos), fica a lista do curso.
+ */
+export async function docsDoCurso(db: Db, curso: string, regime: "gold" | "fin", escolaridade = ""): Promise<DocPedido[]> {
+  const lista = await docsDaFicha(db, curso, regime);
+  if (regime !== "gold" || !eCursoCcp(curso) || !escolaridade || !lista.length) return lista;
+  const doze = escolaridade === "12.º ano";
+  const superior = ensinoSuperior(escolaridade);
+  if (!doze && !superior) return lista;
+  const semRegra = lista.filter(d => d.id !== "exp" && d.id !== "ch");
+  const ch = lista.find(d => d.id === "ch");
+  const exp = lista.find(d => d.id === "exp");
+  return [
+    ...semRegra,
+    { ...(ch ?? { id: "ch", label: "Certificado de habilitações" }), required: true },
+    ...(doze ? [{ ...(exp ?? { id: "exp", label: "Comprovativo de 5 anos de experiência" }), label: "Comprovativo de 5 anos de experiência profissional", required: true }] : []),
+  ];
+}
+
+async function docsDaFicha(db: Db, curso: string, regime: "gold" | "fin"): Promise<DocPedido[]> {
   const base = docsBase(regime);
   const found = await repo.cursoPorNome(db, regime, curso);
   if (!found) return regime === "fin" ? base : [];

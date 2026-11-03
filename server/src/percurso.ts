@@ -292,7 +292,7 @@ export async function concluirPercurso(db: Db, leadId: number) {
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
   // Concluir o percurso é documentos + turma; o pagamento vem depois, pedido pela secretaria.
-  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime, String((row as { escolaridade?: unknown }).escolaridade ?? ""));
   const ficheiros = await listarDocsLead(db, leadId);
   const by = new Map(ficheiros.map(f => [f.tipo, f]));
   const emFalta = pedidos.filter(d => d.required && !entregueAceite(by.get(d.id)?.estado)).map(d => {
@@ -325,7 +325,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
   const regime = regimeDe(lead.regime);
   const curso = String(lead.curso ?? "");
   const pag = await situacaoPagamento(db, lead);
-  const pedidos = await docsDoCurso(db, curso, regime);
+  const pedidos = await docsDoCurso(db, curso, regime, String(lead.escolaridade ?? ""));
   await herdarDocsValidados(db, id).catch(() => 0);
   const docs = await listarDocsLead(db, id) as Ficheiro[];
   const { ok, emFalta } = docsCompletos(pedidos, docs.map(d => d.tipo));
@@ -401,7 +401,7 @@ export async function registarConsentimento(db: Db, leadId: number, tipo: string
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
   const regime = regimeDe(row.regime);
-  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime, String((row as { escolaridade?: unknown }).escolaridade ?? ""));
   const pedido = pedidos.find(p => p.id === tipo && p.modelo);
   if (!pedido) throw new PercursoErro("Este documento não está preparado para consentimento.");
   const ja = await docsRepo.estadosDoTipo(db, leadId, tipo);

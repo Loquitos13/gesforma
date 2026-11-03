@@ -14,6 +14,7 @@ import {
 import { resolverTurmaOferta } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, textoDePessoa } from "./security.js";
 import { campanhaDoPedido, origemDaLista } from "./leadOpcoes.js";
+import { eEscolaridade } from "../../src/partilhado/escolaridade.js";
 import * as leads from "./repos/leads.js";
 import * as escrita from "./repos/leadsEscrita.js";
 import { carimboUtc, hojeLisboa } from "./datas.js";
@@ -30,6 +31,8 @@ export type PreinscricaoPublicaInput = {
   telf?: string;
   concelho?: string;
   origem?: string;
+  /** Gold: escolaridade (decide os documentos do CCP). */
+  escolaridade?: string;
   curso?: string;
   local?: string;
   inicioCurso?: string;
@@ -192,6 +195,10 @@ export async function criarPreinscricaoPublica(
     await escrita.bloquearPedido(q, email, curso);
     const aberto = await escrita.pedidoAberto(q, email, curso);
     if (aberto) {
+      // A escolaridade do pedido repetido entra se o pedido aberto ainda não a tem.
+      if (eEscolaridade(input.escolaridade ?? "")) {
+        await q("UPDATE preinscricoes SET escolaridade = $2 WHERE id = $1 AND escolaridade = ''", [aberto.id, input.escolaridade]);
+      }
       // Pedido repetido com os dados pessoais: só entram se o pedido aberto ainda não os tem (nunca substituem).
       if (finPack && aberto.regime === "fin") {
         const linha = await escrita.piiDoPedido(q, aberto.id);
@@ -210,7 +217,7 @@ export async function criarPreinscricaoPublica(
       origem, entrada: "preinscricao", meioContacto: meio, horario, turmaId, pagamentoMetodo: metodo, regime,
       piiEnc: piiPack.pii_enc ?? "", publicId,
       consentimento: input.consentimento === true ? { ip: (meta.ip ?? "").slice(0, 64), versao: consent.versao } : null,
-      notas,
+      notas, escolaridade: eEscolaridade(input.escolaridade ?? "") ? input.escolaridade : "",
     });
     return null;
   });

@@ -51,7 +51,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
   const row = await leads.lead(db, leadId);
   if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
   const regime = regimeDe(row.regime);
-  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime);
+  const pedidos = await docsDoCurso(db, String(row.curso ?? ""), regime, String((row as { escolaridade?: unknown }).escolaridade ?? ""));
   const ficheiros = await listarDocsLead(db, leadId);
   let turmaId = Number(row.turma_escolhida_id || 0);
   const transferir = Boolean(turmaDestinoId && turmaDestinoId !== turmaId);

@@ -99,6 +99,8 @@ export type NovoLead = {
   consentimento?: { ip: string; versao: string } | null;
   /** Notas para a equipa (ex.: o texto livre de um pedido fora da oferta). */
   notas?: string;
+  /** Escolaridade (formulário Gold): decide os documentos do CCP. */
+  escolaridade?: string;
 };
 
 /** PII do pedido (cifra e colunas legadas), para juntar os dados pessoais da financiada a um pedido repetido. */
@@ -130,14 +132,14 @@ export async function inserirLead(c: Consulta, l: NovoLead) {
     `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, inicio_curso, concelho, local, curso, preco, estado,
                                 campanha, campanha_id, origem, entrada, meio_contacto, horario, turma_id, pagamento_metodo, regime,
                                 pii_enc, public_id, comercial_id, etiqueta_id, nif, morada_fiscal, codigo_postal,
-                                consentimento_em, consentimento_ip, consentimento_versao, notas)
+                                consentimento_em, consentimento_ip, consentimento_versao, notas, escolaridade)
      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,
-             CASE WHEN $29 THEN now() ELSE NULL END, $30, $31, $32)`,
+             CASE WHEN $29 THEN now() ELSE NULL END, $30, $31, $32, $33)`,
     [
       l.id, l.inscrito, l.nome, l.apelido, l.email, l.telf, l.inicioCurso, l.concelho, l.local, l.curso, l.preco, l.estado,
       l.campanha, l.campanhaId, l.origem, l.entrada, l.meioContacto, l.horario, l.turmaId, l.pagamentoMetodo, l.regime,
       l.piiEnc, l.publicId, l.comercialId ?? null, l.etiquetaId ?? null, l.nif ?? "", l.moradaFiscal ?? "", l.codigoPostal ?? "",
-      Boolean(l.consentimento), l.consentimento?.ip ?? "", l.consentimento?.versao ?? "", l.notas ?? "",
+      Boolean(l.consentimento), l.consentimento?.ip ?? "", l.consentimento?.versao ?? "", l.notas ?? "", l.escolaridade ?? "",
     ]);
 }
 

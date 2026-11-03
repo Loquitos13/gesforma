@@ -105,7 +105,7 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
 
   const cliente = lead.estado === "Formando" || lead.estado === "Pago";
   const regime = String(row.regime ?? "gold") === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, lead.curso, regime);
+  const pedidos = await docsDoCurso(db, lead.curso, regime, String((lead as { escolaridade?: unknown }).escolaridade ?? ""));
   await herdarDocsValidados(db, id).catch(() => 0);
   const ficheiros = await listarDocsLead(db, id);
   const labels = new Map(pedidos.map(p => [p.id, p.label]));

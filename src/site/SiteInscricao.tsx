@@ -4,6 +4,7 @@ import { ApiError, apiPublicOferta, apiPublicPreinscricao } from "../partilhado/
 import { SearchSelect } from "../partilhado/FormKit";
 import { ofertaFiltrada, turmaCheia, turmasParaMostrar, uniqueVals, vagasPublicas, type OfertaTurma } from "../partilhado/oferta";
 import { useSiteTexto, type Course } from "./SiteLanding";
+import { ESCOLARIDADES } from "../partilhado/escolaridade";
 import { corSegura } from "./editor/estilos";
 import { ePreinscricao, ePrepago } from "../partilhado/siteConteudo";
 import { textoListaVazia, useOpcoesPublicas } from "./useOpcoesPublicas";
@@ -68,6 +69,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
   const [telf, setTelf] = useState("");
   const [email, setEmail] = useState("");
   const [concelho, setConcelho] = useState("");
+  const [escolaridade, setEscolaridade] = useState("");
   const [origem, setOrigem] = useState("");
   const [consentimento, setConsentimento] = useState(false);
   const concelhos = useOpcoesPublicas("concelhos", aberto);
@@ -211,8 +213,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
       const e = errosDoFin(dadosFin, telf);
       setErrosFin(e);
       if (Object.keys(e).length) return "Corrija os campos assinalados.";
-    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem) {
-      return "Preencha nome, apelido, telemóvel, email, concelho e como tomou conhecimento.";
+    } else if (!nome.trim() || !apelido.trim() || !telf.trim() || !email.trim() || !concelho || !origem || !escolaridade) {
+      return "Preencha nome, apelido, telemóvel, email, escolaridade, concelho e como tomou conhecimento.";
     }
     if (!consentimento) return "Para enviar, aceite a política de privacidade.";
     if (ofertaEstado === "a-carregar") return "A carregar as turmas libertadas.";
@@ -257,6 +259,7 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
         email: email.trim(),
         concelho,
         origem,
+        ...(fin ? {} : { escolaridade }),
         curso: turma?.curso || curso.nomeOferta || curso.title,
         local: turma?.local || local,
         horario: turma?.horario || horario,
@@ -468,6 +471,12 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
                   <Campo label="Apelido"><input className={inputCls} value={apelido} onChange={e => setApelido(e.target.value)} autoComplete="family-name" required /></Campo>
                   <Campo label="Telemóvel"><input className={inputCls} value={telf} onChange={e => setTelf(e.target.value)} autoComplete="tel" inputMode="tel" required /></Campo>
                   <Campo label="Email"><input className={inputCls} type="email" value={email} onChange={e => setEmail(e.target.value)} autoComplete="email" required /></Campo>
+                  <Campo label="Escolaridade">
+                    <select className={inputCls} value={escolaridade} onChange={e => setEscolaridade(e.target.value)} required>
+                      <option value="">Seleccione a escolaridade</option>
+                      {ESCOLARIDADES.map(v => <option key={v} value={v}>{v}</option>)}
+                    </select>
+                  </Campo>
                   <Campo label="Concelho">
                     <SearchSelect
                       value={concelho}

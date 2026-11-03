@@ -21,10 +21,10 @@ export type Criterios = repo.CriteriosCampanha & { soDocsEmFalta?: boolean };
 type PedidosPorCurso = Map<string, Promise<Awaited<ReturnType<typeof docsDoCurso>>>>;
 
 /** Documentos obrigatórios ainda por enviar (ou recusados) desta pré-inscrição. */
-async function docsEmFalta(db: Db, lead: { id: number; curso: string; regime: string }, cache: PedidosPorCurso) {
+async function docsEmFalta(db: Db, lead: { id: number; curso: string; regime: string; escolaridade?: string }, cache: PedidosPorCurso) {
   const regime = lead.regime === "fin" ? "fin" : "gold";
-  const chave = `${regime}:${lead.curso.trim().toLowerCase()}`;
-  if (!cache.has(chave)) cache.set(chave, docsDoCurso(db, lead.curso, regime));
+  const chave = `${regime}:${lead.curso.trim().toLowerCase()}:${lead.escolaridade ?? ""}`;
+  if (!cache.has(chave)) cache.set(chave, docsDoCurso(db, lead.curso, regime, lead.escolaridade ?? ""));
   const pedidos = await cache.get(chave)!;
   const ficheiros = new Map((await listarDocsLead(db, lead.id)).map(f => [f.tipo, f]));
   return pedidos.filter(d => d.required).filter(d => {

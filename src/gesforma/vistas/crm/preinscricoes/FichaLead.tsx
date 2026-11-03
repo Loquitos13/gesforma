@@ -102,7 +102,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
 
           {/* O que a pessoa escolheu ao pré-inscrever-se (local e horário decidem a turma) e o email à vista. */}
           <dl aria-label="Dados do pedido" className="m-0 grid grid-cols-2 gap-x-4 gap-y-2 rounded-cartao border border-linha px-4 py-3 text-[13px] sm:grid-cols-4">
-            {([["Local", lead.local], ["Horário", lead.horario], ["Início", datasPt(lead.inicioCurso || "")], ["Concelho", lead.concelho]] as const).map(([r, v]) => (
+            {([["Local", lead.local], ["Horário", lead.horario], ["Início", datasPt(lead.inicioCurso || "")], ["Concelho", lead.concelho], ...(lead.escolaridade ? [["Escolaridade", lead.escolaridade] as const] : [])] as const).map(([r, v]) => (
               <div key={r} className="min-w-0">
                 <dt className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">{r}</dt>
                 <dd className="m-0 truncate font-semibold" title={v || undefined}>{v || "—"}</dd>

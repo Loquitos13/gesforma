@@ -192,7 +192,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (erroFicheiro) return reply.code(400).send({ error: erroFicheiro });
     const leadId = Number(lead.id);
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime);
+    const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, String(lead.escolaridade ?? ""));
     const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
     // O comprovativo só entra com o passo de pagamento aberto (pagamento pedido pela secretaria).

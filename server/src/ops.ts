@@ -71,6 +71,7 @@ export function mapPreinscricao(r: Record<string, unknown>) {
     telf: pii.telf || String(r.telf ?? ""),
     inicioCurso: String(r.inicio_curso ?? "-"),
     concelho: String(r.concelho ?? ""),
+    escolaridade: String(r.escolaridade ?? ""),
     local: String(r.local ?? ""),
     curso: String(r.curso ?? ""),
     preco: num(r.preco),

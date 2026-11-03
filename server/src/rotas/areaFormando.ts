@@ -61,7 +61,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       const f = await nomeDoFormando(db, regime, id);
       const nome = `${f?.nome ?? ""} ${f?.apelido ?? ""}`.trim() || resultado.email;
       emailEnviado = await enviarEmailAcesso(db, {
-        email: resultado.email, nome, curso: String(f?.curso ?? ""), password: resultado.password, pago: false,
+        email: resultado.email, nome, curso: String(f?.curso ?? ""), password: resultado.password, pago: false, regime,
       }).then(() => true, () => false);
     }
     await audit(db, req.actor!.id, repor ? "formando.acesso_reposto" : "formando.acesso", regime === "gold" ? "formandos_gold" : "formandos_fin", String(id), req.ip, {

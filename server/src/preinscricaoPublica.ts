@@ -252,7 +252,7 @@ export async function criarPreinscricaoPublica(
       // Pedido de contacto repetido: fica o assunto na ficha e sai só a confirmação (sem a ligação dos documentos).
       await logLeadEvent(db, existente.id, undefined, "contacto", "Novo pedido de contacto no site", assunto || origem);
       if (Date.now() - ultimo > MINUTOS_REENVIO * 60_000) {
-        await enviarPedidoContactoRecebido(db, { email, nome: existente.nome, curso: cursoDoContacto }).catch(() => undefined);
+        await enviarPedidoContactoRecebido(db, { email, nome: existente.nome, curso: cursoDoContacto, regime }).catch(() => undefined);
         await escrita.marcarLigacaoReenviada(db, existente.id);
       }
       return {
@@ -295,7 +295,7 @@ export async function criarPreinscricaoPublica(
   }
   if (eContacto) {
     if (assunto) await logLeadEvent(db, id, undefined, "contacto", "Pedido de contacto no site", assunto);
-    await enviarPedidoContactoRecebido(db, { email, nome: nomes.nome, curso: cursoDoContacto }).catch(() => undefined);
+    await enviarPedidoContactoRecebido(db, { email, nome: nomes.nome, curso: cursoDoContacto, regime }).catch(() => undefined);
     return { duplicado: false as const, preinscricao: { id, ref: opaqueRef("pre", id, publicId) }, aviso: AVISO_CONTACTO };
   }
   await firePreinscricaoEmail(db, { id, email, nome: nomes.nome, apelido: nomes.apelido, curso, regime }, "preinscricao.created", `preinscricao:${id}:${email}`).catch(() => undefined);

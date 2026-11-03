@@ -16,6 +16,7 @@ import { listarDocsLead } from "./docsLink.js";
 import { garantirToken } from "./ligacaoPessoal.js";
 import { formandosDaTurma } from "./repos/emails.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { areaDoRegime, type AreaEmail } from "../../src/partilhado/emailAreas.js";
 
 /** Dias por omissão (regra sem dias) e o sentido: antes da data de referência ou depois dela. */
 export const GATILHOS_COM_PRAZO: Record<string, { dias: number; sentido: "antes" | "depois"; referencia: string }> = {
@@ -29,12 +30,13 @@ const origem = () => config.appOrigin.replace(/\/$/, "");
 const dataPt = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}` : iso);
 const fmtEuros = (v: number) => v.toLocaleString("pt-PT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-type Regra = { id: number; trigger_key: string; dias: number | null; curso: string | null };
+/** Cada regra é de uma área: as da Gold tratam turmas e pré-inscrições da Gold, as da Financiada as da Financiada. */
+type Regra = { id: number; trigger_key: string; dias: number | null; curso: string | null; area: AreaEmail };
 type Turma = { regime: "gold" | "fin"; id: number; nome: string; curso: string; local: string; horario: string; data_inicio: string; matricula: string | null };
 
 async function regrasComPrazo(db: Db) {
   return (await db.query<Regra>(
-    "SELECT id, trigger_key, dias, curso FROM email_rules WHERE ativo = true AND trigger_key = ANY($1::text[]) ORDER BY id",
+    "SELECT id, trigger_key, dias, curso, area FROM email_rules WHERE ativo = true AND trigger_key = ANY($1::text[]) AND area IN ('gold', 'fin') ORDER BY id",
     [`{${Object.keys(GATILHOS_COM_PRAZO).join(",")}}`])).rows;
 }
 
@@ -61,7 +63,7 @@ async function leadsPorConcluir(db: Db, t: Turma) {
 const ligacao = async (db: Db, leadId: number, passo: string) => `${origem()}/documentos/${await garantirToken(db, leadId)}?passo=${passo}`;
 
 function disparar(db: Db, regra: Regra, tipo: string, chave: string, payload: Record<string, unknown>, vars: Record<string, string>) {
-  return ingestEvent(db, tipo, payload, `${tipo}:${regra.id}:${chave}`, { soRegraId: regra.id, vars })
+  return ingestEvent(db, tipo, payload, `${tipo}:${regra.id}:${chave}`, { soRegraId: regra.id, vars, area: regra.area })
     .catch(err => console.error(`[emails] regra ${regra.id} (${tipo}):`, err));
 }
 
@@ -76,12 +78,13 @@ export async function enviarRegrasComPrazo(db: Db, fim = 0) {
     const dias = regra.dias ?? cfg.dias;
     const alvo = somarDias(hoje, cfg.sentido === "antes" ? dias : -dias);
     const doCurso = (curso: string) => !regra.curso || regra.curso.trim().toLowerCase() === curso.trim().toLowerCase();
+    const daArea = (regime: string) => areaDoRegime(regime) === regra.area;
 
     if (regra.trigger_key === "matricula.antes_limite" || regra.trigger_key === "documentos.antes_prazo") {
       const docs = regra.trigger_key === "documentos.antes_prazo";
       for (const t of turmas) {
         const limite = t.matricula || (docs ? t.data_inicio : "");
-        if (limite !== alvo || !doCurso(t.curso)) continue;
+        if (limite !== alvo || !doCurso(t.curso) || !daArea(t.regime)) continue;
         for (const l of await leadsPorConcluir(db, t)) {
           const email = normalizeEmail(l.email);
           if (!isEmail(email)) continue;
@@ -114,7 +117,7 @@ export async function enviarRegrasComPrazo(db: Db, fim = 0) {
                              WHERE d.preinscricao_id = p.id AND d.tipo = 'comprovativo' AND COALESCE(d.estado, '') <> 'recusado')`,
         [alvo]);
       for (const l of r.rows) {
-        if (!doCurso(l.curso)) continue;
+        if (!doCurso(l.curso) || !daArea(l.regime)) continue;
         const email = normalizeEmail(l.email);
         if (!isEmail(email)) continue;
         const link = await ligacao(db, l.id, "pagamento");
@@ -127,7 +130,7 @@ export async function enviarRegrasComPrazo(db: Db, fim = 0) {
 
     if (regra.trigger_key === "turma.integracao") {
       for (const t of turmas) {
-        if (t.data_inicio !== alvo || !doCurso(t.curso)) continue;
+        if (t.data_inicio !== alvo || !doCurso(t.curso) || !daArea(t.regime)) continue;
         for (const a of await formandosDaTurma(db, t.regime, t.id, t.nome)) {
           const email = normalizeEmail(a.email);
           if (!isEmail(email)) continue;

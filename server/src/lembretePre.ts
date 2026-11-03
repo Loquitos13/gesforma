@@ -12,6 +12,7 @@ import * as repo from "./repos/lembretesPre.js";
 import { documentosUrl, ensureDocsToken } from "./docsLink.js";
 import { sendMail } from "./mailer.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 
 export type UnidadeLembrete = "minutos" | "horas" | "dias";
 
@@ -170,7 +171,7 @@ async function enviarLembrete(db: Db, lead: repo.LeadLembrete, limite: Date) {
   if (docs) {
     // Documentos em falta: modelos editáveis (lembrete e, a partir de 3 contactos, o último lembrete).
     const final = (await repo.contarContactos(db, lead.id)) >= CONTACTOS_ULTIMO_LEMBRETE;
-    const modelo = await modeloEmail(db, final ? "lembrete_docs_final" : "lembrete_docs");
+    const modelo = await modeloEmail(db, final ? "lembrete_docs_final" : "lembrete_docs", areaDoRegime(lead.regime));
     if (modelo) {
       const emFalta = [
         ...pendencia.faltam,
@@ -200,7 +201,7 @@ async function enviarLembrete(db: Db, lead: repo.LeadLembrete, limite: Date) {
   ].join(" ");
   const recusadosTexto = pendencia.recusados.map(d => `${d.label}: ${d.observacao || "não está correcto. Volte a enviar o ficheiro."}`);
   await enviarModelo(db, {
-    tipo: docs ? "lembrete_docs" : "lembrete_turma", para: email, nome, link: href,
+    tipo: docs ? "lembrete_docs" : "lembrete_turma", area: areaDoRegime(lead.regime), para: email, nome, link: href,
     vars: {
       curso: lead.curso, documentos_url: href, situacao,
       documentos_em_falta_itens: pendencia.faltam, documentos_recusados_itens: recusadosTexto,

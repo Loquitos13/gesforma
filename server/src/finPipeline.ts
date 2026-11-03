@@ -315,7 +315,7 @@ export async function enviarLembreteDocsFin(db: Db, formandoId: number, actorId?
   const portalUrl = formandoFinDocsUrl(token);
   const { enviarModelo } = await import("./emailModelo.js");
   await enviarModelo(db, {
-    tipo: "lembrete_docs_fin_inicio", para: email, nome, link: portalUrl,
+    tipo: "lembrete_docs_fin_inicio", area: "fin", para: email, nome, link: portalUrl,
     vars: { curso: f.curso, documentos_url: portalUrl, documentos_em_falta_itens: emFalta },
     reserva: {
       assunto: "Documentos em falta · {{curso}}",

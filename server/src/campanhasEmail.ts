@@ -95,7 +95,7 @@ export async function enviarCampanha(db: Db, ator: AtorCrm, p: { ids: number[]; 
     try {
       const url = documentosUrl(await ensureDocsToken(db, c.id));
       const r = await ingestEvent(db, "campanha.preinscritos", {
-        email, nome: c.nome, curso: c.curso, preinscricaoId: c.id, documentos_url: url,
+        email, nome: c.nome, curso: c.curso, preinscricaoId: c.id, documentos_url: url, regime: c.regime,
         documentos_em_falta_itens: c.docsEmFalta, cronogramas_itens: cronogramasDe(c.regime === "fin" ? fin : gold, c.curso),
       }, chaveCampanha(c.id, email, dia));
       if (r.duplicate) { await repo.registarDestino(db, envioId, c.id, false, "já recebeu esta campanha hoje"); continue; }

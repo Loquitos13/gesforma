@@ -12,7 +12,7 @@ type Aba = "regras" | "modelos" | "historico";
 
 export default function Emails({ navigate }: VistaProps) {
   const [f, setF] = useFiltrosUrl({ aba: "regras" });
-  // O histórico dos envios (destinatários) é só da secretaria; modelos e regras são de toda a equipa.
+  // Cada área (Gold, Financiada, Contabilidade) tem os seus modelos, regras e histórico; a administração vê todas.
   const verHistorico = usePode()("emails.historico");
   const abas: Aba[] = verHistorico ? ["regras", "modelos", "historico"] : ["regras", "modelos"];
   const aba = (abas.includes(f.aba as Aba) ? f.aba : "regras") as Aba;
@@ -34,7 +34,7 @@ export default function Emails({ navigate }: VistaProps) {
       />
       {aba === "regras" && <Regras opcoes={opcoes} onEditarModelo={() => setF({ aba: "modelos" })} />}
       {aba === "modelos" && <Modelos opcoes={opcoes} />}
-      {aba === "historico" && verHistorico && <Historico />}
+      {aba === "historico" && verHistorico && <Historico variasAreas={(opcoes?.areas?.length ?? 0) > 1} />}
     </div>
   );
 }

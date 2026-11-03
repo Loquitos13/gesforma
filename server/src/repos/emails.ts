@@ -1,33 +1,56 @@
 import { Filtros, many, one, padraoPesquisa, paginar, valor, type Consulta } from "./sql.js";
 import { pgTextArray } from "../pedagogia/util.js";
+import type { AreaEmail } from "../../../src/partilhado/emailAreas.js";
 
 /** Emails automáticos: modelos, regras, eventos e fila de envios. */
 
 export type ModeloEmail = {
-  id: number; tipo: string; nome: string; assunto: string; body_lines: unknown; body_xml: string;
+  id: number; tipo: string; area: AreaEmail; nome: string; assunto: string; body_lines: unknown; body_xml: string;
   cta: string; cta_href: string; cta_ambito: string; updated_at: string;
 };
 
-const SELECT_MODELO = "SELECT id, tipo, nome, assunto, body_lines, body_xml, cta, cta_href, cta_ambito, updated_at::text AS updated_at FROM email_templates";
+const SELECT_MODELO = "SELECT id, tipo, area, nome, assunto, body_lines, body_xml, cta, cta_href, cta_ambito, updated_at::text AS updated_at FROM email_templates";
 
-export function listarModelos(c: Consulta) {
-  return many<ModeloEmail>(c, `${SELECT_MODELO} ORDER BY id`);
+/** Modelos das áreas pedidas (sem áreas, todos). */
+export function listarModelos(c: Consulta, areas?: readonly string[]) {
+  if (!areas) return many<ModeloEmail>(c, `${SELECT_MODELO} ORDER BY id`);
+  return many<ModeloEmail>(c, `${SELECT_MODELO} WHERE area = ANY($1::text[]) ORDER BY id`, [pgTextArray([...areas])]);
 }
 
 export function obterModelo(c: Consulta, id: number) {
   return one<ModeloEmail>(c, `${SELECT_MODELO} WHERE id = $1`, [id]);
 }
 
-/** Modelo pelo tipo, com as linhas do corpo já como lista de texto. */
-export async function modeloEmail(c: Consulta, tipo: string) {
-  const m = await one<ModeloEmail>(c, `${SELECT_MODELO} WHERE tipo = $1`, [tipo]);
+/**
+ * Modelo pelo tipo, na área do envio (a da Gold quando a área não tem o seu), com as linhas do corpo já como
+ * lista de texto.
+ */
+export async function modeloEmail(c: Consulta, tipo: string, area: AreaEmail = "gold") {
+  const m = await one<ModeloEmail>(c, `${SELECT_MODELO} WHERE tipo = $1 AND area IN ($2, 'gold') ORDER BY (area = $2) DESC LIMIT 1`, [tipo, area]);
   if (!m) return null;
   const linhas = Array.isArray(m.body_lines) ? m.body_lines.map(String).filter(Boolean) : [];
   return { ...m, linhas };
 }
 
-export async function existeModeloTipo(c: Consulta, tipo: string) {
-  return Boolean(await one(c, "SELECT 1 FROM email_templates WHERE tipo = $1", [tipo]));
+export async function existeModeloTipo(c: Consulta, tipo: string, area: AreaEmail) {
+  return Boolean(await one(c, "SELECT 1 FROM email_templates WHERE tipo = $1 AND area = $2", [tipo, area]));
+}
+
+/** Modelo novo, escrito por uma coordenação ou pela contabilidade (tipo «personalizado_…», sem código por trás). */
+export async function criarModelo(c: Consulta, m: { tipo: string; area: AreaEmail; nome: string; assunto: string; body_xml: string }) {
+  return valor<number>(c,
+    `INSERT INTO email_templates (tipo, area, nome, assunto, body_lines, body_xml, cta, cta_href, cta_ambito)
+     VALUES ($1, $2, $3, $4, '[]'::jsonb, $5, '', '', 'contacto') RETURNING id`,
+    [m.tipo, m.area, m.nome, m.assunto, m.body_xml]);
+}
+
+/** Regras que usam o modelo (um modelo em uso não se apaga). */
+export async function regrasDoModelo(c: Consulta, tipo: string, area: AreaEmail) {
+  return Number(await valor<number>(c, "SELECT count(*)::int FROM email_rules WHERE template_tipo = $1 AND area = $2", [tipo, area]) ?? 0);
+}
+
+export async function apagarModelo(c: Consulta, id: number) {
+  await one(c, "DELETE FROM email_templates WHERE id = $1", [id]);
 }
 
 export async function actualizarModelo(c: Consulta, id: number, p: {
@@ -46,20 +69,20 @@ export async function actualizarModelo(c: Consulta, id: number, p: {
 }
 
 export type RegraEmail = {
-  id: number; nome: string; trigger_key: string; gatilho_label: string; template_tipo: string; template_nome: string | null;
+  id: number; area: AreaEmail; nome: string; trigger_key: string; gatilho_label: string; template_tipo: string; template_nome: string | null;
   delay_seconds: number; curso: string | null; ativo: boolean; dias: number | null;
   envios: number; abertos: number; falhados: number; em_fila: number; ultimo_envio: string | null;
 };
 
-/** Regras com estatísticas (sem os envios de teste) e a data do último envio. */
-export function listarRegras(c: Consulta) {
+/** Regras (das áreas pedidas; sem áreas, todas) com estatísticas (sem os envios de teste) e a data do último envio. */
+export function listarRegras(c: Consulta, areas?: readonly string[]) {
   return many<RegraEmail>(
     c,
-    `SELECT r.id, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.ativo, r.dias,
+    `SELECT r.id, r.area, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.ativo, r.dias,
             COALESCE(j.envios, 0)::int AS envios, COALESCE(j.abertos, 0)::int AS abertos,
             COALESCE(j.falhados, 0)::int AS falhados, COALESCE(j.em_fila, 0)::int AS em_fila, j.ultimo_envio
        FROM email_rules r
-       LEFT JOIN email_templates t ON t.tipo = r.template_tipo
+       LEFT JOIN email_templates t ON t.tipo = r.template_tipo AND t.area = r.area
        LEFT JOIN (
          SELECT rule_id,
                 count(*) FILTER (WHERE status = 'sent') AS envios,
@@ -71,16 +94,33 @@ export function listarRegras(c: Consulta) {
           WHERE COALESCE(payload->>'teste', '') <> 'true'
           GROUP BY rule_id
        ) j ON j.rule_id = r.id
+      ${areas ? "WHERE r.area = ANY($1::text[])" : ""}
       ORDER BY r.id`,
+    areas ? [pgTextArray([...areas])] : [],
   );
 }
 
-export async function criarRegra(c: Consulta, r: { nome: string; triggerKey: string; gatilho: string; templateTipo: string; atrasoSeg: number; curso: string | null; ativo: boolean; dias?: number | null }) {
+/** Área de uma regra (null se não existe). */
+export async function areaDaRegra(c: Consulta, id: number) {
+  return (await one<{ area: AreaEmail }>(c, "SELECT area FROM email_rules WHERE id = $1", [id]))?.area ?? null;
+}
+
+/** Área de um modelo (null se não existe). */
+export async function areaDoModelo(c: Consulta, id: number) {
+  return (await one<{ area: AreaEmail; tipo: string }>(c, "SELECT area, tipo FROM email_templates WHERE id = $1", [id])) ?? null;
+}
+
+/** Área de um envio (a da regra que o pôs na fila). */
+export async function areaDoEnvio(c: Consulta, id: string) {
+  return (await one<{ area: AreaEmail }>(c, "SELECT r.area FROM email_jobs j JOIN email_rules r ON r.id = j.rule_id WHERE j.id = $1", [id]))?.area ?? null;
+}
+
+export async function criarRegra(c: Consulta, r: { area: AreaEmail; nome: string; triggerKey: string; gatilho: string; templateTipo: string; atrasoSeg: number; curso: string | null; ativo: boolean; dias?: number | null }) {
   const id = await valor<number>(
     c,
-    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo, dias)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8) RETURNING id`,
-    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.curso, r.ativo, r.dias ?? null],
+    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo, dias, area)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING id`,
+    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.curso, r.ativo, r.dias ?? null, r.area],
   );
   return Number(id);
 }
@@ -105,14 +145,14 @@ export async function apagarRegra(c: Consulta, id: number) {
   await one(c, "DELETE FROM email_rules WHERE id = $1", [id]);
 }
 
-/** Regras activas (com o modelo) para um conjunto de eventos. */
-export function regrasActivasPara(c: Consulta, chaves: string[]) {
+/** Regras activas (com o modelo) da área do envio para um conjunto de eventos. */
+export function regrasActivasPara(c: Consulta, chaves: string[], area: AreaEmail) {
   return many<RegraComModelo>(
     c,
     `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
-       FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo
-      WHERE r.ativo = true AND r.trigger_key = ANY($1::text[])`,
-    [pgTextArray(chaves)],
+       FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo AND t.area = r.area
+      WHERE r.ativo = true AND r.trigger_key = ANY($1::text[]) AND r.area = $2`,
+    [pgTextArray(chaves), area],
   );
 }
 
@@ -125,7 +165,7 @@ export function regraComModelo(c: Consulta, id: number) {
   return one<RegraComModelo>(
     c,
     `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
-       FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo WHERE r.id = $1`,
+       FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo AND t.area = r.area WHERE r.id = $1`,
     [id],
   );
 }
@@ -234,26 +274,29 @@ export async function cancelarEmFila(c: Consulta, id: string) {
   return Boolean(r);
 }
 
-export function estatisticasEnvios30Dias(c: Consulta) {
+export function estatisticasEnvios30Dias(c: Consulta, areas?: readonly string[]) {
   return one<{ sent: number; queued: number; failed: number; abertos: number }>(
     c,
-    `SELECT count(*) FILTER (WHERE status = 'sent')::int AS sent,
-            count(*) FILTER (WHERE status IN ('queued', 'sending'))::int AS queued,
-            count(*) FILTER (WHERE status = 'failed')::int AS failed,
-            count(*) FILTER (WHERE status = 'sent' AND opened_at IS NOT NULL)::int AS abertos
-       FROM email_jobs
-      WHERE created_at >= now() - interval '30 days' AND COALESCE(payload->>'teste', '') <> 'true'`,
+    `SELECT count(*) FILTER (WHERE j.status = 'sent')::int AS sent,
+            count(*) FILTER (WHERE j.status IN ('queued', 'sending'))::int AS queued,
+            count(*) FILTER (WHERE j.status = 'failed')::int AS failed,
+            count(*) FILTER (WHERE j.status = 'sent' AND j.opened_at IS NOT NULL)::int AS abertos
+       FROM email_jobs j JOIN email_rules r ON r.id = j.rule_id
+      WHERE j.created_at >= now() - interval '30 days' AND COALESCE(j.payload->>'teste', '') <> 'true'
+        ${areas ? "AND r.area = ANY($1::text[])" : ""}`,
+    areas ? [pgTextArray([...areas])] : [],
   );
 }
 
 export type EnvioLinha = {
   id: string; para: string; nome: string; assunto: string; estado: string; agendado: string; enviado: string | null;
-  aberto: string | null; erro: string | null; regra: string; regra_id: number; tentativas: number; teste: boolean;
+  aberto: string | null; erro: string | null; regra: string; regra_id: number; tentativas: number; teste: boolean; area: AreaEmail;
 };
 
-/** Histórico de envios, paginado e filtrado. */
-export function listarEnvios(c: Consulta, f: { regra?: number; estado?: string; q?: string; de?: string; ate?: string; pagina: number; porPagina: number }) {
+/** Histórico de envios (das áreas pedidas; sem áreas, todos), paginado e filtrado. */
+export function listarEnvios(c: Consulta, f: { regra?: number; estado?: string; q?: string; de?: string; ate?: string; pagina: number; porPagina: number; areas?: readonly string[] }) {
   const w = new Filtros();
+  if (f.areas) w.add("r.area = ANY(?::text[])", pgTextArray([...f.areas]));
   w.add("j.rule_id = ?", f.regra);
   w.add("j.status = ?", f.estado);
   const p = padraoPesquisa(f.q);
@@ -264,7 +307,7 @@ export function listarEnvios(c: Consulta, f: { regra?: number; estado?: string; 
     c,
     `SELECT j.id, j.to_email AS para, j.to_name AS nome, j.subject AS assunto, j.status AS estado,
             j.scheduled_at::text AS agendado, j.sent_at::text AS enviado, j.opened_at::text AS aberto, j.last_error AS erro,
-            r.nome AS regra, r.id AS regra_id, j.attempts AS tentativas, COALESCE(j.payload->>'teste', '') = 'true' AS teste,
+            r.nome AS regra, r.id AS regra_id, j.attempts AS tentativas, COALESCE(j.payload->>'teste', '') = 'true' AS teste, r.area,
             coalesce(j.sent_at, j.scheduled_at) AS ord
        FROM email_jobs j JOIN email_rules r ON r.id = j.rule_id ${w.where}`,
     w.params,
@@ -325,9 +368,9 @@ const LEAD_EM = `CASE WHEN inscrito ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}' THEN to_time
  * (evento com a chave `prefixo:id:email`, a mesma de enqueueCrmReminders): senão a lista crescia todos os dias.
  */
 export function leadsParados(c: Consulta, dias: number, soGold: boolean, prefixo: string) {
-  return many<{ id: number; nome: string; apelido: string; email: string; curso: string }>(
+  return many<{ id: number; nome: string; apelido: string; email: string; curso: string; regime: string }>(
     c,
-    `SELECT id, nome, apelido, email, curso FROM preinscricoes
+    `SELECT id, nome, apelido, email, curso, COALESCE(regime, 'gold') AS regime FROM preinscricoes
       WHERE estado NOT IN ('Pago', 'Formando', 'Desistiu') AND email <> ''
         AND ($2::boolean = false OR COALESCE(regime, 'gold') <> 'fin')
         AND (${LEAD_EM}) <= now() - make_interval(days => $1::int)

@@ -196,6 +196,7 @@ export async function contactarLead(db: Db, actor: Actor, id: number, nota: stri
   if (isEmail(email)) {
     await ingestEvent(db, "preinscricao.contacted", {
       email, nome: `${current.nome} ${current.apelido}`.trim(), curso: String(current.curso ?? ""), preinscricaoId: id,
+      regime: regimeDaLinha(current as { regime?: unknown }),
     }, `contacted:${id}:${email}`).catch(() => undefined);
   }
   return leadMapeado(db, id);

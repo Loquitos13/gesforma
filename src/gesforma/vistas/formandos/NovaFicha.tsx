@@ -25,7 +25,7 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
   const gold = regime === "gold";
   // A palavra-passe gerada é mostrada: só quem o servidor deixa gerar o acesso vê esta opção (o comercial não).
   const pode = usePode();
-  const podeAcesso = pode(gold ? "pagamentos.confirmar" : "formandosFin.gerir");
+  const podeAcesso = pode(gold ? "formandosGold.gerir" : "formandosFin.gerir");
   const cursos = useOpcoes("cursos", { regime });
   const turmas = useOpcoes("turmas", { regime });
   const locais = useOpcoes("locais", { regime });

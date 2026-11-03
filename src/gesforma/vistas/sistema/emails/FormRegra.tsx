@@ -4,11 +4,14 @@ import { apiAlterarRegra, apiCriarRegra, apiPrevisualizarEmail, type OpcoesEmail
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
+import { ROTULO_AREA_EMAIL, eAreaEmail, type AreaEmail } from "../../../../partilhado/emailAreas";
 import { Botao, Caixa, Campo, Entrada, Modal, Selecao } from "../../../../partilhado/ui";
 import { MolduraEmail } from "./Previsualizacao";
 
 export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | null; opcoes: OpcoesEmail; onFechar: () => void }) {
+  const areas = opcoes.areas ?? [];
   const [f, setF] = useState({
+    area: (regra?.area ?? areas[0] ?? "gold") as AreaEmail,
     nome: regra?.nome ?? "",
     gatilho: regra?.gatilho ?? "",
     templateTipo: regra?.template ?? "",
@@ -21,8 +24,8 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
   const criar = useAccao(apiCriarRegra, { ok: "Regra criada.", invalidar: ["emails:"] });
   const alterar = useAccao(apiAlterarRegra, { ok: "Regra gravada.", invalidar: ["emails:"] });
   const { dados: prev, aCarregar } = useRecurso(
-    f.templateTipo ? `emails:prev:${f.templateTipo}:${f.curso}` : null,
-    signal => apiPrevisualizarEmail({ tipo: f.templateTipo, curso: f.curso || null }, signal),
+    f.templateTipo ? `emails:prev:${f.area}:${f.templateTipo}:${f.curso}` : null,
+    signal => apiPrevisualizarEmail({ tipo: f.templateTipo, area: f.area, curso: f.curso || null }, signal),
   );
   const gatilho = opcoes.gatilhos.find(g => g.valor === f.gatilho);
   // Regras com prazo: em vez do atraso, os dias antes (ou depois) da data de referência.
@@ -50,6 +53,12 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
     >
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="space-y-3">
+          {areas.length > 1 && (
+            <Campo rotulo="Área" ajuda={regra ? "A área de uma regra não muda: crie outra na área certa." : "A regra trata as pessoas desta área (Gold ou Financiada) com os emails dela."}>
+              {a => <Selecao {...a} disabled={Boolean(regra)} value={f.area} opcoes={areas.map(x => ({ valor: x, rotulo: ROTULO_AREA_EMAIL[x] }))}
+                onChange={e => { if (eAreaEmail(e.target.value)) setF({ ...f, area: e.target.value, templateTipo: "" }); }} />}
+            </Campo>
+          )}
           <Campo rotulo="Nome da regra" obrigatorio>{a => <Entrada {...a} value={f.nome} maxLength={160} onChange={e => setF({ ...f, nome: e.target.value })} data-autofocus />}</Campo>
           <Campo rotulo="Quando" obrigatorio ajuda={gatilho?.descricao}>
             {a => <Selecao {...a} vazio="Escolha o momento" opcoes={opcoes.gatilhos.map(g => ({ valor: g.valor, rotulo: g.valor }))} value={f.gatilho} onChange={e => setF({ ...f, gatilho: e.target.value })} />}
@@ -64,7 +73,7 @@ export function FormRegra({ regra, opcoes, onFechar }: { regra: RegraEmail | nul
             </Campo>
           )}
           <Campo rotulo="Modelo" obrigatorio>
-            {a => <Selecao {...a} vazio="Escolha o modelo" opcoes={opcoes.modelos.map(m => ({ valor: m.tipo, rotulo: m.nome }))} value={f.templateTipo} onChange={e => setF({ ...f, templateTipo: e.target.value })} />}
+            {a => <Selecao {...a} vazio="Escolha o modelo" opcoes={opcoes.modelos.filter(m => m.area === f.area).map(m => ({ valor: m.tipo, rotulo: m.nome }))} value={f.templateTipo} onChange={e => setF({ ...f, templateTipo: e.target.value })} />}
           </Campo>
           <Campo rotulo="Só para o curso" ajuda="Vazio: aplica-se a todos os cursos.">
             {a => <Selecao {...a} vazio="Todos os cursos" opcoes={cursos.selecao} value={f.curso} onChange={e => setF({ ...f, curso: e.target.value })} />}

@@ -27,7 +27,7 @@ export async function avisarDocumentoRecebido(
   const id = Number(lead.id);
   const vista = String(lead.regime ?? "gold") === "fin" ? "financiada" : "gold";
   await ingestEvent(db, "equipa.documentos_recebidos",
-    { email: para, nome: "Equipa", curso: String(lead.curso ?? "") },
+    { email: para, nome: "Equipa", curso: String(lead.curso ?? ""), regime: String(lead.regime ?? "gold") },
     `docrecebido:${id}:${documento}:${ficheiroId}`,
     { vars: {
       nome_formando: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.replace(/\s+/g, " ").trim() || "—",
@@ -58,7 +58,7 @@ export async function avisarFormadoresNovos(db: Db, regime: "gold" | "fin", turm
     const email = normalizeEmail(f?.email ?? "");
     if (!isEmail(email)) continue;
     await ingestEvent(db, "formador.atribuido",
-      { email, nome: f!.nome, curso: String(depois?.curso ?? ""), turma: String(depois?.nome ?? "") },
+      { email, nome: f!.nome, curso: String(depois?.curso ?? ""), turma: String(depois?.nome ?? ""), regime },
       `formador:${regime}${turmaId}:${email}`,
       { vars: {
         data_inicio: dataPt(String(depois?.data_inicio ?? "")) || "a confirmar",

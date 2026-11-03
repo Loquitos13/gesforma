@@ -1,14 +1,17 @@
 // API do domínio "emails": regras, modelos, pré-visualização e histórico de envios.
 import { api, enviar, qs, type Pagina } from "./cliente";
+import type { AreaEmail } from "../emailAreas";
 
 export type CtaAmbito = "preinscricao" | "contacto" | "documentos" | "pagamento";
 
 export type OpcoesEmail = {
+  /** Áreas que o perfil vê e edita (a administração, todas). */
+  areas?: AreaEmail[];
   gatilhos: { valor: string; evento: string; descricao: string }[];
   atrasos: string[];
   /** Gatilhos com prazo (por evento): dias por omissão, antes/depois e a data de referência. */
   prazos?: Record<string, { dias: number; sentido: "antes" | "depois"; referencia: string }>;
-  modelos: { tipo: string; nome: string }[];
+  modelos: { tipo: string; nome: string; area: AreaEmail }[];
   ambitos: { valor: CtaAmbito; rotulo: string }[];
   variaveis: string[];
   /** Variáveis próprias de alguns modelos (emails automáticos com dados próprios). */
@@ -21,6 +24,7 @@ export type OpcoesEmail = {
 
 export type RegraEmail = {
   id: number;
+  area: AreaEmail;
   nome: string;
   gatilho: string;
   evento: string;
@@ -42,6 +46,9 @@ export type RegraEmail = {
 export type ModeloEmail = {
   id: number;
   tipo: string;
+  area: AreaEmail;
+  /** Escrito à mão (só esses se apagam). */
+  personalizado?: boolean;
   nome: string;
   assunto: string;
   body_lines: unknown;
@@ -56,7 +63,7 @@ export type ModeloEmail = {
 export type EnvioEmail = {
   id: string; para: string; nome: string; assunto: string; estado: "queued" | "sending" | "sent" | "failed" | "cancelled";
   agendado: string; enviado: string | null; aberto: string | null; erro: string | null; regra: string; regra_id: number;
-  tentativas: number; teste: boolean;
+  tentativas: number; teste: boolean; area?: AreaEmail;
 };
 
 export type EstatisticasEnvios = { sent: number; queued: number; failed: number; abertos: number };
@@ -65,7 +72,7 @@ export const apiOpcoesEmail = (signal?: AbortSignal) => api<OpcoesEmail>("/v1/em
 export const apiRegrasEmail = (signal?: AbortSignal) => api<{ rules: RegraEmail[] }>("/v1/email/regras", { signal });
 export const apiModelosEmail = (signal?: AbortSignal) => api<{ templates: ModeloEmail[] }>("/v1/email/templates", { signal });
 
-export type CorpoRegra = { nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean; dias?: number | null };
+export type CorpoRegra = { area?: AreaEmail; nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean; dias?: number | null };
 
 export const apiCriarRegra = (corpo: CorpoRegra) => enviar.post<{ id: number }>("/v1/email/rules", corpo);
 export const apiAlterarRegra = (id: number, corpo: Partial<CorpoRegra>) => enviar.patch<{ ok: true }>(`/v1/email/rules/${id}`, corpo);
@@ -75,10 +82,13 @@ export const apiTestarRegra = (id: number) => enviar.post<{ ok: true; to: string
 export type CorpoModelo = { nome?: string; assunto?: string; body_xml?: string; cta?: string; cta_href?: string; cta_ambito?: CtaAmbito };
 
 export const apiAlterarModelo = (id: number, corpo: CorpoModelo) => enviar.patch<{ template: ModeloEmail }>(`/v1/email/templates/${id}`, corpo);
+export const apiCriarModelo = (corpo: { area?: AreaEmail; nome: string; assunto: string; body_xml: string }) =>
+  enviar.post<{ template: ModeloEmail }>("/v1/email/templates", corpo);
+export const apiApagarModelo = (id: number) => enviar.delete<{ ok: true }>(`/v1/email/templates/${id}`);
 
 export type Previsualizacao = { assunto: string; html: string; texto: string; para: string; de: string };
 
-export const apiPrevisualizarEmail = (corpo: CorpoModelo & { tipo: string; curso?: string | null }, signal?: AbortSignal) =>
+export const apiPrevisualizarEmail = (corpo: CorpoModelo & { tipo: string; area?: AreaEmail; curso?: string | null }, signal?: AbortSignal) =>
   api<Previsualizacao>("/v1/email/previsualizar", { method: "POST", body: JSON.stringify(corpo), signal });
 
 export type FiltrosEnvios = { regra?: string; estado?: string; q?: string; de?: string; ate?: string; pagina?: number; porPagina?: number };

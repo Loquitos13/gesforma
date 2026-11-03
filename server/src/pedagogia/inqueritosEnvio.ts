@@ -9,6 +9,7 @@ import { contactosFormadores, contactosFormandos, equipaDaTurma } from "../repos
 import { anexarPerguntasDaTurma } from "./ficheiros.js";
 import { publicoInquerito, type PublicoInquerito } from "./inqueritos.js";
 import { asArr, asObj, type Regime } from "./util.js";
+import { areaDoRegime } from "../../../src/partilhado/emailAreas.js";
 
 /** Token público do inquérito (cria se ainda não tiver). */
 export async function tokenDoInquerito(db: Db, item: { id: number; public_token: string | null }) {
@@ -74,7 +75,7 @@ export async function enviarInqueritosDaTurma(db: Db, actorId: string | undefine
     }
     const alvos = pessoa.publicos.filter(p => (porPublico.get(p) ?? []).length).map(rotuloPublicoInquerito).join(" e ");
     await enviarModelo(db, {
-      tipo: "inquerito_turma", para: pessoa.email, nome: pessoa.nome, link: links[0]!.url,
+      tipo: "inquerito_turma", area: areaDoRegime(regime), para: pessoa.email, nome: pessoa.nome, link: links[0]!.url,
       vars: { turma: row.nome, curso: row.curso, publico: alvos, inqueritos_itens: links.map(l => `${l.titulo}: ${l.url}`) },
       reserva: {
         assunto: "Inquérito da turma {{turma}}",

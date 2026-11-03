@@ -14,6 +14,7 @@ import {
   pagamentoDoLead, pagamentoBasico, reservarConclusao, turmaGoldParaInscricao,
 } from "./repos/formandosInscricao.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 
 /**
  * Fim do percurso Gold pago: com o pagamento confirmado (comprovativo validado, webhook ou
@@ -52,13 +53,13 @@ async function criarFormandoGoldDoLead(db: Db, lead: Record<string, unknown>, tu
  * Email com o acesso à área do formando (modelos «acesso_formando_pago» e «acesso_formando», editáveis).
  * A palavra-passe só existe aqui (nunca fica gravada em claro).
  */
-export async function enviarEmailAcesso(db: Db, input: { email: string; nome: string; curso: string; password?: string; pago: boolean }) {
+export async function enviarEmailAcesso(db: Db, input: { email: string; nome: string; curso: string; password?: string; pago: boolean; regime?: string }) {
   const link = `${config.appOrigin.replace(/\/$/, "")}/area-formando`;
   const palavraPasse = input.password
     ? `Palavra-passe temporária: ${input.password} (vai ser pedida uma nova no primeiro acesso).`
     : "Entre com a palavra-passe que já usa na área do formando. Se não se lembrar, use «Esqueci-me da palavra-passe».";
   await enviarModelo(db, {
-    tipo: input.pago ? "acesso_formando_pago" : "acesso_formando",
+    tipo: input.pago ? "acesso_formando_pago" : "acesso_formando", area: areaDoRegime(input.regime),
     para: input.email, nome: input.nome, link,
     vars: { curso: input.curso, palavra_passe: palavraPasse },
     reserva: {
@@ -80,7 +81,7 @@ export async function darAcessoAoFormando(db: Db, regime: "gold" | "fin", forman
   const f = await nomeDoFormando(db, regime, formandoId);
   const nome = `${f?.nome ?? ""} ${f?.apelido ?? ""}`.trim() || acesso.email;
   try {
-    await enviarEmailAcesso(db, { email: acesso.email, nome, curso, password: acesso.password, pago });
+    await enviarEmailAcesso(db, { email: acesso.email, nome, curso, password: acesso.password, pago, regime });
   } catch (err) {
     // A ficha e a conta já existem: a falha do email não pode desfazer a inscrição nem dar 500.
     console.error("email de acesso falhou", err);

@@ -12,6 +12,7 @@ import { COMPROVATIVO, docsCompletos, docsDoCurso } from "./docsCurso.js";
 import { isEmail, normalizeEmail } from "./security.js";
 import * as docs from "./repos/leadDocs.js";
 import * as leads from "./repos/leads.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 
 export function documentosUrl(token: string) {
   return `${config.appOrigin.replace(/\/$/, "")}/documentos/${token}`;
@@ -38,6 +39,7 @@ export async function firePreinscricaoEmail(
   const r = await ingestEvent(db, type, {
     email,
     nome,
+    regime,
     curso: lead.curso,
     turma: lead.turma ?? "-",
     preinscricaoId: lead.id,
@@ -138,7 +140,7 @@ export async function avisarDocumentosEmFalta(
   const faltam = emFalta.filter(d => !d.recusado);
   const recusados = emFalta.filter(d => d.recusado);
   if (!faltam.length && !recusados.length) return { enviado: false as const };
-  const lead = await leads.lead(db, leadId) as { nome: string; apelido: string; email: string; curso: string } | null;
+  const lead = await leads.lead(db, leadId) as { nome: string; apelido: string; email: string; curso: string; regime?: string | null } | null;
   if (!lead) return null;
   const email = normalizeEmail(lead.email);
   if (!isEmail(email)) return { enviado: false as const, erro: "A ficha não tem email." };
@@ -146,7 +148,7 @@ export async function avisarDocumentosEmFalta(
   const url = `${documentosUrl(token)}?passo=documentos`;
   const nome = `${lead.nome} ${lead.apelido}`.trim();
   await enviarModelo(db, {
-    tipo: "documentos_em_falta", para: email, nome, link: url,
+    tipo: "documentos_em_falta", area: areaDoRegime(lead.regime), para: email, nome, link: url,
     vars: {
       curso: lead.curso, documentos_url: url,
       documentos_em_falta_itens: faltam.map(d => d.label),

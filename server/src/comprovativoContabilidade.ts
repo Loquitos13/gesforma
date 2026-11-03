@@ -30,7 +30,7 @@ export async function enviarComprovativoContabilidade(
     "Conta de destino: {{iban}}",
   ];
   await enviarModelo(db, {
-    tipo: "comprovativo_contabilidade", para, nome: "Contabilidade",
+    tipo: "comprovativo_contabilidade", area: "contabilidade", para, nome: "Contabilidade",
     vars: {
       nome_formando: nome || "—", nif: ou(lead.nif), telemovel: ou(lead.telf), email_formando: ou(lead.email),
       iban_formando: ou(lead.iban), curso: ou(lead.curso), valor: fmtEuros(valor),

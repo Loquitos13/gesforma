@@ -11,8 +11,11 @@ const NOVOS = [
 describe("emails automáticos com modelo editável", () => {
   it("os modelos novos existem; o texto editado é o que sai; sem modelo sai o texto de reserva", async () => {
     const ctx = await arrancar();
-    const r = await ctx.db.query<{ tipo: string }>("SELECT tipo FROM email_templates WHERE tipo = ANY($1::text[])", [`{${NOVOS.join(",")}}`]);
-    expect(r.rows.map(x => x.tipo).sort()).toEqual([...NOVOS].sort());
+    // Cada email automático existe na Gold e (cópia) na Financiada.
+    for (const area of ["gold", "fin"]) {
+      const r = await ctx.db.query<{ tipo: string }>("SELECT tipo FROM email_templates WHERE area = $2 AND tipo = ANY($1::text[])", [`{${NOVOS.join(",")}}`, area]);
+      expect(r.rows.map(x => x.tipo).sort(), area).toEqual([...NOVOS].sort());
+    }
 
     const envio = {
       tipo: "comprovativo_recusado", nome: "Ana Silva", email: "ana@exemplo.pt", link: "https://ena.pt/x",

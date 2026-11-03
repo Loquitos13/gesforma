@@ -7,9 +7,11 @@ import { config } from "../config.js";
 import { CTA_BY_TIPO, SECRETARIA_MAIL, ctaDestino } from "../emailCta.js";
 import { VARIAVEIS_DOS_MODELOS } from "../emailModelo.js";
 import {
-  actualizarModelo, actualizarRegra, apagarRegra, cancelarEmFila, criarRegra, destinatarioConhecido, emailDaPreinscricao,
-  estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto, obterEnvio, obterModelo, reenviarFalhado,
+  actualizarModelo, actualizarRegra, apagarModelo, apagarRegra, areaDaRegra, areaDoEnvio, areaDoModelo, cancelarEmFila, criarModelo, criarRegra,
+  destinatarioConhecido, emailDaPreinscricao, estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto,
+  obterEnvio, obterModelo, reenviarFalhado, regrasDoModelo,
 } from "../repos/emails.js";
+import { AREAS_EMAIL, areaDoRegime, areasDoPerfil, type AreaEmail } from "../../../src/partilhado/emailAreas.js";
 import { GATILHOS_COM_PRAZO } from "../regrasAgendadas.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
@@ -56,6 +58,8 @@ const VARIAVEIS = [
 ];
 
 const regraSchema = z.object({
+  /** Área da regra (só a administração escolhe; as outras ficam na sua). */
+  area: z.enum(AREAS_EMAIL).optional(),
   nome: z.string().trim().min(2).max(160),
   gatilho: z.string().min(2).max(160),
   templateTipo: z.string().min(2).max(64),
@@ -74,8 +78,18 @@ const modeloSchema = z.object({
   cta_href: z.string().trim().min(1).max(500).optional(),
   cta_ambito: z.enum(["preinscricao", "contacto", "documentos", "pagamento"]).optional(),
 });
+/** Modelo novo (escrito à mão por uma coordenação ou pela contabilidade). */
+const novoModeloSchema = z.object({
+  area: z.enum(AREAS_EMAIL).optional(),
+  nome: z.string().trim().min(2).max(120),
+  assunto: z.string().trim().min(2).max(200),
+  body_xml: z.string().trim().min(8).max(8000),
+});
+/** Os modelos escritos à mão têm este prefixo no tipo; só esses se apagam (os outros saem do código). */
+const PREFIXO_PERSONALIZADO = "personalizado_";
 const previewSchema = modeloSchema.extend({
   tipo: z.string().min(2).max(64),
+  area: z.enum(AREAS_EMAIL).optional(),
   curso: z.string().max(200).optional().nullable(),
 });
 const eventSchema = z.object({
@@ -132,6 +146,7 @@ const CRON_EMAIL_MS = 18_000;
 function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
   return {
     id: r.id,
+    area: r.area,
     nome: r.nome,
     gatilho: r.gatilho_label,
     evento: r.trigger_key,
@@ -161,15 +176,26 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   const { db, requireAuth, audit } = deps;
   const actor = (req: FastifyRequest) => req.actor!;
 
+  /** Áreas de quem pede (a administração vê todas). */
+  const areasDe = (req: FastifyRequest) => areasDoPerfil(actor(req).role);
+  /** A área pedida se o perfil a pode usar; sem ela, a primeira do perfil. */
+  const areaPedida = (req: FastifyRequest, pedida?: AreaEmail): AreaEmail | null => {
+    const areas = areasDe(req);
+    if (pedida) return areas.includes(pedida) ? pedida : null;
+    return areas[0] ?? null;
+  };
+  const doPerfil = (req: FastifyRequest, area: AreaEmail | null | undefined) => Boolean(area && areasDe(req).includes(area));
+
   app.get("/v1/email/opcoes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const modelos = await listarModelos(db);
+    const modelos = await listarModelos(db, areasDe(req));
     return {
+      areas: areasDe(req),
       gatilhos: Object.keys(TRIGGER_MAP).map(valor => ({ valor, evento: TRIGGER_MAP[valor], descricao: DESCRICAO_GATILHO[valor] ?? "" })),
       atrasos: ATRASOS,
       // Gatilhos com prazo: os dias por omissão e a que data se referem (o ecrã mostra o campo «dias»).
       prazos: GATILHOS_COM_PRAZO,
-      modelos: modelos.map(m => ({ tipo: m.tipo, nome: m.nome })),
+      modelos: modelos.map(m => ({ tipo: m.tipo, nome: m.nome, area: m.area })),
       ambitos: AMBITOS,
       variaveis: VARIAVEIS,
       // Modelos dos emails automáticos com variáveis próprias e botão para o endereço próprio do email.
@@ -182,15 +208,41 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/email/templates", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const modelos = await listarModelos(db);
-    return { templates: modelos.map(m => ({ ...m, funcao: ctaDestino(m.tipo).funcao })) };
+    const modelos = await listarModelos(db, areasDe(req));
+    return { templates: modelos.map(m => ({ ...m, funcao: ctaDestino(m.tipo).funcao, personalizado: m.tipo.startsWith(PREFIXO_PERSONALIZADO) })) };
+  });
+
+  app.post("/v1/email/templates", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { body: novoModeloSchema }, req);
+    if (!v) return;
+    const area = areaPedida(req, v.body.area);
+    if (!area) return reply.code(403).send({ error: "Só cria emails na sua área." });
+    const tipo = `${PREFIXO_PERSONALIZADO}${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+    const id = await criarModelo(db, { tipo, area, nome: v.body.nome, assunto: v.body.assunto, body_xml: v.body.body_xml });
+    await audit(db, actor(req).id, "email.template_create", "email_template", String(id), req.ip, { area });
+    return { template: await obterModelo(db, Number(id)) };
+  });
+
+  app.delete("/v1/email/templates/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const m = await areaDoModelo(db, v.params.id);
+    if (!m || !doPerfil(req, m.area)) return reply.code(404).send({ error: "modelo inexistente" });
+    if (!m.tipo.startsWith(PREFIXO_PERSONALIZADO)) return reply.code(409).send({ error: "Os emails automáticos do GesForma não se apagam: desligue a regra." });
+    if (await regrasDoModelo(db, m.tipo, m.area)) return reply.code(409).send({ error: "Este email está numa regra: apague a regra primeiro." });
+    await apagarModelo(db, v.params.id);
+    await audit(db, actor(req).id, "email.template_delete", "email_template", String(v.params.id), req.ip);
+    return { ok: true };
   });
 
   app.patch("/v1/email/templates/:id", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam, body: modeloSchema }, req);
     if (!v) return;
-    if (!(await obterModelo(db, v.params.id))) return reply.code(404).send({ error: "modelo inexistente" });
+    const m = await areaDoModelo(db, v.params.id);
+    if (!m || !doPerfil(req, m.area)) return reply.code(404).send({ error: "modelo inexistente" });
     await actualizarModelo(db, v.params.id, v.body);
     await audit(db, actor(req).id, "email.template_update", "email_template", String(v.params.id), req.ip);
     return { template: await obterModelo(db, v.params.id) };
@@ -201,7 +253,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { body: previewSchema }, req);
     if (!v) return;
-    const modelos = await listarModelos(db);
+    const area = areaPedida(req, v.body.area);
+    const modelos = area ? await listarModelos(db, [area]) : [];
     const base = modelos.find(m => m.tipo === v.body.tipo);
     if (!base) return reply.code(404).send({ error: "modelo inexistente" });
     const m = {
@@ -222,7 +275,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   for (const caminho of ["/v1/email/rules", "/v1/email/regras"]) {
     app.get(caminho, async (req, reply) => {
       if (!requireAuth(req, reply)) return;
-      return { rules: (await listarRegras(db)).map(mapRegra) };
+      return { rules: (await listarRegras(db, areasDe(req))).map(mapRegra) };
     });
   }
 
@@ -232,9 +285,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const key = TRIGGER_MAP[v.body.gatilho];
     if (!key) return reply.code(400).send({ error: "gatilho desconhecido" });
-    if (!(await existeModeloTipo(db, v.body.templateTipo))) return reply.code(400).send({ error: "modelo desconhecido" });
+    const area = areaPedida(req, v.body.area);
+    if (!area) return reply.code(403).send({ error: "Só cria regras na sua área." });
+    if (!(await existeModeloTipo(db, v.body.templateTipo, area))) return reply.code(400).send({ error: "modelo desconhecido" });
     const id = await criarRegra(db, {
-      nome: v.body.nome, triggerKey: key, gatilho: v.body.gatilho, templateTipo: v.body.templateTipo,
+      area, nome: v.body.nome, triggerKey: key, gatilho: v.body.gatilho, templateTipo: v.body.templateTipo,
       atrasoSeg: delaySecondsFromLabel(v.body.atraso ?? "Imediatamente"), curso: v.body.curso || null, ativo: v.body.ativo ?? true,
       dias: GATILHOS_COM_PRAZO[key] ? v.body.dias ?? null : null,
     });
@@ -247,9 +302,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idParam, body: regraSchema.partial() }, req);
     if (!v) return;
     const d = v.body;
+    const area = await areaDaRegra(db, v.params.id);
+    if (!doPerfil(req, area)) return reply.code(404).send({ error: "regra inexistente" });
     const key = d.gatilho ? TRIGGER_MAP[d.gatilho] : undefined;
     if (d.gatilho && !key) return reply.code(400).send({ error: "gatilho desconhecido" });
-    if (d.templateTipo && !(await existeModeloTipo(db, d.templateTipo))) return reply.code(400).send({ error: "modelo desconhecido" });
+    if (d.templateTipo && !(await existeModeloTipo(db, d.templateTipo, area!))) return reply.code(400).send({ error: "modelo desconhecido" });
     await actualizarRegra(db, v.params.id, {
       nome: d.nome, gatilho: d.gatilho, triggerKey: key, templateTipo: d.templateTipo,
       atrasoSeg: d.atraso != null ? delaySecondsFromLabel(d.atraso) : undefined,
@@ -263,6 +320,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
+    if (!doPerfil(req, await areaDaRegra(db, v.params.id))) return reply.code(404).send({ error: "regra inexistente" });
     try {
       const result = await sendRuleTest(db, v.params.id, { email: actor(req).email, name: actor(req).name });
       await audit(db, actor(req).id, "email.rule_test", "email_rule", String(v.params.id), req.ip);
@@ -276,6 +334,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
+    if (!doPerfil(req, await areaDaRegra(db, v.params.id))) return reply.code(404).send({ error: "regra inexistente" });
     await apagarRegra(db, v.params.id);
     await audit(db, actor(req).id, "email.rule_delete", "email_rule", String(v.params.id), req.ip);
     return { ok: true };
@@ -285,8 +344,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/email/jobs", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const stats = await estatisticasEnvios30Dias(db);
-    const pagina = await listarEnvios(db, { pagina: 1, porPagina: 80 });
+    const areas = areasDe(req);
+    const stats = await estatisticasEnvios30Dias(db, areas);
+    const pagina = await listarEnvios(db, { pagina: 1, porPagina: 80, areas });
     return {
       stats: stats ?? { sent: 0, queued: 0, failed: 0, abertos: 0 },
       jobs: pagina.linhas.map(j => ({
@@ -300,7 +360,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { query: enviosQuery }, req);
     if (!v) return;
-    const [stats, pagina] = [await estatisticasEnvios30Dias(db), await listarEnvios(db, v.query)];
+    const areas = areasDe(req);
+    const [stats, pagina] = [await estatisticasEnvios30Dias(db, areas), await listarEnvios(db, { ...v.query, areas })];
     return { stats: stats ?? { sent: 0, queued: 0, failed: 0, abertos: 0 }, ...pagina };
   });
 
@@ -308,6 +369,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: uuidParam }, req);
     if (!v) return;
+    if (!doPerfil(req, await areaDoEnvio(db, v.params.id))) return reply.code(404).send({ error: "envio inexistente" });
     const e = await obterEnvio(db, v.params.id);
     if (!e) return reply.code(404).send({ error: "envio inexistente" });
     return { envio: { id: e.id, assunto: e.subject, html: e.body_html, texto: e.body_text, para: e.to_email } };
@@ -317,6 +379,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: uuidParam }, req);
     if (!v) return;
+    if (!doPerfil(req, await areaDoEnvio(db, v.params.id))) return reply.code(404).send({ error: "envio inexistente" });
     if (!(await reenviarFalhado(db, v.params.id))) return reply.code(409).send({ error: "Só se reenviam envios falhados." });
     await audit(db, actor(req).id, "email.job_retry", "email_job", v.params.id, req.ip);
     await flushQueuedJobs(db, 5).catch(() => undefined);
@@ -327,6 +390,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: uuidParam }, req);
     if (!v) return;
+    if (!doPerfil(req, await areaDoEnvio(db, v.params.id))) return reply.code(404).send({ error: "envio inexistente" });
     if (!(await cancelarEmFila(db, v.params.id))) return reply.code(409).send({ error: "Só se cancelam envios em fila." });
     await audit(db, actor(req).id, "email.job_cancel", "email_job", v.params.id, req.ip);
     return { ok: true };
@@ -413,7 +477,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return reply.code(403).send({ error: "Destinatário desconhecido no GesForma." });
     }
     try {
-      const result = await ingestEvent(db, type, payload, idempotencyKey);
+      const regimeLead = payload.preinscricaoId
+        ? (await db.query<{ regime: string | null }>("SELECT regime FROM preinscricoes WHERE id = $1", [payload.preinscricaoId])).rows[0]?.regime
+        : null;
+      const result = await ingestEvent(db, type, payload, idempotencyKey, { area: areaDoRegime(regimeLead) });
       await flushQueuedJobs(db, 5, 0, result.eventId).catch(() => undefined);
       await audit(db, a.id, "automation.event", type, result.eventId ?? undefined, req.ip, { queued: result.queued, duplicate: result.duplicate });
       return result;

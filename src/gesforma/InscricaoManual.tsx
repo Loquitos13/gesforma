@@ -37,7 +37,7 @@ export function CamposInscricaoManual({ value, onChange, regime }: {
   const lbl = "text-xs font-semibold text-slate-500 uppercase tracking-wide";
   // Gerar o acesso mostra a palavra-passe: só a secretaria (Gold) e a pedagogia (Financiada), como no servidor.
   const pode = usePode();
-  const podeAcesso = pode(regime === "fin" ? "formandosFin.gerir" : "pagamentos.confirmar");
+  const podeAcesso = pode(regime === "fin" ? "formandosFin.gerir" : "formandosGold.gerir");
   useEffect(() => {
     if (!podeAcesso && value.criarAcesso) onChange({ ...value, criarAcesso: false });
   }, [podeAcesso, value, onChange]);

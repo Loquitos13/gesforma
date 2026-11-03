@@ -112,6 +112,7 @@ export async function validarPreinscricao(db: Db, leadId: number, actorId?: stri
       curso: String(row.curso ?? ""),
       turma: turma?.nome ?? moved.turma ?? "-",
       preinscricaoId: leadId,
+      regime,
     }, `validated:${leadId}`).catch(() => undefined);
   }
   if (regime === "gold" && isEmail(emailValidado)) {

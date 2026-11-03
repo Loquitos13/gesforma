@@ -31,7 +31,7 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
   const podeEditar = pode(gold ? "turmas.gerir" : "formandosFin.gerir");
   const podeApagar = gold ? pode("sistema.ver") : pode("formandosFin.gerir");
   // O mesmo que o servidor exige em POST /v1/formandos/:regime/:id/acesso.
-  const podeAcesso = pode(gold ? "pagamentos.confirmar" : "formandosFin.gerir");
+  const podeAcesso = pode(gold ? "formandosGold.gerir" : "formandosFin.gerir");
   const chave = id ? `formandos:ficha:${regime}:${id}` : null;
   const { dados: ficha, erro, aCarregar, recarregar } = useRecurso(chave, s => apiFichaFormando(regime, id, s));
   // O separador vai no URL (?aba=financiamento): o cockpit da turma abre a ficha directamente nos dados em falta.

@@ -15,6 +15,7 @@ import {
 import { enviarRegrasComPrazo } from "./regrasAgendadas.js";
 import { CRM_ESTADO_RANK, crmEstadoFromEvent, EVENT_ALIASES, fillVars, isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 import { hojeLisboa, somarDias } from "./datas.js";
+import { areaDoRegime, type AreaEmail } from "../../src/partilhado/emailAreas.js";
 
 type Modelo = Pick<RegraComModelo, "template_tipo" | "assunto" | "body_lines" | "body_xml" | "cta" | "cta_href" | "cta_ambito">;
 
@@ -88,10 +89,11 @@ export function renderModelo(m: Modelo, nome: string, vars: Record<string, strin
 /**
  * `opts.soRegraId`: só essa regra (as regras com prazo disparam uma a uma, cada uma com os seus dias).
  * `opts.vars`: variáveis a mais para o modelo (datas, local, horário, `link` do botão…).
+ * `opts.area`: área dos emails (Gold, Financiada, Contabilidade); sem ela, a do `payload.regime` (Gold por omissão).
  */
 export async function ingestEvent(
   db: Db, type: string, payload: Record<string, unknown>, idempotencyKey: string,
-  opts: { soRegraId?: number; vars?: Record<string, string> } = {},
+  opts: { soRegraId?: number; vars?: Record<string, string>; area?: AreaEmail } = {},
 ) {
   const email = normalizeEmail(String(payload.email ?? ""));
   if (!isEmail(email)) throw new Error("Email do destinatário inválido.");
@@ -101,7 +103,8 @@ export async function ingestEvent(
   const nome = sanitizeHeader(String(payload.nome ?? "Formando"));
   const curso = sanitizeHeader(String(payload.curso ?? ""));
   const turma = sanitizeHeader(String(payload.turma ?? "-"));
-  const regras = (await regrasActivasPara(db, EVENT_ALIASES[type] ?? [type])).filter(r => !opts.soRegraId || r.id === opts.soRegraId);
+  const area = opts.area ?? areaDoRegime(payload.regime);
+  const regras = (await regrasActivasPara(db, EVENT_ALIASES[type] ?? [type], area)).filter(r => !opts.soRegraId || r.id === opts.soRegraId);
   const vars = buildCtaVars({
     nome, email, curso, turma,
     documentosUrl: String(payload.documentos_url ?? ""),
@@ -163,7 +166,7 @@ async function enqueueCrmReminders(db: Db, fim = 0) {
       if (fim && Date.now() >= fim) return;
       const email = normalizeEmail(row.email);
       if (!isEmail(email)) continue;
-      await ingestEvent(db, tipo, { email, nome: `${row.nome} ${row.apelido}`.trim(), curso: row.curso, preinscricaoId: row.id }, `${prefixo}:${row.id}:${email}`)
+      await ingestEvent(db, tipo, { email, nome: `${row.nome} ${row.apelido}`.trim(), curso: row.curso, preinscricaoId: row.id, regime: row.regime }, `${prefixo}:${row.id}:${email}`)
         .catch(() => undefined);
     }
   }
@@ -178,7 +181,7 @@ async function enqueueTurmaReminders(db: Db) {
       if (!isEmail(email)) continue;
       await ingestEvent(
         db, "turma.starts_in_24h",
-        { email, nome: `${a.nome} ${a.apelido}`.trim(), curso: a.curso || turma.curso, turma: turma.nome },
+        { email, nome: `${a.nome} ${a.apelido}`.trim(), curso: a.curso || turma.curso, turma: turma.nome, regime: turma.regime },
         `turma24h:${turma.id}:${email}:${turma.data_inicio ?? tomorrow}`,
       ).catch(() => undefined);
     }

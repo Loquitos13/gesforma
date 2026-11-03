@@ -6,7 +6,7 @@ import { FIN, GOLD, PEDAGOGIA, SECRETARIA, type Regra } from "./perfis.js";
  */
 export const regras: Regra[] = [
   ["DELETE", "/v1/formandos-gold/:id", SECRETARIA],
-  // Registar dinheiro recebido é da secretaria (capacidade `pagamentos.confirmar`).
+  // Registar dinheiro recebido na ficha é da coordenação Gold (capacidade `pagamentos.registarFicha`).
   ["POST", "/v1/formandos/gold/:id/registar-pagamento", SECRETARIA],
   ["DELETE", "/v1/formandos-fin/:id", PEDAGOGIA],
   ["DELETE", "/v1/inscricoes-fin/:id", PEDAGOGIA],

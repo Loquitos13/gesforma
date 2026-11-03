@@ -6,13 +6,14 @@
  */
 import type { Db } from "./db/pool.js";
 import { enviarModelo } from "./emailModelo.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 
 export const AVISO_CONTACTO = "Recebemos o seu pedido de contacto. A ENA vai contactá-lo em breve.";
 
 /** `curso`: o nome do curso na oferta (vazio fora da oferta), nunca o texto do pedido. */
-export async function enviarPedidoContactoRecebido(db: Db, p: { email: string; nome: string; curso: string }) {
+export async function enviarPedidoContactoRecebido(db: Db, p: { email: string; nome: string; curso: string; regime?: string }) {
   await enviarModelo(db, {
-    tipo: "pedido_contacto", para: p.email, nome: p.nome,
+    tipo: "pedido_contacto", area: areaDoRegime(p.regime), para: p.email, nome: p.nome,
     vars: { sobre_curso: p.curso ? ` sobre ${p.curso}` : "" },
     reserva: {
       assunto: "Recebemos o seu pedido de contacto",

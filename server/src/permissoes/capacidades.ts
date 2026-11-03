@@ -23,7 +23,8 @@ export const CAPACIDADES = {
   "formandosGold.gerir": SECRETARIA,
   "pagamentos.faturas": PAGAMENTOS,
   "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
-  "emails.historico": SECRETARIA,
+  // Histórico dos envios: as coordenações e a contabilidade, cada uma só da sua área.
+  "emails.historico": [...COORDENACAO, "contabilidade"] as Perfil[],
   // O comercial só vende: não edita cursos nem gere turmas (ver permissoes/comercial.ts).
   "cursos.editar": SECRETARIA,
   "cursos.apagar": SECRETARIA,

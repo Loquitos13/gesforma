@@ -54,8 +54,8 @@ describe("matriz de permissões", () => {
     }
   });
 
-  it("emails: modelos e regras para toda a equipa; histórico só da secretaria", () => {
-    for (const perfil of ["secretaria", "financiada", "comercial"]) {
+  it("emails: modelos e regras para toda a equipa e a contabilidade (cada um na sua área); histórico das coordenações e da contabilidade", () => {
+    for (const perfil of ["secretaria", "financiada", "comercial", "contabilidade"]) {
       expect(podeAceder(perfil, "GET", "/v1/email/opcoes")).toBe(true);
       expect(podeAceder(perfil, "PATCH", "/v1/email/templates/1")).toBe(true);
       expect(podeAceder(perfil, "POST", "/v1/email/previsualizar")).toBe(true);
@@ -64,12 +64,10 @@ describe("matriz de permissões", () => {
       expect(podeAceder(perfil, "POST", "/v1/email/rules/3/teste")).toBe(true);
       expect(podeAceder(perfil, "DELETE", "/v1/email/rules/3")).toBe(true);
     }
-    for (const perfil of ["financiada", "comercial"]) {
-      expect(podeAceder(perfil, "GET", "/v1/email/envios")).toBe(false);
-      expect(podeAceder(perfil, "POST", "/v1/email/envios/1/reenviar")).toBe(false);
-      expect(podeAceder(perfil, "GET", "/v1/email/jobs")).toBe(false);
-    }
-    expect(podeAceder("secretaria", "GET", "/v1/email/envios")).toBe(true);
+    expect(podeAceder("comercial", "GET", "/v1/email/envios")).toBe(false);
+    expect(podeAceder("comercial", "POST", "/v1/email/envios/1/reenviar")).toBe(false);
+    expect(podeAceder("comercial", "GET", "/v1/email/jobs")).toBe(false);
+    for (const perfil of ["secretaria", "financiada", "contabilidade"]) expect(podeAceder(perfil, "GET", "/v1/email/envios"), perfil).toBe(true);
     expect(podeAceder("formador", "PATCH", "/v1/email/templates/1")).toBe(false);
   });
 

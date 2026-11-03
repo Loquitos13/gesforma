@@ -11,6 +11,7 @@ import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import {
   Botao, Cartao, ConfirmarPerigo, ErroCarregar, Esqueleto, Interruptor, Vazio, cx, dataHora, num,
 } from "../../../../partilhado/ui";
+import { EtiquetaArea } from "./EtiquetaArea";
 import { FormRegra } from "./FormRegra";
 import { MolduraEmail } from "./Previsualizacao";
 
@@ -50,8 +51,9 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
       .filter(g => g.lista.length);
   }, [regras]);
   const sel = regras.find(r => r.id === selId) ?? grupos[0]?.lista[0] ?? null;
-  const modelo = sel ? (modelos?.templates ?? []).find(m => m.tipo === sel.template) : undefined;
-  const pedido = modelo ? { tipo: modelo.tipo, assunto: modelo.assunto, body_xml: modelo.body_xml, cta: modelo.cta, curso: sel?.curso ?? null } : null;
+  const varias = (opcoes?.areas?.length ?? 0) > 1;
+  const modelo = sel ? (modelos?.templates ?? []).find(m => m.tipo === sel.template && m.area === sel.area) : undefined;
+  const pedido = modelo ? { tipo: modelo.tipo, area: modelo.area, assunto: modelo.assunto, body_xml: modelo.body_xml, cta: modelo.cta, curso: sel?.curso ?? null } : null;
   const { dados: prev, aCarregar: aPrever } = useRecurso(
     pedido ? `emails:prev:regra:${sel?.id}:${modelo?.updated_at}` : null,
     signal => apiPrevisualizarEmail(pedido!, signal),
@@ -97,7 +99,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
                         ativa ? "bg-acao-suave/60" : "hover:bg-fundo")}
                     >
                       <div className="min-w-0">
-                        <p className="m-0 text-[13px] font-semibold text-tinta truncate">{r.nome}</p>
+                        <p className="m-0 flex items-center gap-2 text-[13px] font-semibold text-tinta"><span className="min-w-0 truncate">{r.nome}</span>{varias && <EtiquetaArea area={r.area} className="shrink-0" />}</p>
                         <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {quando(r)}{r.curso ? ` · só ${r.curso}` : ""}</p>
                       </div>
                       <div className="text-xs text-tinta-suave text-right">
@@ -119,7 +121,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
             <section className="bg-superficie border border-linha rounded-cartao flex flex-col" aria-label={`Regra ${sel.nome}`}>
               <div className="px-4 py-3.5 border-b border-linha flex items-start gap-3 flex-wrap">
                 <div className="flex-1 min-w-0">
-                  <h2 className="m-0 text-[15px] font-semibold text-tinta">{sel.nome}</h2>
+                  <h2 className="m-0 flex items-center gap-2 text-[15px] font-semibold text-tinta">{sel.nome}{varias && <EtiquetaArea area={sel.area} />}</h2>
                   <p className="m-0 mt-0.5 text-xs text-tinta-suave">Modelo: {sel.templateNome ?? sel.template} · {sel.gatilho} · {quando(sel)}</p>
                   <p className="num m-0 mt-1 text-xs text-tinta-suave">
                     {num(sel.envios)} enviados · {sel.envios ? `${num(sel.taxaAbertura)} % abertos` : "sem envios"}

@@ -4,6 +4,7 @@ import type { Db } from "./db/pool.js";
 import { enviarModelo } from "./emailModelo.js";
 import { contactosFormadores } from "./repos/pedagogiaTurma.js";
 import { isEmail } from "./security.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 
 function fmtData(iso: string) {
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(iso);
@@ -22,7 +23,7 @@ export async function avisarPlanoRevisto(db: Db, a: {
   let enviados = 0;
   for (const c of contactos) {
     await enviarModelo(db, {
-      tipo: aprovado ? "plano_aprovado" : "plano_devolvido", para: c.email, nome: c.nome, link: href,
+      tipo: aprovado ? "plano_aprovado" : "plano_devolvido", area: areaDoRegime(a.regime), para: c.email, nome: c.nome, link: href,
       vars: {
         curso: a.curso, turma: a.turma, sessao: String(a.n), data_sessao: a.data ? ` (${fmtData(a.data)})` : "",
         revisto_por: a.revistoPor ? ` (${a.revistoPor})` : "", comentario_itens: a.comentario ? [a.comentario] : [],

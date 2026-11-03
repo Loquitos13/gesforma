@@ -10,6 +10,7 @@ import {
   Botao, Cartao, ErroCarregar, Estado, Filtros, Modal, Paginacao, Tabela, Vazio, dataHora, useFiltrosUrl, type Coluna, type Tom,
 } from "../../../../partilhado/ui";
 import { MolduraEmail } from "./Previsualizacao";
+import { EtiquetaArea } from "./EtiquetaArea";
 
 const ESTADO: Record<EnvioEmail["estado"], { rotulo: string; tom: Tom }> = {
   sent: { rotulo: "Enviado", tom: "sucesso" },
@@ -19,7 +20,7 @@ const ESTADO: Record<EnvioEmail["estado"], { rotulo: string; tom: Tom }> = {
   cancelled: { rotulo: "Cancelado", tom: "neutro" },
 };
 
-export function Historico() {
+export function Historico({ variasAreas = false }: { variasAreas?: boolean }) {
   const pode = usePode();
   const gerir = pode("emails.gerir");
   const [f, setF, limpar] = useFiltrosUrl({ regra: "", estado: "", q: "", de: "", ate: "", pagina: "1" });
@@ -45,7 +46,7 @@ export function Historico() {
       ),
     },
     { id: "assunto", titulo: "Assunto", celula: e => <span className="block max-w-[320px] truncate" title={e.assunto}>{e.assunto}</span> },
-    { id: "regra", titulo: "Regra", esconderMovel: true, celula: e => <span className="text-tinta-suave">{e.regra}{e.teste ? " · teste" : ""}</span> },
+    { id: "regra", titulo: "Regra", esconderMovel: true, celula: e => <span className="inline-flex items-center gap-2 text-tinta-suave">{e.regra}{e.teste ? " · teste" : ""}{variasAreas && <EtiquetaArea area={e.area} />}</span> },
     { id: "quando", titulo: "Quando", celula: e => dataHora(e.enviado ?? e.agendado) },
     {
       id: "estado", titulo: "Estado",

@@ -380,10 +380,11 @@ export async function apagarSelo(c: Consulta) {
 
 // ─── Modelos de email ──────────────────────────────────────────────────────────
 
-export async function modeloEmail(c: Consulta, tipo: string) {
+/** O modelo da área (por omissão, o da Gold). */
+export async function modeloEmail(c: Consulta, tipo: string, area = "gold") {
   return one<{ assunto: string; body_lines: unknown; body_xml: string; cta: string }>(
     c,
-    "SELECT assunto, body_lines, body_xml, cta FROM email_templates WHERE tipo = $1",
-    [tipo],
+    "SELECT assunto, body_lines, body_xml, cta FROM email_templates WHERE tipo = $1 AND area IN ($2, 'gold') ORDER BY (area = $2) DESC LIMIT 1",
+    [tipo, area],
   );
 }

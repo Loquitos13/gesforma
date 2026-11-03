@@ -13,11 +13,14 @@ import { renderAutomaticEmail } from "./emailHtml.js";
 import { sendMail } from "./mailer.js";
 import { modeloEmail } from "./repos/emails.js";
 import { fillVars } from "./security.js";
+import type { AreaEmail } from "../../src/partilhado/emailAreas.js";
 
 export type ReservaEmail = { assunto: string; linhas: string[]; cta?: string };
 
 export type EnvioModelo = {
   tipo: string;
+  /** Área do modelo (Gold, Financiada, Contabilidade); sem ela, o da Gold. */
+  area?: AreaEmail;
   para: string;
   nome: string;
   /** Variáveis do modelo; as listas (`…_itens`) podem vir em array. */
@@ -36,7 +39,7 @@ export async function montarModelo(db: Db, e: Omit<EnvioModelo, "para" | "anexos
   for (const [k, v] of Object.entries(e.vars)) vars[k] = Array.isArray(v) ? v.filter(Boolean).join("\n") : v;
   vars.nome ??= e.nome;
   vars.link = e.link ?? "";
-  const modelo = await modeloEmail(db, e.tipo);
+  const modelo = await modeloEmail(db, e.tipo, e.area ?? "gold");
   if (modelo) return renderModelo({ ...modelo, template_tipo: modelo.tipo }, e.nome, vars);
   const mail = renderAutomaticEmail({
     nome: e.nome, xml: "", linhas: e.reserva.linhas, cta: e.reserva.cta ?? "", href: e.link ?? "", vars, origin: config.appOrigin,

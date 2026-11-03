@@ -25,6 +25,7 @@ import { modeloEmail } from "./repos/emails.js";
 import { notaDoSistemaFin } from "./repos/finPipeline.js";
 import * as leads from "./repos/leads.js";
 import { isEmail, normalizeEmail } from "./security.js";
+import { areaDoRegime, type AreaEmail } from "../../src/partilhado/emailAreas.js";
 
 /** Recusas feitas dentro desta janela (segundos) depois de um email de recusa ficam para o email seguinte. */
 export const JANELA_RECUSA_S = 300;
@@ -37,11 +38,13 @@ type Envio = {
   tipo: "documento_recusado" | "lembrete_docs";
   para: string; nome: string; curso: string; href: string;
   recusados: string[]; faltam: string[]; telefones: string[];
+  /** Área do modelo (o da Financiada para quem é da Financiada). */
+  area: AreaEmail;
 };
 
 /** Envia o modelo editável; sem ele (apagado), um texto equivalente. */
 async function enviarModelo(db: Db, e: Envio) {
-  const modelo = await modeloEmail(db, e.tipo);
+  const modelo = await modeloEmail(db, e.tipo, e.area);
   const vars = buildCtaVars({
     nome: e.nome, email: e.para, curso: e.curso, turma: "-", documentosUrl: e.href,
     emFaltaItens: e.tipo === "lembrete_docs" ? [...e.faltam, ...e.recusados] : e.faltam,
@@ -102,7 +105,7 @@ export async function avisarRecusasLead(db: Db, leadId: number, opts: { forcar?:
   const recusados = p.recusados.map(itemRecusa);
   try {
     await enviarModelo(db, {
-      tipo: "documento_recusado", para: email, nome, curso, href, recusados, faltam: p.faltam,
+      tipo: "documento_recusado", para: email, nome, curso, href, recusados, faltam: p.faltam, area: areaDoRegime(lead.regime),
       telefones: await telefonesPorZona(db, { preinscricaoId: leadId }),
     });
   } catch (err) {
@@ -132,7 +135,7 @@ export async function reenviarPedidoLead(db: Db, leadId: number, actorId?: strin
   const href = `${documentosUrl(token)}?passo=documentos`;
   const nome = `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim();
   await enviarModelo(db, {
-    tipo: "lembrete_docs", para: email, nome, curso: String(lead.curso ?? ""), href, recusados: [], faltam: p.faltam,
+    tipo: "lembrete_docs", para: email, nome, curso: String(lead.curso ?? ""), href, recusados: [], faltam: p.faltam, area: areaDoRegime(lead.regime),
     telefones: await telefonesPorZona(db, { preinscricaoId: leadId }),
   });
   await repo.adiarLembreteLead(db, leadId);
@@ -174,7 +177,7 @@ export async function avisarRecusasFin(db: Db, formandoId: number, opts: { forca
   const faltam = vista.documentos.filter(d => d.required && d.estado === "em_falta").map(d => d.label);
   try {
     await enviarModelo(db, {
-      tipo: "documento_recusado", para: vista.email, nome: vista.nome, curso: vista.curso, href: vista.url,
+      tipo: "documento_recusado", para: vista.email, nome: vista.nome, curso: vista.curso, href: vista.url, area: "fin",
       recusados: itens, faltam, telefones: await telefonesPorZona(db, { regime: "fin" }),
     });
   } catch (err) {
@@ -224,7 +227,7 @@ export async function enviarLembretesFormandosFin(db: Db, fim = 0) {
       if (!(await repo.reclamarLembreteFin(db, id, limite))) continue;
       // Uma falha (SMTP) não pára os outros; o lembrete reservado conta como enviado.
       const saiu = await enviarModelo(db, {
-        tipo: "lembrete_docs", para: vista.email, nome: vista.nome, curso: vista.curso, href: vista.url,
+        tipo: "lembrete_docs", para: vista.email, nome: vista.nome, curso: vista.curso, href: vista.url, area: "fin",
         recusados, faltam, telefones: await telefonesPorZona(db, { regime: "fin" }),
       }).then(() => true, () => false);
       if (!saiu) continue;

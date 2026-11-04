@@ -8,6 +8,17 @@
 	email {$EMAIL_CERTIFICADOS}
 }
 
+# Páginas, sitemap e robots vêm da API, que também manda cabeçalhos de segurança (Helmet). Aqui ficam só os do Caddy:
+# sem isto saíam em duplicado e contraditórios (duas CSP, dois HSTS, dois Referrer-Policy).
+(cabecalhos_so_do_caddy) {
+	header_down -Content-Security-Policy
+	header_down -Strict-Transport-Security
+	header_down -Referrer-Policy
+	header_down -X-Content-Type-Options
+	header_down -X-Frame-Options
+	header_down -Permissions-Policy
+}
+
 {$DOMINIO} {
 	encode zstd gzip
 
@@ -20,7 +31,27 @@
 		Permissions-Policy "camera=(), microphone=(), geolocation=()"
 		Strict-Transport-Security "max-age=31536000"
 	}
-	header -Server
+	# Sem assinaturas da tecnologia (Server, Via), também nas respostas que vêm da API.
+	header {
+		-Server
+		-Via
+		defer
+	}
+
+	# Ficheiros e pastas ocultos (.env, .git, .htaccess…): 404 sempre, nunca chegam ao site nem à API.
+	# O /.well-known fica de fora (certificados e verificações de domínio).
+	@ocultos {
+		path_regexp ocultos /\.
+		not path /.well-known/*
+	}
+	handle @ocultos {
+		respond 404
+	}
+	# Cópias de segurança e ficheiros de configuração esquecidos.
+	@sensiveis path *.bak *.sql *.sql.gz *.zip *.tar *.tar.gz *.env *.log *.yml *.yaml *.ini *.conf
+	handle @sensiveis {
+		respond 404
+	}
 
 	# API: /api/v1/... chega à API como /v1/... (como na Vercel e no vite.config.ts).
 	handle_path /api/* {
@@ -29,11 +60,15 @@
 
 	handle /sitemap.xml {
 		rewrite * /v1/public/sitemap.xml
-		reverse_proxy api:43148
+		reverse_proxy api:43148 {
+			import cabecalhos_so_do_caddy
+		}
 	}
 	handle /robots.txt {
 		rewrite * /v1/public/robots.txt
-		reverse_proxy api:43148
+		reverse_proxy api:43148 {
+			import cabecalhos_so_do_caddy
+		}
 	}
 
 	# Ficheiros do build (JS, CSS, imagens, ícones). Os de /assets têm o hash no nome: cache de um ano.
@@ -55,7 +90,9 @@
 	# e os dados de partilha da página (server/src/seo.ts).
 	handle {
 		rewrite * /v1/public/pagina?caminho={path}
-		reverse_proxy api:43148
+		reverse_proxy api:43148 {
+			import cabecalhos_so_do_caddy
+		}
 	}
 
 	log {
@@ -67,5 +104,6 @@
 # Com o domínio principal (ena.pt), o www passa para ele (301: a Google fica só com um endereço de cada página).
 # O www tem de apontar para a VPS (CNAME para ena.pt); senão, comente estas 3 linhas.
 www.{$DOMINIO} {
+	header -Server
 	redir https://{$DOMINIO}{uri} permanent
 }

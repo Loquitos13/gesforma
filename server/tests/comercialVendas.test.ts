@@ -190,7 +190,7 @@ describe("servidor: o que o comercial usa continua a funcionar", () => {
     }
   });
 
-  it("documentos da pré-inscrição: vê os das suas; ficheiros de formandos e de outras pré-inscrições não", async () => {
+  it("documentos da pré-inscrição: vê os das Gold; ficheiros de formandos não", async () => {
     const meu = await leadDoComercial();
     const alheio = (await ctx.db.query<{ id: number }>(
       `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, estado, regime, comercial_id)
@@ -206,14 +206,15 @@ describe("servidor: o que o comercial usa continua a funcionar", () => {
 
     const estado = async (perfil: "comercial" | "secretaria", id: string) => (await pedido(ctx, perfil, "GET", `/v1/drive/files/${id}`)).statusCode;
     expect(await estado("comercial", "cv-doc-meu")).toBe(200);
-    expect(await estado("comercial", "cv-doc-alheio")).toBe(404);
+    // Documentos de pré-inscrições Gold de outro comercial: também (o comercial vê todas as pré-inscrições Gold).
+    expect(await estado("comercial", "cv-doc-alheio")).toBe(200);
     expect(await estado("comercial", "cv-formando")).toBe(404);
     expect((await pedido(ctx, "comercial", "GET", "/v1/drive/files/cv-formando/content")).statusCode).toBe(404);
     for (const id of ["cv-doc-meu", "cv-doc-alheio", "cv-formando"]) expect(await estado("secretaria", id)).toBe(200);
 
     const lista = (await pedido(ctx, "comercial", "GET", "/v1/drive/files?regime=gold")).json<{ files: { id: string }[] }>().files.map(f => f.id);
     expect(lista).toContain("cv-doc-meu");
-    expect(lista).not.toContain("cv-doc-alheio");
+    expect(lista).toContain("cv-doc-alheio");
     expect(lista).not.toContain("cv-formando");
 
     const ficha = (await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${meu}`)).json<{ documentos: { url: string }[] }>();

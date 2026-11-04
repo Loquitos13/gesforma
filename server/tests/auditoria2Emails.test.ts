@@ -151,11 +151,11 @@ describe("POST /v1/events só com eventos permitidos e leads visíveis (achado 1
     expect(paraQuem(l.email)).toHaveLength(0);
   });
 
-  it("o comercial só mexe nos próprios leads, com o email do lead", async () => {
+  it("o comercial mexe nos leads Gold (também os de outro comercial), sempre com o email do lead", async () => {
     const alheio = await lead(ctx.userId.admin);
-    expect((await evento("comercial", "preinscricao.contacted", alheio.email, alheio.id)).statusCode).toBe(404);
     expect((await evento("comercial", "preinscricao.contacted", alheio.email)).statusCode).toBe(400);
     expect(await estadoLead(alheio.id)).toBe("Não contactado");
+    expect((await evento("comercial", "preinscricao.contacted", alheio.email, alheio.id)).statusCode).toBe(200);
 
     const meu = await lead(ctx.userId.comercial);
     expect((await evento("comercial", "preinscricao.contacted", alheio.email, meu.id)).statusCode).toBe(403);

@@ -15,7 +15,7 @@ export type Candidato = {
  * Com ator, só as pré-inscrições que ele vê (o comercial, só as suas: `Filtros.visivelPara`).
  */
 export async function candidatos(c: Consulta, k: CriteriosCampanha, ator?: AtorCrm) {
-  const w = new Filtros([k.dias, k.contactos, k.curso ?? ""]).visivelPara(ator, "p.comercial_id", "p.regime");
+  const w = new Filtros([k.dias, k.contactos, k.curso ?? ""]).preinscricoesVisiveisPara(ator, "p.");
   return many<Candidato>(c,
     `SELECT p.id, p.nome, p.apelido, p.email, p.curso, COALESCE(p.regime, 'gold') AS regime, p.estado,
             p.created_at::text AS created_at, x.n::int AS contactos,
@@ -67,7 +67,7 @@ export async function listarEnvios(c: Consulta) {
 
 /** Destinatários do envio que este ator vê (os outros ficam de fora da lista). */
 export async function destinosDoEnvio(c: Consulta, envioId: number, ator?: AtorCrm) {
-  const w = new Filtros([envioId]).sempre("d.envio_id = $1").visivelPara(ator, "p.comercial_id", "p.regime");
+  const w = new Filtros([envioId]).sempre("d.envio_id = $1").preinscricoesVisiveisPara(ator, "p.");
   return many<{ preinscricao_id: number; nome: string; apelido: string; curso: string; estado: string; enviado: boolean; erro: string }>(c,
     `SELECT d.preinscricao_id, p.nome, p.apelido, p.curso, p.estado, d.enviado, d.erro
        FROM campanha_envio_destinos d JOIN preinscricoes p ON p.id = d.preinscricao_id

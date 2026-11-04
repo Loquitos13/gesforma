@@ -102,12 +102,12 @@ export async function dispensarAlertasDoLead(c: Consulta, leadId: number) {
 
 export async function dispensarAlerta(c: Consulta, id: string, ator?: AtorCrm) {
   const w = new Filtros([id]).sempre("p.id = doc_alertas.preinscricao_id AND doc_alertas.id = $1 AND doc_alertas.dispensada_em IS NULL")
-    .visivelPara(ator, "p.comercial_id", "p.regime");
+    .preinscricoesVisiveisPara(ator, "p.");
   await many(c, `UPDATE doc_alertas SET dispensada_em = now() FROM preinscricoes p ${w.where}`, w.params);
 }
 
 export async function alertasAbertos(c: Consulta, limite = 20, ator?: AtorCrm) {
-  const w = new Filtros([limite]).sempre("a.dispensada_em IS NULL").visivelPara(ator, "p.comercial_id", "p.regime");
+  const w = new Filtros([limite]).sempre("a.dispensada_em IS NULL").preinscricoesVisiveisPara(ator, "p.");
   return many<{ id: string; preinscricao_id: number; created_at: string; nome: string; apelido: string; curso: string; regime: string }>(c,
     `SELECT a.id, a.preinscricao_id, a.created_at, p.nome, p.apelido, p.curso, COALESCE(p.regime, 'gold') AS regime
        FROM doc_alertas a

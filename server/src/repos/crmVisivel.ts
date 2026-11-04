@@ -17,6 +17,8 @@ export function donoDoPedido(ator: AtorCrm, pedido?: string | null) {
 /** A linha existe e este ator pode vê-la (`Filtros.visivelPara`). */
 export async function linhaVisivel(c: Consulta, tabela: TabelaCrm, id: number, ator: AtorCrm) {
   const { dono, regime } = TABELAS_CRM[tabela];
-  const w = new Filtros([id]).sempre("id = $1").visivelPara(ator, dono, regime);
+  const w = tabela === "preinscricoes"
+    ? new Filtros([id]).sempre("id = $1").preinscricoesVisiveisPara(ator)
+    : new Filtros([id]).sempre("id = $1").visivelPara(ator, dono, regime);
   return Boolean(await valor(c, `SELECT 1 FROM ${tabela} ${w.where}`, w.params));
 }

@@ -27,7 +27,7 @@ function comoB(ctx: Ctx, cookie: string, method: "GET" | "POST" | "PATCH" | "DEL
   return ctx.app.inject({ method, url, headers: { "x-gesforma-client": "web", cookie }, payload: payload as never });
 }
 
-describe("CRM: cada comercial só vê e mexe no que é seu (sem depender do RLS)", () => {
+describe("CRM: o comercial vê todas as pré-inscrições Gold; propostas e contratos só os seus (sem depender do RLS)", () => {
   it("pré-inscrições, propostas e contratos de outro comercial e sem dono", async () => {
     const ctx = await arrancar();
     const b = await comercialB(ctx);
@@ -42,20 +42,21 @@ describe("CRM: cada comercial só vê e mexe no que é seu (sem depender do RLS)
     const leadOrfao = ro.json().preinscricao.id as number;
     await ctx.db.query("UPDATE preinscricoes SET comercial_id = NULL WHERE id = $1", [leadOrfao]);
 
-    // B não vê nem altera a de A, nem a sem dono.
-    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${leadA}`)).statusCode).toBe(404);
-    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${leadOrfao}`)).statusCode).toBe(404);
-    expect((await comoB(ctx, b.cookie, "PATCH", `/v1/preinscricoes/${leadA}`, { notas: "x" })).statusCode).toBe(404);
-    expect((await comoB(ctx, b.cookie, "POST", `/v1/crm/leads/${leadA}/notas`, { nota: "x" })).statusCode).toBe(404);
+    // Pré-inscrições: B vê e trabalha todas as da Gold (a de A e a sem dono também)…
+    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${leadA}`)).statusCode).toBe(200);
+    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${leadOrfao}`)).statusCode).toBe(200);
+    expect((await comoB(ctx, b.cookie, "POST", `/v1/crm/leads/${leadA}/notas`, { nota: "x" })).statusCode).toBe(200);
     expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${leadB}`)).statusCode).toBe(200);
     const listaB = (await comoB(ctx, b.cookie, "GET", "/v1/crm/leads?perPage=100")).json<{ items: { id: number }[]; total: number }>();
-    expect(listaB.items.map(i => i.id)).toEqual([leadB]);
-    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/search?q=${nomeA}`)).json().leads).toEqual([]);
-    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/search?q=${nomeOrfa}`)).json().leads).toEqual([]);
-    expect((await comoB(ctx, b.cookie, "GET", "/v1/crm/duplicados?telf=916000001")).json().duplicados).toEqual([]);
-    // Em lote também não: nem mexe, nem atribui a outra pessoa.
-    expect((await comoB(ctx, b.cookie, "POST", "/v1/crm/lote", { ids: [leadA], acao: "etiqueta", etiquetaId: null })).json().updated).toBe(0);
+    expect(listaB.items.map(i => i.id)).toEqual(expect.arrayContaining([leadA, leadB, leadOrfao]));
+    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/search?q=${nomeA}`)).json().leads.length).toBeGreaterThan(0);
+    // …mas não passa uma pré-inscrição a outra pessoa.
     expect((await comoB(ctx, b.cookie, "POST", "/v1/crm/lote", { ids: [leadB], acao: "atribuir", comercialId: ctx.userId.comercial })).statusCode).toBe(403);
+    // As da Financiada continuam fora.
+    const fin = (await ctx.db.query<{ id: number }>(
+      `INSERT INTO preinscricoes (id, inscrito, nome, email, curso, estado, regime, comercial_id)
+       VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Fin', 'fin.dono@exemplo.pt', 'X', 'Não contactado', 'fin', $1) RETURNING id`, [b.id])).rows[0]!.id;
+    expect((await comoB(ctx, b.cookie, "GET", `/v1/crm/leads/${fin}`)).statusCode).toBe(404);
 
     // Propostas e contratos (A, B e sem dono).
     const n = 800_000 + Math.floor(Math.random() * 99_000);

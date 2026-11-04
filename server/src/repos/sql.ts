@@ -168,6 +168,15 @@ export class Filtros {
     return this.sempre("false");
   }
 
+  /**
+   * Pré-inscrições: como `visivelPara`, mas o comercial vê todas as da Gold (com ou sem comercial atribuído, também as
+   * de outro comercial); as da Financiada continuam fora. Igual à política RLS da migração 237.
+   */
+  preinscricoesVisiveisPara(ator: AtorCrm | undefined, prefixo = ""): this {
+    if (ator?.role === "comercial") return this.sempre(`${prefixo}regime IS DISTINCT FROM 'fin'`);
+    return this.visivelPara(ator, `${prefixo}comercial_id`, `${prefixo}regime`);
+  }
+
   get where(): string {
     return this.partes.length ? `WHERE ${this.partes.join(" AND ")}` : "";
   }

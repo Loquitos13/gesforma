@@ -72,7 +72,7 @@ describe("Contrato assinado em papel é irreversível", () => {
 });
 
 describe("Campanhas por email: só as pré-inscrições que o ator vê", () => {
-  it("o comercial não vê nem envia para as de outro comercial nem para as sem dono", async () => {
+  it("o comercial vê e envia para todas as Gold (também as de outro comercial e as sem dono)", async () => {
     const ctx = await arrancar();
     const b = await comercialB(ctx);
     const curso = unico("Curso Campanha Dono");
@@ -93,18 +93,17 @@ describe("Campanhas por email: só as pré-inscrições que o ator vê", () => {
     const q = `dias=30&contactos=2&curso=${encodeURIComponent(curso)}`;
     const ids = async (r: Promise<{ json: () => { candidatos: { id: number }[] } }>) => (await r).json().candidatos.map(c => c.id).sort();
 
-    expect(await ids(pedido(ctx, "comercial", "GET", `/v1/campanhas/email/candidatos?${q}`))).toEqual([minha]);
-    expect(await ids(b.pedir("GET", `/v1/campanhas/email/candidatos?${q}`))).toEqual([deB]);
+    // O comercial vê todas as pré-inscrições Gold (as de outro comercial e as sem dono também).
+    expect(await ids(pedido(ctx, "comercial", "GET", `/v1/campanhas/email/candidatos?${q}`))).toEqual([minha, deB, semDono].sort());
+    expect(await ids(b.pedir("GET", `/v1/campanhas/email/candidatos?${q}`))).toEqual([minha, deB, semDono].sort());
     expect(await ids(pedido(ctx, "secretaria", "GET", `/v1/campanhas/email/candidatos?${q}`))).toEqual([minha, deB, semDono].sort());
 
-    // Enviar só para a de outro (ou sem dono): nenhuma cumpre para este ator.
     const criterios = { dias: 30, contactos: 2, curso };
-    expect((await pedido(ctx, "comercial", "POST", "/v1/campanhas/email/enviar", { criterios, ids: [deB, semDono] })).statusCode).toBe(409);
     const env = await pedido(ctx, "secretaria", "POST", "/v1/campanhas/email/enviar", { criterios, ids: [minha, deB, semDono] });
     expect(env.statusCode, env.body).toBe(200);
     const envioId = env.json().envioId as number;
     const destinos = async (r: Promise<{ json: () => { destinos: { preinscricaoId: number }[] } }>) => (await r).json().destinos.map(d => d.preinscricaoId).sort();
-    expect(await destinos(pedido(ctx, "comercial", "GET", `/v1/campanhas/email/envios/${envioId}`))).toEqual([minha]);
+    expect(await destinos(pedido(ctx, "comercial", "GET", `/v1/campanhas/email/envios/${envioId}`))).toEqual([minha, deB, semDono].sort());
     expect(await destinos(pedido(ctx, "secretaria", "GET", `/v1/campanhas/email/envios/${envioId}`))).toEqual([minha, deB, semDono].sort());
   });
 

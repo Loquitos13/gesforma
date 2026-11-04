@@ -105,7 +105,7 @@ export async function duplicados(c: Consulta, email: string, n9: string, excetoI
         AND (
           ($2 <> '' AND lower(email) = $2)
           OR ($3 <> '' AND length($3) = 9 AND (telf LIKE '%' || $3 OR telf LIKE '%' || '351' || $3))
-        )`).visivelPara(ator, "comercial_id", "regime");
+        )`).preinscricoesVisiveisPara(ator);
   return many<Linha>(c,
     `SELECT id, nome, apelido, email, telf, estado, curso, inscrito
        FROM preinscricoes ${w.where}
@@ -117,7 +117,7 @@ export async function outrosPedidos(c: Consulta, leadId: number, email: string, 
   const w = new Filtros([email, leadId, n9]).sempre(`id <> $2 AND (
         (email <> '' AND lower(email) = lower($1))
         OR (telf <> '' AND $3 <> '' AND (telf LIKE '%' || $3))
-      )`).visivelPara(ator, "comercial_id", "regime");
+      )`).preinscricoesVisiveisPara(ator);
   return many<Linha>(c, `SELECT * FROM preinscricoes ${w.where} ORDER BY inscrito DESC LIMIT 20`, w.params);
 }
 

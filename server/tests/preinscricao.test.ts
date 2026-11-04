@@ -490,6 +490,36 @@ describe("turma escolhida no site", () => {
     const depois = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
     expect(depois.turmaEscolhida).toBeNull();
     expect(depois.turmaCheia).toBe(true);
+    expect(depois.aguardaTurma).toBeNull();
+
+    // A pessoa prefere aguardar pela próxima turma no mesmo horário: fica na ficha.
+    const ag = await ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/aguardar-turma`, payload: {} });
+    expect(ag.statusCode, ag.body).toBe(200);
+    expect((await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json().aguardaTurma).toBeTruthy();
+    expect((await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}`)).json().aguardaTurma).toBeTruthy();
+  });
+
+  it("turma escolhida sem vagas (com a tolerância): a ficha avisa; o comercial envia a sugestão de outra turma", async () => {
+    const ctx = await arrancar();
+    const curso = await cursoGold(ctx);
+    const turma = await turmaGold(ctx, curso, "2031-04-07");
+    const outra = await turmaGold(ctx, curso, "2031-05-05");
+    const email = `${unico("tiago")}@exemplo.pt`;
+    expect((await publico(ctx, { nome: "Tiago", email, curso, turmaId: turma.id })).statusCode).toBe(200);
+    const id = await preinscricaoDoEmail(ctx, email);
+    // A turma enche (vagas e tolerância ocupadas).
+    await ctx.db.query("UPDATE turmas_gold SET vagas = 1, tolerancia_vagas = 1, total_alunos = 2 WHERE id = $1", [turma.id]);
+    const ficha = (await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}`)).json();
+    expect(ficha.turmaEscolhida).toMatchObject({ id: turma.id, livres: 0 });
+    // Com só a vaga preenchida, a tolerância ainda dá lugar.
+    await ctx.db.query("UPDATE turmas_gold SET total_alunos = 1 WHERE id = $1", [turma.id]);
+    expect((await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}`)).json().turmaEscolhida.livres).toBe(1);
+    await ctx.db.query("UPDATE turmas_gold SET total_alunos = 2 WHERE id = $1", [turma.id]);
+
+    expect((await pedido(ctx, "contabilidade", "POST", `/v1/crm/leads/${id}/turma-cheia`, {})).statusCode).toBe(403);
+    const r = await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/turma-cheia`, {});
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().turmas.map((t: { nome: string }) => t.nome)).toContain(outra.nome);
   });
 
   it("recusa uma turma sem vagas", async () => {

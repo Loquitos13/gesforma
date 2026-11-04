@@ -55,7 +55,8 @@ export async function gravarTurmaEscolhida(
 ) {
   await many(c,
     `UPDATE preinscricoes SET
-       turma_escolhida_id = $2, turma_id = $2, local = $3, horario = $4, inicio_curso = $5, preco = COALESCE($6, preco)
+       turma_escolhida_id = $2, turma_id = $2, local = $3, horario = $4, inicio_curso = $5, preco = COALESCE($6, preco),
+       aguarda_turma_em = NULL, aguarda_turma_horario = NULL
      WHERE id = $1`,
     [leadId, t.id, t.local, t.horario, t.dataInicio, t.preco]);
 }
@@ -165,4 +166,11 @@ export async function marcarFormandoGoldPago(c: Consulta, formandoId: number, me
   await many(c,
     "UPDATE formandos_gold SET pago = true, metodo = CASE WHEN metodo IN ('-', '') THEN $2 ELSE metodo END WHERE id = $1",
     [formandoId, metodo]);
+}
+
+/** Turma cheia: a pessoa prefere aguardar pela próxima turma neste horário (fica sem turma escolhida). */
+export async function marcarAguardaTurma(c: Consulta, leadId: number, horario: string) {
+  await many(c,
+    "UPDATE preinscricoes SET aguarda_turma_em = now(), aguarda_turma_horario = $2 WHERE id = $1",
+    [leadId, horario.slice(0, 80)]);
 }

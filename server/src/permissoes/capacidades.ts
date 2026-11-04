@@ -21,6 +21,8 @@ export const CAPACIDADES = {
   "pagamentos.validarComprovativo": EQUIPA,
   // Inserir na turma (Gold) quem já tem o pagamento confirmado: o comercial e a coordenação.
   "crm.inserirNaTurma": EQUIPA,
+  // Turma cheia: enviar à pessoa outras turmas do curso (ou aguardar pela próxima): o comercial e a coordenação.
+  "crm.sugerirTurma": EQUIPA,
   // Pagamento de quem já é formando, registado na ficha (numerário, transferência): a coordenação Gold.
   "pagamentos.registarFicha": SECRETARIA,
   // Acesso à área do formando da Gold (palavra-passe gerada): a coordenação Gold.

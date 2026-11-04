@@ -203,7 +203,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
 
   app.post("/v1/crm/leads/:id/turma-cheia", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração envia esta sugestão." });
+    if (!pode(req.actor!.role, "crm.sugerirTurma")) return reply.code(403).send({ error: "Só o comercial, a coordenação ou a administração enviam esta sugestão." });
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
     try {

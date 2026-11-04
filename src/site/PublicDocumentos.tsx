@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState, type CSSProperties, type FormEven
 import { useSiteTextoState } from "./SiteLanding";
 import { corSegura } from "./editor/estilos";
 import {
-  ApiError, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
+  ApiError, apiPublicAguardarTurma, apiPublicConcluirPercurso, apiPublicConsentir, apiPublicDocumentoUpload, apiPublicDocumentos, apiPublicEscolherTurma,
   apiPublicFaturacaoPercurso, type DadosFaturacao, type DadosFinLigacao, type PagamentoPercurso, type TurmaPercurso,
 } from "../partilhado/api";
 import { PercursoDadosFin, etapaInicial, type EtapaFin } from "./PercursoDadosFin";
@@ -47,6 +47,8 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [percursoConcluido, setPercursoConcluido] = useState(false);
   const [emFalta, setEmFalta] = useState<string[]>([]);
   const [turmaCheia, setTurmaCheia] = useState(false);
+  /** Turma cheia: a pessoa prefere aguardar pela próxima turma no mesmo horário. */
+  const [aguarda, setAguarda] = useState<{ horario: string } | null>(null);
   const [encerrada, setEncerrada] = useState(false);
   const [fecho, setFecho] = useState<{ motivo: string; mensagem: string }>({ motivo: "", mensagem: "" });
   const [escolheTurma, setEscolheTurma] = useState(true);
@@ -102,6 +104,7 @@ export function PublicDocumentos({ token }: { token: string }) {
     const falta = r.emFalta ?? [];
     setEmFalta(falta);
     setTurmaCheia(Boolean(r.turmaCheia));
+    setAguarda(r.aguardaTurma ?? null);
     const seguinte: 1 | 2 = comTurma && r.turmaEscolhida ? 2 : 1;
     setPassoServidor(seguinte);
     if (!comTurma) setPasso(1);
@@ -219,6 +222,21 @@ export function PublicDocumentos({ token }: { token: string }) {
       setOk("Cronograma escolhido.");
     } catch (err) {
       setError(erroDe(err, "Não foi possível escolher a turma."));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function aguardar() {
+    setBusy(true);
+    setError("");
+    try {
+      await apiPublicAguardarTurma(token);
+      aplicar(await apiPublicDocumentos(token));
+      setPasso(2);
+      setOk("Registado: avisamos quando abrir a próxima turma.");
+    } catch (err) {
+      setError(erroDe(err, "Não foi possível registar."));
     } finally {
       setBusy(false);
     }
@@ -485,7 +503,19 @@ export function PublicDocumentos({ token }: { token: string }) {
               <section className="border-t border-[#efeae1] px-6 py-5 sm:px-8">
                 <p className="text-sm text-[#5c564c]">{textoTurmas(criterios)}</p>
                 {turmaCheia && (
-                  <p className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950">A turma anterior foi dada como cheia pela secretaria e já não pode ser escolhida. Seleccione outra.</p>
+                  <div className="mt-3 rounded-xl bg-amber-50 px-4 py-3 text-sm text-amber-950">
+                    {aguarda ? (
+                      <p>Registámos que prefere aguardar pela próxima turma{aguarda.horario ? ` no horário ${aguarda.horario}` : " no mesmo horário"}. Avisamos assim que abrir. Se mudar de ideias, pode escolher uma das turmas abaixo.</p>
+                    ) : (
+                      <>
+                        <p>A turma que escolheu já tem todas as vagas preenchidas. Escolha outra turma abaixo ou, se preferir, aguarde pela próxima turma{criterios.horario ? ` no horário ${criterios.horario}` : " no mesmo horário"}.</p>
+                        <button type="button" disabled={busy} onClick={() => void aguardar()}
+                          className="mt-3 rounded-full border border-amber-900/30 bg-white px-4 py-2 text-sm font-semibold text-amber-950 hover:bg-amber-100 disabled:opacity-50">
+                          Prefiro aguardar pela próxima turma
+                        </button>
+                      </>
+                    )}
+                  </div>
                 )}
                 {error && <p className="mt-3 text-sm text-red-700">{error}</p>}
                 {turmas.length === 0 && (

@@ -270,6 +270,8 @@ async function resumoPercurso(
     /** Gold com preço: isento | por_pedir | pedido | pago. */
     estadoPagamento: pagamento,
     pagamentoPedidoEm: row.pagamento_pedido_em ? String(row.pagamento_pedido_em) : null,
+    // Turma cheia: a pessoa escolheu, na ligação pessoal, aguardar pela próxima turma no mesmo horário.
+    aguardaTurma: row.aguarda_turma_em ? { em: String(row.aguarda_turma_em), horario: String(row.aguarda_turma_horario ?? "") } : null,
     podePedirPagamento: faltaPedir === "",
     faltaPedirPagamento: faltaPedir,
   };

@@ -19,6 +19,7 @@ import { fechoDaLigacao, leadPorToken, marcarUso, textoFecho, vistaEncerrada } f
 import { DadosFinErro, aceitarTermosFin, faltaDadosFin, gravarIdentificacaoFin, gravarMoradaFin } from "../percursoDadosFin.js";
 import { PercursoErro, concluirPercurso, escolherTurmaPublica, registarConsentimento, vistaDocumentosPublica } from "../percurso.js";
 import * as leads from "../repos/leads.js";
+import { aguardarProximaTurma } from "../percursoValidacao.js";
 import { validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
 
@@ -127,6 +128,18 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       return { ok: true, turma: await escolherTurmaPublica(db, Number(lead.id), v.body.turmaId) };
     } catch (err) {
       return reply.code(400).send({ error: err instanceof PercursoErro ? err.message : "Não foi possível escolher a turma." });
+    }
+  });
+
+  // Turma cheia: em vez de escolher outra turma, a pessoa prefere aguardar pela próxima no mesmo horário.
+  app.post("/v1/public/documentos/:token/aguardar-turma", limite(10), async (req, reply) => {
+    const lead = await ligacaoAberta(req, reply);
+    if (!lead) return;
+    await marcarUso(db, Number(lead.id));
+    try {
+      return { ok: true, ...(await aguardarProximaTurma(db, Number(lead.id))) };
+    } catch (err) {
+      return reply.code(400).send({ error: err instanceof PercursoErro ? err.message : "Não foi possível registar." });
     }
   });
 

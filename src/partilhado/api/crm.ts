@@ -152,6 +152,8 @@ export type DossieLead = {
   turmaPelaSecretaria: boolean;
   estadoPagamento: EstadoPagamentoLead;
   pagamentoPedidoEm: string | null;
+  /** Turma cheia: a pessoa escolheu aguardar pela próxima turma no mesmo horário. */
+  aguardaTurma?: { em: string; horario: string } | null;
   podePedirPagamento: boolean;
   faltaPedirPagamento: string;
   /**

@@ -53,8 +53,25 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
 
   const depois = <T,>(r: T | undefined) => { if (r) onMudou(); };
 
+  // Turma escolhida sem vagas (já com a tolerância): alerta e sugestão de outra turma por email (comercial e coordenação).
+  const podeSugerir = usePode()("crm.sugerirTurma");
+  const turmaSemVagas = l.regime === "gold" && l.estado !== "Formando" && !d.validadaEm && Boolean(d.turmaEscolhida) && (d.turmaEscolhida?.livres ?? 1) <= 0;
+
   return (
     <div className="flex flex-col gap-4">
+      {d.aguardaTurma && l.estado !== "Formando" && (
+        <Aviso tom="info" titulo="Prefere aguardar pela próxima turma">
+          A pessoa escolheu, na ligação pessoal, aguardar pela próxima turma{d.aguardaTurma.horario ? ` no horário ${d.aguardaTurma.horario}` : " no mesmo horário"} (desde {data(d.aguardaTurma.em)}).
+          Quando abrir uma turma, avise-a: pode escolhê-la na mesma ligação pessoal.
+        </Aviso>
+      )}
+      {turmaSemVagas && (
+        <Aviso tom="perigo" titulo="Turma sem vagas"
+          acao={podeSugerir ? <Botao variante="primario" aCarregar={cheia.aCorrer} onClick={() => void cheia.correr(l.id).then(depois)}>Sugerir outra turma</Botao> : undefined}>
+          A turma <strong>{d.turmaEscolhida!.nome}</strong> ({d.turmaEscolhida!.horario}, {d.turmaEscolhida!.local}) já tem todas as vagas preenchidas, incluindo a tolerância.
+          «Sugerir outra turma» envia à pessoa um email com as turmas do mesmo curso noutros horários (ou com outra data) e a opção de aguardar pela próxima turma no mesmo horário.
+        </Aviso>
+      )}
       {!l.secretariaEm && l.estado === "Pré-inscrição" && (
         <section aria-label="Dados fiscais" className="flex flex-col gap-3 rounded-cartao border border-linha p-3">
           <p className="m-0 text-[13px] text-tinta-suave">Complete o NIF e a morada fiscal: a pré-inscrição passa sozinha para a secretaria.</p>
@@ -129,9 +146,6 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
           {d.faltaValidar && <p className="m-0 text-xs text-tinta-suave">{d.faltaValidar}</p>}
           <Botao variante="primario" aCarregar={validar.aCorrer} disabled={!podeValidar}
             onClick={() => void validar.correr(l.id, destinoSel?.id).then(depois)}>Validar pré-inscrição</Botao>
-          {!d.turmaPelaSecretaria && (destinoCheio || soCheia) && (
-            <Botao variante="secundario" aCarregar={cheia.aCorrer} onClick={() => void cheia.correr(l.id).then(depois)}>Turma cheia: enviar outras datas</Botao>
-          )}
         </section>
       )}
 

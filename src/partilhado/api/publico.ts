@@ -130,6 +130,8 @@ export const apiPublicDocumentos = (token: string) =>
     breves?: TurmaPercurso[];
     turmaEscolhida?: TurmaPercurso | null;
     turmaCheia?: boolean;
+    /** Turma cheia e a pessoa escolheu aguardar pela próxima turma no mesmo horário. */
+    aguardaTurma?: { horario: string } | null;
     criterios?: { local: string; horario: string; inicio: string };
   }>(
     `/v1/public/documentos/${encodeURIComponent(token)}`,
@@ -148,6 +150,9 @@ export const apiPublicEscolherTurma = (token: string, turmaId: number) =>
   api<{ ok: boolean }>(`/v1/public/documentos/${encodeURIComponent(token)}/turma`, {
     method: "POST", body: JSON.stringify({ turmaId }),
   });
+
+export const apiPublicAguardarTurma = (token: string) =>
+  api<{ ok: boolean; horario: string }>(`/v1/public/documentos/${encodeURIComponent(token)}/aguardar-turma`, { method: "POST", body: "{}" });
 
 /** Financiada: o que a ligação pessoal mostra dos passos antes dos documentos. */
 export type DadosFinLigacao = {

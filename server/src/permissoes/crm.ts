@@ -30,7 +30,8 @@ export const regras: Regra[] = [
   ["POST", "/v1/crm/leads/:id/documentos/:docId/recusar", EQUIPA],
   ["POST", "/v1/crm/leads/:id/validar-preinscricao", PEDAGOGIA],
   ["POST", "/v1/crm/leads/:id/pedir-pagamento", PEDAGOGIA],
-  ["POST", "/v1/crm/leads/:id/turma-cheia", PEDAGOGIA],
+  // Turma cheia: sugerir outra turma por email (o comercial e a coordenação).
+  ["POST", "/v1/crm/leads/:id/turma-cheia", EQUIPA],
   ["DELETE", "/v1/crm/etiquetas/:id", SECRETARIA],
   ["DELETE", "/v1/crm/clientes/:id", SECRETARIA],
   ["DELETE", "/v1/crm/parceiros/:id", SECRETARIA],

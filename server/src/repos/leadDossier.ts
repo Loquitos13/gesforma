@@ -133,10 +133,10 @@ export async function pagamento(c: Consulta, id: string) {
   return one<Linha>(c, "SELECT * FROM pagamentos WHERE id = $1", [id]);
 }
 
-/** Turma escolhida na ligação pessoal, com a ocupação (sem reservas). */
+/** Turma escolhida na ligação pessoal, com a ocupação (sem reservas); as vagas já contam com a tolerância. */
 export async function turmaEscolhida(c: Consulta, regime: Regime, turmaId: number) {
   const sql = regime === "fin"
-    ? "SELECT id, nome, local, horario, data_inicio, alunos AS ocupadas, alunos_total AS vagas FROM turmas_fin WHERE id = $1"
-    : "SELECT id, nome, local, horario, data_inicio, total_alunos AS ocupadas, vagas FROM turmas_gold WHERE id = $1";
+    ? "SELECT id, nome, local, horario, data_inicio, alunos AS ocupadas, alunos_total + GREATEST(0, COALESCE(tolerancia_vagas, 0)) AS vagas FROM turmas_fin WHERE id = $1"
+    : "SELECT id, nome, local, horario, data_inicio, total_alunos AS ocupadas, vagas + GREATEST(0, COALESCE(tolerancia_vagas, 0)) AS vagas FROM turmas_gold WHERE id = $1";
   return one<{ id: number; nome: string; local: string; horario: string; data_inicio: string; ocupadas: number; vagas: number }>(c, sql, [turmaId]);
 }

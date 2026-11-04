@@ -172,19 +172,19 @@ export async function enviarSugestaoTurmaCheia(db: Db, leadId: number, actorId?:
   await enviarModelo(db, {
     tipo: "turma_cheia", para: email, nome, link: url,
     vars: {
-      curso, local, documentos_url: url,
+      curso, local, horario, documentos_url: url,
       turmas_itens: sugestoes.map(t => `${t.nome} · ${t.horario} · início ${fmtData(t.dataInicio)} · ${t.livres} vaga${t.livres === 1 ? "" : "s"}`),
-      sem_turmas: sugestoes.length ? "" : "Neste momento não há outra turma com vaga nesse local. A secretaria avisa quando abrir uma data.",
+      sem_turmas: sugestoes.length ? "" : "Neste momento não há outra turma com vaga nesse local. Pode aguardar pela próxima turma: avisamos quando abrir uma data.",
     },
     reserva: {
       assunto: "Turma cheia · outras datas de {{curso}}",
       linhas: [
-        "A turma de {{curso}} em {{local}} já não tem vaga.",
-        "Estas são as próximas turmas do mesmo curso com vaga:<br>{{turmas_itens}}",
+        "A turma de {{curso}} em {{local}} já tem todas as vagas preenchidas.",
+        "Pode escolher outra turma do mesmo curso (noutro horário ou com outra data):<br>{{turmas_itens}}",
         "{{sem_turmas}}",
-        "A ligação pessoal continua aberta para escolher outro cronograma.",
+        "Na sua ligação pessoal pode escolher uma destas turmas ou, se preferir, aguardar pela próxima turma no mesmo horário: avisamos assim que abrir.",
       ],
-      cta: "Escolher outro cronograma",
+      cta: "Escolher turma ou aguardar",
     },
   });
   await repo.recusarTurmaCheia(db, leadId, turmaId);
@@ -218,4 +218,15 @@ export async function ligarPreinscricaoAoFormandoGold(db: Db, formandoId: number
   await transferirDocsDoLead(db, row.id, actorId);
   await evento(db, row.id, actorId, "Inscrito na turma", `Ficha de formando #${formandoId}`);
   return { leadId: row.id };
+}
+
+/** Turma cheia: a pessoa, na ligação pessoal, prefere aguardar pela próxima turma no mesmo horário. */
+export async function aguardarProximaTurma(db: Db, leadId: number) {
+  const row = await leads.lead(db, leadId);
+  if (!row) throw new PercursoErro("Pré-inscrição inexistente.");
+  if (row.validada_em) throw new PercursoErro("A secretaria já validou esta pré-inscrição.");
+  const horario = String(row.horario ?? "");
+  await repo.marcarAguardaTurma(db, leadId, horario);
+  await evento(db, leadId, undefined, "Prefere aguardar pela próxima turma", horario ? `No mesmo horário: ${horario}` : "Mesmo horário");
+  return { horario };
 }

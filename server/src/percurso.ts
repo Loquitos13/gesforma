@@ -393,6 +393,8 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     breves,
     turmaEscolhida,
     turmaCheia: recusadas.size > 0 && !turmaEscolhida,
+    /** Turma cheia e a pessoa escolheu aguardar pela próxima turma no mesmo horário. */
+    aguardaTurma: lead.aguarda_turma_em ? { horario: String(lead.aguarda_turma_horario ?? "") } : null,
     /** Financiada: morada, identificação (sensíveis mascarados) e termos, antes dos documentos. */
     dadosFin: vistaDadosFin(lead),
     criterios: {

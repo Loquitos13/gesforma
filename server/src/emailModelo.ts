@@ -70,7 +70,7 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
   pedido_pagamento: { valor: "125,00", link: "(página de pagamento)" },
   pedido_pagamento_formando: { valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0", titular: "ENA", link: "/area-formando" },
   comprovativo_recusado: { motivo: "O comprovativo não está legível.", link: "(página de pagamento)" },
-  turma_cheia: { local: "V.N.Gaia", turmas_itens: "CCP-VNG-PL · Pós-laboral · início 02-12-2026 · 4 vagas", sem_turmas: "", link: "(ligação pessoal)" },
+  turma_cheia: { local: "V.N.Gaia", horario: "Pós-laboral", turmas_itens: "CCP-VNG-PL · Pós-laboral · início 02-12-2026 · 4 vagas", sem_turmas: "", link: "(ligação pessoal)" },
   documentos_em_falta: { link: "(ligação pessoal)" },
   lembrete_turma: { situacao: "Ainda falta escolher a turma.", link: "(ligação pessoal)" },
   lembrete_docs_fin_inicio: { link: "(área segura dos documentos)" },

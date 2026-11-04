@@ -1,5 +1,6 @@
 // API do domínio "emails": regras, modelos, pré-visualização e histórico de envios.
 import { api, enviar, qs, type Pagina } from "./cliente";
+import type { GrupoEquipa } from "../equipasAviso";
 import type { AreaEmail } from "../emailAreas";
 
 export type CtaAmbito = "preinscricao" | "contacto" | "documentos" | "pagamento";
@@ -35,6 +36,8 @@ export type RegraEmail = {
   ativo: boolean;
   /** Regras com prazo: dias antes/depois da data de referência (null = os dias por omissão). */
   dias?: number | null;
+  /** Avisos internos: as equipas que recebem (Gold, Financiada, Contabilidade). */
+  destinatarios?: GrupoEquipa[] | null;
   envios: number;
   abertos: number;
   falhados: number;
@@ -72,7 +75,10 @@ export const apiOpcoesEmail = (signal?: AbortSignal) => api<OpcoesEmail>("/v1/em
 export const apiRegrasEmail = (signal?: AbortSignal) => api<{ rules: RegraEmail[] }>("/v1/email/regras", { signal });
 export const apiModelosEmail = (signal?: AbortSignal) => api<{ templates: ModeloEmail[] }>("/v1/email/templates", { signal });
 
-export type CorpoRegra = { area?: AreaEmail; nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean; dias?: number | null };
+export type CorpoRegra = {
+  area?: AreaEmail; nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean; dias?: number | null;
+  destinatarios?: GrupoEquipa[] | null;
+};
 
 export const apiCriarRegra = (corpo: CorpoRegra) => enviar.post<{ id: number }>("/v1/email/rules", corpo);
 export const apiAlterarRegra = (id: number, corpo: Partial<CorpoRegra>) => enviar.patch<{ ok: true }>(`/v1/email/rules/${id}`, corpo);

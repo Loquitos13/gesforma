@@ -72,7 +72,7 @@ describe("botões e listas", () => {
 });
 
 describe("falar com uma pessoa", () => {
-  it("opção 4: bot em pausa, aviso por email à entidade, caixa de conversas e resposta da equipa", async () => {
+  it("opção 4: bot em pausa, aviso por email à equipa, caixa de conversas e resposta da equipa", async () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");
     const t = tel();
     await handleWhatsappText(ctx.db, t, "olá", "", "Rita Lopes");
@@ -80,15 +80,19 @@ describe("falar com uma pessoa", () => {
     const pede = await handleWhatsappText(ctx.db, t, "4", "", "Rita Lopes", "Falar com a equipa");
     expect(pede.humano).toBe(true);
     expect(pede.replies[0]).toMatch(/Uma pessoa da equipa da ENA vai responder-lhe aqui/);
+    // Sem pré-inscrição: vai às equipas Gold (comerciais e coordenação) e Financiada; nunca à administração nem à contabilidade.
     const aviso = enviados.slice(antes);
-    expect(aviso).toHaveLength(1);
-    expect(aviso[0]).toMatchObject({ to: "geral@ena.pt", subject: "WhatsApp: Rita Lopes quer falar com a equipa" });
+    const equipa = (await ctx.db.query<{ email: string; role: string }>(
+      "SELECT lower(email) AS email, role FROM users WHERE active = true AND role IN ('admin', 'comercial', 'secretaria', 'financiada', 'contabilidade')")).rows;
+    const esperados = equipa.filter(u => ["comercial", "secretaria", "financiada"].includes(u.role)).map(u => u.email).sort();
+    expect(aviso.map(m => m.to).sort()).toEqual(esperados);
+    for (const m of aviso) expect(m.subject).toBe("WhatsApp: Rita Lopes quer falar com a equipa");
     expect(aviso[0]!.text).toContain(`/gesforma/gold/whatsapp?telefone=${t}`);
 
     // Em pausa: o bot não responde (nem a «olá») e não sai outro aviso.
     expect((await handleWhatsappText(ctx.db, t, "olá, ainda está aí?")).replies).toEqual([]);
     expect((await handleWhatsappText(ctx.db, t, "operador")).replies).toEqual([]);
-    expect(enviados.length).toBe(antes + 1);
+    expect(enviados.length).toBe(antes + aviso.length);
 
     // Caixa de conversas: a que pede uma pessoa vem à frente, com as mensagens por ler.
     const lista = await pedido(ctx, "comercial", "GET", "/v1/crm/whatsapp/conversas");

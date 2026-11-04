@@ -14,6 +14,7 @@ import {
 import { EtiquetaArea } from "./EtiquetaArea";
 import { FormRegra } from "./FormRegra";
 import { MolduraEmail } from "./Previsualizacao";
+import { ROTULO_GRUPO_CURTO } from "../../../../partilhado/equipasAviso";
 
 const FASES: { id: string; titulo: string; teste: (evento: string) => boolean }[] = [
   { id: "pre", titulo: "Pré-inscrição", teste: e => (e.startsWith("preinscricao.") && e !== "preinscricao.unpaid_3d") || e.startsWith("lead.") || e.startsWith("matricula.") || e.startsWith("documentos.") },
@@ -101,6 +102,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
                       <div className="min-w-0">
                         <p className="m-0 flex items-center gap-2 text-[13px] font-semibold text-tinta"><span className="min-w-0 truncate">{r.nome}</span>{varias && <EtiquetaArea area={r.area} className="shrink-0" />}</p>
                         <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {quando(r)}{r.curso ? ` · só ${r.curso}` : ""}</p>
+                        {r.destinatarios?.length ? <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Para: {r.destinatarios.map(g => ROTULO_GRUPO_CURTO[g]).join(", ")}</p> : null}
                       </div>
                       <div className="text-xs text-tinta-suave text-right">
                         <span className="block font-semibold text-tinta">{num(r.envios)} enviados</span>

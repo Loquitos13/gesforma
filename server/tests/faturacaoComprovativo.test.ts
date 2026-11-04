@@ -21,8 +21,11 @@ let seq = 0;
 
 beforeAll(async () => {
   ctx = await arrancar();
-  const r = await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", iban: "PT50 0002 0123 1234 5678 9015 4", emailContabilidade: CONTAS } });
+  const r = await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", iban: "PT50 0002 0123 1234 5678 9015 4" } });
   expect(r.statusCode, r.body).toBe(200);
+  // A contabilidade é quem tem o perfil Contabilidade (um só utilizador activo, com este email).
+  await ctx.db.query("UPDATE users SET active = false WHERE role = 'contabilidade' AND id <> $1", [ctx.userId.contabilidade]);
+  await ctx.db.query("UPDATE users SET email = $2 WHERE id = $1", [ctx.userId.contabilidade, CONTAS]);
 });
 
 /** Pré-inscrição Gold com o pagamento pedido pela secretaria (passo de pagamento aberto) e a sua ligação pessoal. */

@@ -13,6 +13,7 @@ import {
 } from "../repos/emails.js";
 import { AREAS_EMAIL, areaDoRegime, areasDoPerfil, type AreaEmail } from "../../../src/partilhado/emailAreas.js";
 import { GATILHOS_COM_PRAZO } from "../regrasAgendadas.js";
+import { eAvisoEquipa, GRUPOS_EQUIPA, gruposPorOmissao, type GrupoEquipa } from "../../../src/partilhado/equipasAviso.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
 import { enviarAvisosDocumentos } from "../avisosDocumentos.js";
@@ -42,9 +43,16 @@ const DESCRICAO_GATILHO: Record<string, string> = {
   "Antes do prazo dos documentos": "A quem ainda tem documentos em falta, X dias antes da data limite de matrícula (ou do início da turma).",
   "Pagamento pedido sem comprovativo": "X dias depois de pedido o pagamento, se ainda não chegou o comprovativo.",
   "Antes do início da turma (integração)": "Aos formandos da turma, X dias antes do início: local, horário e área do formando.",
-  "Documentos ou comprovativo recebidos (aviso à equipa)": "Vai para o email do local da pessoa (ou o da entidade) quando chega um documento ou o comprovativo.",
+  "Documentos recebidos (aviso à equipa)": "Vai para a equipa escolhida em «Enviar para» quando a pessoa entrega todos os documentos obrigatórios.",
+  "Comprovativo de pagamento recebido (aviso à equipa)": "Vai para a equipa escolhida em «Enviar para» quando chega o comprovativo de pagamento.",
   "Formador atribuído a uma turma": "Vai para o formador quando é atribuído a uma turma (ficha da turma ou cronograma).",
 };
+/** Equipas de um aviso interno (sem repetidos); vazio = as da área por omissão. */
+function gruposValidos(lista: readonly GrupoEquipa[] | null | undefined, area: AreaEmail, trigger = "") {
+  const unicos = [...new Set(lista ?? [])];
+  return unicos.length ? unicos : gruposPorOmissao(trigger, area);
+}
+
 const ATRASOS = ["Imediatamente", "1 hora depois", "24 horas depois", "3 dias depois"];
 const AMBITOS = [
   { valor: "documentos", rotulo: "Ligação pessoal (documentos)" },
@@ -68,6 +76,8 @@ const regraSchema = z.object({
   ativo: z.boolean().optional(),
   /** Regras com prazo: dias antes (ou depois) da data de referência; vazio = o valor por omissão do gatilho. */
   dias: z.number().int().min(0).max(365).nullable().optional(),
+  /** Avisos internos: a que equipas vai (Gold, Financiada, Contabilidade). */
+  destinatarios: z.array(z.enum(GRUPOS_EQUIPA)).max(3).nullable().optional(),
 });
 const modeloSchema = z.object({
   nome: z.string().trim().min(2).max(120).optional(),
@@ -156,6 +166,7 @@ function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
     curso: r.curso,
     ativo: r.ativo,
     dias: r.dias,
+    destinatarios: r.destinatarios ?? null,
     envios: r.envios,
     abertos: r.abertos,
     falhados: r.falhados,
@@ -292,6 +303,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       area, nome: v.body.nome, triggerKey: key, gatilho: v.body.gatilho, templateTipo: v.body.templateTipo,
       atrasoSeg: delaySecondsFromLabel(v.body.atraso ?? "Imediatamente"), curso: v.body.curso || null, ativo: v.body.ativo ?? true,
       dias: GATILHOS_COM_PRAZO[key] ? v.body.dias ?? null : null,
+      destinatarios: eAvisoEquipa(key) ? gruposValidos(v.body.destinatarios, area, key) : null,
     });
     await audit(db, actor(req).id, "email.rule_create", "email_rule", String(id), req.ip);
     return { id };
@@ -311,6 +323,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       nome: d.nome, gatilho: d.gatilho, triggerKey: key, templateTipo: d.templateTipo,
       atrasoSeg: d.atraso != null ? delaySecondsFromLabel(d.atraso) : undefined,
       curso: d.curso === undefined ? undefined : (d.curso || null), ativo: d.ativo, dias: d.dias,
+      destinatarios: d.destinatarios === undefined ? undefined : gruposValidos(d.destinatarios, area!),
     });
     await audit(db, actor(req).id, "email.rule_update", "email_rule", String(v.params.id), req.ip, { ...d });
     return { ok: true };

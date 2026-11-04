@@ -18,6 +18,7 @@ import { COMPROVATIVO, documentosUrl, ensureDocsToken, listarDocsLead } from "./
 import { readDriveContent } from "./driveFicheiros.js";
 import { enviarModelo } from "./emailModelo.js";
 import { dadosConfirmados, sugestaoFaturacao, type DadosFaturacao } from "./faturacao.js";
+import { emailsDaEquipa } from "./equipaDestinatarios.js";
 import { lerEntidade, type Entidade } from "./regrasConfig.js";
 import * as repo from "./repos/comprovativoContabilidade.js";
 import * as leads from "./repos/leads.js";
@@ -44,13 +45,13 @@ export type FaturacaoNoEmail = { dados: DadosFaturacao; confirmados: boolean };
 type Ficheiro = { nome: string; mime: string; bytes: Buffer };
 
 /**
- * Envia o email à contabilidade (false: sem email da contabilidade). Sem `faturacao`, vão os dados da ficha, por confirmar.
+ * Envia o email a cada utilizador com o perfil Contabilidade (false: não há nenhum activo). Sem `faturacao`, vão os dados da ficha, por confirmar.
  * Sem `ficheiro` (não foi possível lê-lo), sai sem anexo: o comprovativo está em Pagamentos.
  */
 export async function enviarComprovativoContabilidade(db: Db, lead: Record<string, unknown>, ficheiro: Ficheiro | null, faturacao?: FaturacaoNoEmail) {
   const ent = await lerEntidade(db);
-  const para = ent.emailContabilidade.trim();
-  if (!isEmail(para)) return false;
+  const destinos = await emailsDaEquipa(db, ["contabilidade"]);
+  if (!destinos.length) return false;
   const pag = lead.pagamento_id ? await pags.pagamento(db, String(lead.pagamento_id)) : null;
   const valor = Number(pag?.valor ?? lead.preco) || 0;
   const fat = faturacao ?? { dados: sugestaoFaturacao(lead), confirmados: false };
@@ -61,8 +62,8 @@ export async function enviarComprovativoContabilidade(db: Db, lead: Record<strin
     "Conta de destino: {{iban}}",
     "Dados de faturação ({{faturacao_estado}}):<br>Nome ou empresa: {{faturacao_nome}}<br>NIF: {{faturacao_nif}}<br>Morada fiscal: {{faturacao_morada}}<br>Código postal: {{faturacao_codigo_postal}}<br>Email da fatura: {{faturacao_email}}",
   ];
-  await enviarModelo(db, {
-    tipo: "comprovativo_contabilidade", area: "contabilidade", para, nome: "Contabilidade",
+  for (const pessoa of destinos) await enviarModelo(db, {
+    tipo: "comprovativo_contabilidade", area: "contabilidade", para: pessoa.email, nome: pessoa.nome,
     vars: {
       nome_formando: nomeDe(lead) || "—", nif: ou(lead.nif), telemovel: ou(lead.telf), email_formando: ou(lead.email),
       iban_formando: ou(lead.iban), curso: ou(lead.curso), valor: fmtEuros(valor),

@@ -257,7 +257,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       }
       // Aviso à equipa: o comprovativo logo; os documentos só quando estão todos os obrigatórios (um email, não um por ficheiro).
       if (comprovativo) {
-        await avisarDocumentoRecebido(db, lead, rotulo, file.id).catch(err => console.error("[emails] aviso de documento recebido:", err));
+        await avisarDocumentoRecebido(db, lead, rotulo, file.id, { comprovativo: true }).catch(err => console.error("[emails] aviso de comprovativo recebido:", err));
       } else {
         const agora = await listarDocsLead(db, leadId);
         const entregue = (id: string) => agora.some(d => d.tipo === id && d.estado !== "recusado");

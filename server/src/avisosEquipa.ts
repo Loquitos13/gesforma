@@ -1,42 +1,56 @@
 /**
  * Avisos internos por regra de email (Sistema › Emails › Regras):
- *  - equipa.documentos_recebidos: chegou um documento ou o comprovativo na ligação pessoal → email do local da pessoa
- *    (Edição de cursos › Locais) ou, sem ele, o da entidade;
+ *  - equipa.documentos_recebidos: a pessoa entregou os documentos obrigatórios na ligação pessoal;
+ *  - equipa.comprovativo_recebido: chegou o comprovativo de pagamento;
+ *    os dois vão para os utilizadores das equipas escolhidas na regra («Enviar para»; nunca a administração);
  *  - formador.atribuido: um formador passa a estar na turma (ficha da turma ou cronograma) → email do formador.
- * Sem regra activa não sai nada; cada aviso sai uma só vez (chave de idempotência).
+ * Sem regra activa não sai nada; cada aviso sai uma só vez a cada pessoa (chave de idempotência).
  *
- * E, sem regra (sai sempre): o pedido para falar com a equipa no WhatsApp → email da entidade (modelo
+ * E, sem regra (sai sempre): o pedido para falar com a equipa no WhatsApp → a equipa da área da pessoa (modelo
  * «aviso_whatsapp_humano»).
  */
 import { ingestEvent } from "./automations.js";
-import { enviarModelo } from "./emailModelo.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
-import { lerEntidade } from "./regrasConfig.js";
-import { remetenteDoDestinatario } from "./remetenteLocal.js";
+import { enviarModelo } from "./emailModelo.js";
+import { emailsDaEquipa } from "./equipaDestinatarios.js";
+import { regrasActivasPara } from "./repos/emails.js";
+import { gruposPorOmissao } from "../../src/partilhado/equipasAviso.js";
+import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 import { isEmail, normalizeEmail } from "./security.js";
 
 const origem = () => config.appOrigin.replace(/\/$/, "");
 const dataPt = (iso: string) => (/^\d{4}-\d{2}-\d{2}/.test(iso) ? `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}` : iso);
 
+/**
+ * Documentos (todos os obrigatórios) ou comprovativo recebidos: um email a cada utilizador das equipas da regra activa
+ * da área da pré-inscrição.
+ */
 export async function avisarDocumentoRecebido(
   db: Db,
   lead: Record<string, unknown>,
   documento: string,
   ficheiroId: string,
+  opts: { comprovativo?: boolean } = {},
 ) {
-  const local = await remetenteDoDestinatario(db, String(lead.email ?? "")).catch(() => null);
-  const para = normalizeEmail(local?.email || (await lerEntidade(db)).email);
-  if (!isEmail(para)) return;
+  const evento = opts.comprovativo ? "equipa.comprovativo_recebido" : "equipa.documentos_recebidos";
+  const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+  const area = areaDoRegime(regime);
   const id = Number(lead.id);
-  const vista = String(lead.regime ?? "gold") === "fin" ? "financiada" : "gold";
-  await ingestEvent(db, "equipa.documentos_recebidos",
-    { email: para, nome: "Equipa", curso: String(lead.curso ?? ""), regime: String(lead.regime ?? "gold") },
-    `docrecebido:${id}:${documento}:${ficheiroId}`,
-    { vars: {
-      nome_formando: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.replace(/\s+/g, " ").trim() || "—",
-      documento, link: `${origem()}/gesforma/${vista}/pre-inscricoes?lead=${id}`,
-    } });
+  const vista = regime === "fin" ? "financiada" : "gold";
+  const vars = {
+    nome_formando: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.replace(/\s+/g, " ").trim() || "—",
+    documento, link: `${origem()}/gesforma/${vista}/pre-inscricoes?lead=${id}`,
+  };
+  for (const regra of await regrasActivasPara(db, [evento], area)) {
+    const grupos = regra.destinatarios?.length ? regra.destinatarios : gruposPorOmissao(evento, area);
+    for (const pessoa of await emailsDaEquipa(db, grupos)) {
+      await ingestEvent(db, evento,
+        { email: pessoa.email, nome: pessoa.nome, curso: String(lead.curso ?? ""), regime },
+        `${opts.comprovativo ? "comprovativo" : "docrecebido"}:${id}:${documento}:${ficheiroId}:${regra.id}:${pessoa.email}`.slice(0, 200),
+        { soRegraId: regra.id, vars, area });
+    }
+  }
 }
 
 type TurmaAvisos = { nome?: unknown; curso?: unknown; local?: unknown; horario?: unknown; data_inicio?: unknown; formador?: unknown; formadores?: unknown; cronograma?: unknown };
@@ -72,25 +86,29 @@ export async function avisarFormadoresNovos(db: Db, regime: "gold" | "fin", turm
   }
 }
 
-/** Alguém pediu, no WhatsApp, para falar com uma pessoa: aviso por email à entidade, com a ligação para a conversa. */
-export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: string; mensagem: string; regime: "gold" | "fin" }) {
-  const para = normalizeEmail((await lerEntidade(db)).email);
-  if (!isEmail(para)) return;
+/**
+ * Alguém pediu, no WhatsApp, para falar com uma pessoa: aviso por email à equipa da área da pessoa (sem pré-inscrição,
+ * às equipas Gold e Financiada), com a ligação para a conversa.
+ */
+export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: string; mensagem: string; regime: "gold" | "fin" | null }) {
   const vista = p.regime === "fin" ? "financiada" : "gold";
   const telefone = p.telefone.startsWith("351") ? `+351 ${p.telefone.slice(3)}` : `+${p.telefone}`;
   const nome = p.nome || telefone;
-  await enviarModelo(db, {
-    tipo: "aviso_whatsapp_humano", area: p.regime, para, nome: "Equipa",
-    vars: { nome_contacto: nome, telefone, mensagem: p.mensagem },
-    link: `${origem()}/gesforma/${vista}/whatsapp?telefone=${encodeURIComponent(p.telefone)}`,
-    reserva: {
-      assunto: "WhatsApp: {{nome_contacto}} quer falar com a equipa",
-      linhas: [
-        "{{nome_contacto}} ({{telefone}}) pediu, no WhatsApp da ENA, para falar com uma pessoa da equipa.",
-        "Última mensagem: {{mensagem}}",
-        "O assistente automático fica em pausa nesta conversa. Responda pela caixa de conversas do GesForma.",
-      ],
-      cta: "Abrir a conversa",
-    },
-  });
+  const grupos = p.regime ? [p.regime] : ["gold", "fin"];
+  for (const pessoa of await emailsDaEquipa(db, grupos)) {
+    await enviarModelo(db, {
+      tipo: "aviso_whatsapp_humano", area: p.regime ?? "gold", para: pessoa.email, nome: pessoa.nome,
+      vars: { nome_contacto: nome, telefone, mensagem: p.mensagem },
+      link: `${origem()}/gesforma/${vista}/whatsapp?telefone=${encodeURIComponent(p.telefone)}`,
+      reserva: {
+        assunto: "WhatsApp: {{nome_contacto}} quer falar com a equipa",
+        linhas: [
+          "{{nome_contacto}} ({{telefone}}) pediu, no WhatsApp da ENA, para falar com uma pessoa da equipa.",
+          "Última mensagem: {{mensagem}}",
+          "O assistente automático fica em pausa nesta conversa. Responda pela caixa de conversas do GesForma.",
+        ],
+        cta: "Abrir a conversa",
+      },
+    });
+  }
 }

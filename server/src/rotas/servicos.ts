@@ -2,10 +2,10 @@ import { enviarModelo } from "../emailModelo.js";
 import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { LIMITES_SERVICO as L, slugServico, videoServico } from "../../../src/partilhado/siteServicos.js";
-import { lerEntidadePublica } from "../regrasConfig.js";
 import * as repo from "../repos/servicos.js";
 import { many, one, type Consulta } from "../repos/sql.js";
 import { idNum, validar } from "../validacao.js";
+import { emailsDaEquipa } from "../equipaDestinatarios.js";
 import type { Deps } from "./tipos.js";
 import { hojeLisboa } from "../datas.js";
 
@@ -177,10 +177,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       await one(q, `INSERT INTO pedidos_proposta (nome, empresa, email, telefone, servico, mensagem, cliente_id)
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [p.nome, p.empresa, p.email, p.telefone, p.servico, p.mensagem, clienteId ?? null]);
     });
-    const ena = await lerEntidadePublica(db);
-    if (ena.email) {
+    // Aviso à equipa Gold (comerciais e coordenação pedagógica), não à administração.
+    for (const pessoa of await emailsDaEquipa(db, ["gold"])) {
       await enviarModelo(db, {
-        tipo: "pedido_proposta", para: ena.email, nome: ena.nomeCurto || ena.nome,
+        tipo: "pedido_proposta", para: pessoa.email, nome: pessoa.nome,
         vars: {
           nome_contacto: p.nome, empresa: p.empresa || p.nome, email_contacto: p.email, telefone: p.telefone || "—",
           servico: p.servico || "—", mensagem: p.mensagem || "(sem mensagem)",

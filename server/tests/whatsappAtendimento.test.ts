@@ -257,3 +257,28 @@ describe("eliminar conversa", () => {
     expect((await pedido(ctx, "secretaria", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json().mensagens).toHaveLength(2);
   });
 });
+
+describe("Gold ou Financiada", () => {
+  it("antes de listar cursos pergunta Gold ou Financiada; a Financiada regista a pré-inscrição com o local preferido", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const { listCursosOferta } = await import("../src/ofertaGold.js");
+    const t = tel();
+    // Lista de cursos: primeiro a escolha.
+    const lista = await handleWhatsappText(ctx.db, t, "3");
+    expect(lista.replies[0]).toMatch(/Formação Gold[\s\S]*Formação Financiada/);
+    expect((await handleWhatsappText(ctx.db, t, "fin")).replies[0]).toMatch(/^Cursos de Formação Financiada:/);
+
+    const fin = (await listCursosOferta(ctx.db)).find(c => c.regime === "fin");
+    if (!fin) return; // sem cursos financiados na base de testes, a lista acima chega
+    const email = `wa.fin.${t}@exemplo.pt`;
+    await handleWhatsappText(ctx.db, t, "1");
+    for (const passo of ["fin", "Ana", "Reis", email, "Porto"]) await handleWhatsappText(ctx.db, t, passo);
+    let r = await handleWhatsappText(ctx.db, t, fin.nome);
+    if (/Onde prefere/.test(r.replies[0] ?? "")) r = await handleWhatsappText(ctx.db, t, "1");
+    expect(r.replies.join("\n")).toMatch(/sim/i);
+    await handleWhatsappText(ctx.db, t, "sim");
+    const lead = (await ctx.db.query<{ regime: string; curso: string; origem: string }>(
+      "SELECT regime, curso, origem FROM preinscricoes WHERE email = $1", [email])).rows[0];
+    expect(lead).toMatchObject({ regime: "fin", curso: fin.nome, origem: "WhatsApp" });
+  });
+});

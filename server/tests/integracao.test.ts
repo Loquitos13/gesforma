@@ -44,7 +44,7 @@ describe("WhatsApp: consentimento antes de gravar", () => {
     const turma = (await listOfertaGold(ctx.db))[0];
     expect(turma, "o seed de demonstração tem turmas Gold activas").toBeTruthy();
     const email = `${unico("wa")}@exemplo.pt`;
-    const passos = ["menu", "1", "Rita", "Lopes", email, "Porto", turma!.curso, turma!.local, turma!.horario, turma!.dataInicio];
+    const passos = ["menu", "1", "gold", "Rita", "Lopes", email, "Porto", turma!.curso, turma!.local, turma!.horario, turma!.dataInicio];
     let ultimo: Awaited<ReturnType<typeof handleWhatsappText>> | null = null;
     for (const t of passos) ultimo = await handleWhatsappText(ctx.db, telefone, t);
     expect(ultimo!.passo).toBe("consentimento");

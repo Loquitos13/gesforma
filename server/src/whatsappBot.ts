@@ -3,7 +3,10 @@ import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
 import { criarPreinscricaoPublica, politicaPrivacidade } from "./preinscricaoPublica.js";
-import { filtrarOferta, fmtDataPt, listCursosGoldActivos, listOfertaGold, uniqueOferta, type OfertaTurma } from "./ofertaGold.js";
+import { listarCatalogoPublico } from "./catalogoPublico.js";
+import {
+  filtrarOferta, fmtDataPt, listCursosGoldActivos, listCursosOferta, listOfertaFin, listOfertaGold, uniqueOferta, type OfertaTurma,
+} from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 import { avisarPedidoWhatsapp } from "./avisosEquipa.js";
 import { reabrirConversaWhatsapp } from "./whatsappInatividade.js";
@@ -12,9 +15,13 @@ import {
   pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
 } from "./repos/whatsapp.js";
 
-type Passo = "menu" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "horario" | "data" | "consentimento";
+type Passo =
+  | "menu" | "regime" | "regimeLista" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "localFin" | "horario" | "data"
+  | "consentimento";
 
 type Dados = {
+  /** Gold (pago, com turma) ou Financiada (a turma é atribuída pela coordenação). */
+  regime?: "gold" | "fin";
   nome?: string;
   apelido?: string;
   email?: string;
@@ -82,6 +89,37 @@ function parseDados(raw: unknown): Dados {
 
 async function cursosActivos(db: Db) {
   return listCursosGoldActivos(db);
+}
+
+/** Cursos da Financiada visíveis no site (os mesmos do catálogo). */
+async function cursosFin(db: Db) {
+  return (await listCursosOferta(db)).filter(c => c.regime === "fin").map(c => c.nome);
+}
+
+/** Locais de um curso da Financiada: os da ficha do curso e os das turmas abertas. */
+async function locaisFin(db: Db, curso: string) {
+  const chave = curso.trim().toLowerCase();
+  const doCatalogo = (await listarCatalogoPublico(db)).cursos
+    .find(c => c.regime === "fin" && c.titulo.trim().toLowerCase() === chave)?.locais.map(l => l.nome) ?? [];
+  const dasTurmas = uniqueOferta(filtrarOferta(await listOfertaFin(db), { curso }), "local");
+  return [...new Set([...doCatalogo, ...dasTurmas].filter(l => l.trim()))];
+}
+
+/** Gold ou Financiada, antes de listar cursos. */
+const ESCOLHA_REGIME = (titulo: string): Resposta => ({
+  texto: titulo,
+  opcoes: [
+    { id: "gold", titulo: "Formação Gold", descricao: "Cursos pagos, com turmas e datas marcadas" },
+    { id: "fin", titulo: "Formação Financiada", descricao: "Gratuita para quem cumpre os requisitos" },
+  ],
+  simples: [titulo, "1 · Formação Gold (cursos pagos, com turmas e datas marcadas)", "2 · Formação Financiada (gratuita para quem cumpre os requisitos)", "", "Responda com o número."].join("\n"),
+});
+
+function lerRegime(t: string): "gold" | "fin" | null {
+  const q = t.trim().toLowerCase();
+  if (q === "1" || q === "gold" || /\bgold\b/.test(q)) return "gold";
+  if (q === "2" || q === "fin" || /financ/.test(q)) return "fin";
+  return null;
 }
 
 function pickOpcao(text: string, opcoes: string[]) {
@@ -266,8 +304,9 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
 
   if (passo === "menu" || (passo as string) === "consulta") {
     if (text === "1" || /pr[eé]-?inscri/i.test(text) || /^inscrever/i.test(text)) {
-      passo = "nome";
-      say("Vamos à pré-inscrição. Qual é o *primeiro nome*?");
+      passo = "regime";
+      dados = {};
+      say(ESCOLHA_REGIME("Vamos à pré-inscrição. Que formação procura?"));
     } else if (text === "2" || /estado|pedido|inscri/i.test(text)) {
       const leads = await leadsPorTelefone(db, telefone);
       if (leads[0]) {
@@ -280,12 +319,31 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
         say("Não encontro um pedido neste número. Escreva *1* para se pré-inscrever ou contacte a secretaria.");
       }
     } else if (text === "3" || /curso/i.test(text)) {
+      passo = "regimeLista";
+      say(ESCOLHA_REGIME("Que cursos quer ver?"));
+    } else {
+      say(MENU);
+    }
+  } else if (passo === "regime") {
+    const regime = lerRegime(text);
+    if (!regime) say(ESCOLHA_REGIME("Não percebi. Que formação procura?"));
+    else {
+      dados.regime = regime;
+      passo = "nome";
+      say("Qual é o *primeiro nome*?");
+    }
+  } else if (passo === "regimeLista") {
+    const regime = lerRegime(text);
+    if (!regime) say(ESCOLHA_REGIME("Não percebi. Que cursos quer ver?"));
+    else if (regime === "gold") {
       const cursos = await cursosActivos(db);
-      say(listaTexto("Cursos Gold activos:", cursos.map(c => `${c.nome} · € ${c.preco}`)).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
+      say(listaTexto("Cursos Gold:", cursos.map(c => `${c.nome} · € ${c.preco}`)).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
       say("Esse valor é o do curso. O local ou o horário podem ter outro preço, e a inscrição fica com o que escolher.");
       passo = "menu";
     } else {
-      say(MENU);
+      const cursos = await cursosFin(db);
+      say(listaTexto("Cursos de Formação Financiada:", cursos).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
+      passo = "menu";
     }
   } else if (passo === "nome") {
     dados.nome = sanitizeHeader(text).slice(0, 80);
@@ -308,9 +366,66 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
   } else if (passo === "concelho") {
     dados.concelho = sanitizeHeader(text).slice(0, 80);
     passo = "curso";
+    if (dados.regime === "fin") {
+      say(listaNumerada("Curso de Formação Financiada a que se quer pré-inscrever:", await cursosFin(db), "Neste momento não há cursos de Formação Financiada abertos. Escreva *menu*."));
+      await saveSessao(db, telefone, passo, dados, leadId);
+      for (const r of replies) await logMsg(db, telefone, "out", r);
+      return { replies, mensagens, telefone, passo, leadId };
+    }
     const cursos = await cursosActivos(db);
-    say("Agora os *dados do curso*. A turma é o conjunto local + horário + data de início, e só entra se estiver *liberada* (turma Gold activa).");
+    say("Agora o *curso*. Depois escolhe o local, o horário e a data de início entre as turmas abertas.");
     say(listaNumerada("Curso a que se quer inscrever:", cursos.map(c => c.nome)));
+  } else if (passo === "curso" && dados.regime === "fin") {
+    const cursos = await cursosFin(db);
+    const curso = pickOpcao(text, cursos);
+    if (!curso) say(listaNumerada("Não percebi o curso. Escolha um número:", cursos));
+    else {
+      dados.curso = curso;
+      dados.local = undefined;
+      const locais = await locaisFin(db, curso);
+      if (locais.length) {
+        passo = "localFin";
+        say(listaNumerada(`Onde prefere fazer ${curso}?`, locais));
+      } else {
+        passo = "consentimento";
+        say(await pedidoConsentimento(db));
+      }
+    }
+  } else if (passo === "localFin") {
+    const locais = await locaisFin(db, dados.curso ?? "");
+    const local = pickOpcao(text, locais);
+    if (!local) say(listaNumerada("Não percebi o local. Escolha um número:", locais));
+    else {
+      dados.local = local;
+      passo = "consentimento";
+      say(await pedidoConsentimento(db));
+    }
+  } else if (passo === "consentimento" && dados.regime === "fin") {
+    const resposta = text.trim().toLowerCase();
+    if (/^(n|não|nao|2)$/.test(resposta)) {
+      say("Sem a sua autorização não registamos a pré-inscrição. Escreva *menu* se mudar de ideias.");
+      passo = "menu";
+      dados = {};
+    } else if (!/^(s|sim|aceito|1)$/.test(resposta)) {
+      say("Responda *sim* para aceitar ou *não* para cancelar.");
+    } else {
+      // Financiada: a turma é atribuída pela coordenação; o local fica como preferência. Os dados pessoais pedem-se
+      // depois, na ligação pessoal que segue por email.
+      const created = await criarPreinscricaoPublica(db, {
+        nome: dados.nome || "WhatsApp", apelido: dados.apelido || "", email: dados.email || "", telf: telefone,
+        concelho: dados.concelho || "", curso: dados.curso || "", local: dados.local || "", regime: "fin",
+        origem: "WhatsApp", meioContacto: "WhatsApp", consentimento: true,
+      }, { ip: "WhatsApp" });
+      if ("error" in created) {
+        say(created.error === "email inválido" ? "O email ficou inválido. Escreva *menu* e recomece." : "Não foi possível registar a pré-inscrição. Escreva *menu* e tente outra vez.");
+      } else {
+        leadId = created.preinscricao.id;
+        await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
+        say(`${dados.curso}${dados.local ? `\nLocal preferido: ${dados.local}` : ""}\n${created.aviso}\n\nA coordenação da Formação Financiada contacta-o para confirmar a turma.`);
+      }
+      passo = "menu";
+      dados = {};
+    }
   } else if (passo === "curso") {
     const cursos = await cursosActivos(db);
     const curso = pickOpcao(text, cursos.map(c => c.nome)) || sanitizeHeader(text).slice(0, 200);

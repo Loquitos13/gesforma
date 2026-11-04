@@ -39,7 +39,7 @@ describe("WhatsApp: o bot não revela pré-inscrições de outros", () => {
     const turma = (await listOfertaGold(ctx.db))[0]!;
     const email = `${unico("dup")}@exemplo.pt`;
     const fim = async (tel: string) => {
-      for (const t of ["menu", "1", "Rita", "Lopes", email, "Porto", turma.curso, turma.local, turma.horario, turma.dataInicio]) {
+      for (const t of ["menu", "1", "gold", "Rita", "Lopes", email, "Porto", turma.curso, turma.local, turma.horario, turma.dataInicio]) {
         await handleWhatsappText(ctx.db, tel, t);
       }
       return (await handleWhatsappText(ctx.db, tel, "sim")).replies.join("\n");

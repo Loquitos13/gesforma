@@ -3,6 +3,7 @@ import { useAuth } from "../../partilhado/AuthGate";
 import { recarregarSeVersaoNova } from "../../partilhado/versaoNova";
 import { Botao, cx, Esqueleto } from "../../partilhado/ui";
 import { DocAlertas } from "../DocAlertas";
+import { WhatsappAlertas } from "../WhatsappPendentes";
 import { tabDoFormador } from "../vistas/turmas/cockpit/base";
 import { caminhoDaVista, vistaDoCaminho, type Destino, type Vista } from "../rotasGesforma";
 import { FileDialogPaint } from "../ViewLoading";
@@ -191,6 +192,7 @@ export function AppShell() {
       </div>
 
       <DocAlertas onOpen={(id, regime) => navigate({ view: regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes", leadId: id })} />
+      <WhatsappAlertas role={user.role} onOpen={(telefone, regime) => navigate({ view: regime === "fin" ? "fin-whatsapp" : "gold-whatsapp", filtros: { telefone } })} />
       <Pesquisa aberta={pesquisaAberta} onFechar={() => setPesquisaAberta(false)} onNavigate={navigate} />
     </>
   );

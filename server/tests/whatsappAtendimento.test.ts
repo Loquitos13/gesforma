@@ -225,6 +225,7 @@ describe("fechar conversas e inatividade", () => {
     const espera = tel();
     await handleWhatsappText(ctx.db, espera, "4", "", "Marta");
     await ctx.db.query("UPDATE whatsapp_sessoes SET humano_desde = humano_desde - interval '5 hours' WHERE telefone = $1", [espera]);
+    await recuar(espera, "5 hours");
     const antes = enviados.length;
     await verificarInatividade(ctx.db, enviar);
     await verificarInatividade(ctx.db, enviar);
@@ -280,5 +281,23 @@ describe("Gold ou Financiada", () => {
     const lead = (await ctx.db.query<{ regime: string; curso: string; origem: string }>(
       "SELECT regime, curso, origem FROM preinscricoes WHERE email = $1", [email])).rows[0];
     expect(lead).toMatchObject({ regime: "fin", curso: fin.nome, origem: "WhatsApp" });
+  });
+});
+
+describe("pedidos à espera (contador e alerta)", () => {
+  it("o pedido aparece até a equipa responder; volta se a pessoa escrever outra vez; sai ao fechar", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    const pendente = async () => ((await pedido(ctx, "financiada", "GET", "/v1/crm/whatsapp/pendentes")).json().pendentes as { telefone: string; regime: string | null }[])
+      .find(p => p.telefone === t);
+    expect((await pedido(ctx, "contabilidade", "GET", "/v1/crm/whatsapp/pendentes")).statusCode).toBe(403);
+    await handleWhatsappText(ctx.db, t, "4");
+    expect(await pendente()).toMatchObject({ telefone: t, regime: null });
+    expect((await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/responder", { telefone: t, texto: "Olá, em que posso ajudar?" })).statusCode).toBe(200);
+    expect(await pendente()).toBeUndefined();
+    await handleWhatsappText(ctx.db, t, "Quero saber datas");
+    expect(await pendente()).toBeDefined();
+    await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/fechar", { telefone: t });
+    expect(await pendente()).toBeUndefined();
   });
 });

@@ -96,7 +96,7 @@ export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao <> 'evento') AS ultima,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'in') AS ultima_in,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'out'
-               AND m.autor IS NOT NULL AND m.autor <> '' AND m.created_at >= s.humano_desde) AS resposta_equipa
+               AND m.autor IS NOT NULL AND m.autor <> '') AS resposta_equipa
        FROM whatsapp_sessoes s
       WHERE s.fechada_em IS NULL
         AND EXISTS (SELECT 1 FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao <> 'evento')
@@ -124,7 +124,9 @@ export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
       }
     }
     // 3. Pediu para falar com a equipa e ninguém respondeu há X horas: novo aviso à equipa (uma vez por pedido).
-    if (r.avisoEquipaHoras && humano && !s.resposta_equipa && ha(s.humano_desde) >= r.avisoEquipaHoras * 60) {
+    // À espera: a última mensagem da pessoa é mais recente do que a última resposta da equipa; conta desde ela.
+    const aEspera = !s.resposta_equipa || (s.ultima_in != null && new Date(s.ultima_in).getTime() > new Date(s.resposta_equipa).getTime());
+    if (r.avisoEquipaHoras && humano && aEspera && ha(s.ultima_in ?? s.humano_desde) >= r.avisoEquipaHoras * 60) {
       const marcada = await db.query(
         "UPDATE whatsapp_sessoes SET aviso_equipa_em = now() WHERE telefone = $1 AND aviso_equipa_em IS NULL RETURNING telefone", [s.telefone]);
       if (marcada.rows.length) {

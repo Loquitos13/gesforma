@@ -7,6 +7,7 @@ import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { Icone } from "./Icones";
 import { menuDoPerfil, painelDoPerfil, vistaDoMenu, type GrupoMenu, type ItemMenu } from "./navegacao";
 import { preCarregarVista } from "./rotas";
+import { useWhatsappPendentes } from "../WhatsappPendentes";
 import type { Navegar } from "./tipos";
 
 /** Grupos e submenus abertos: o da vista actual abre sempre; o resto fica como a pessoa deixou. */
@@ -37,6 +38,10 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
   );
   const modalPasse = <AlterarPalavraPasse aberto={mudarPasse} onFechar={() => setMudarPasse(false)} />;
   const menu = useMemo(() => menuDoPerfil(user.role), [user.role]);
+  // Pedidos de WhatsApp à espera de uma pessoa da equipa: contador no «WhatsApp» (e no «CRM» fechado).
+  const pendentes = useWhatsappPendentes();
+  const contadorDe = (v?: Vista) => (v === "gold-whatsapp" ? pendentes.gold : v === "fin-whatsapp" ? pendentes.fin : 0);
+  const contadorItem = (item: ItemMenu) => contadorDe(item.view) + (item.children ?? []).reduce((n, c) => n + contadorDe(c.view), 0);
   const ativo = vistaDoMenu(view);
   const [abertos, setAbertos] = useState(() => abertosIniciais(menu, ativo));
 
@@ -80,8 +85,9 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
                 return (
                   <button key={item.label} type="button" title={`${g.group} · ${item.label}`} aria-label={item.label} aria-current={a ? "page" : undefined}
                     onClick={() => destino && ir(destino)} onMouseEnter={() => destino && preCarregarVista(destino)}
-                    className={cx("p-2 rounded-controlo", a ? "bg-nav-ativo text-white" : "hover:text-white hover:bg-white/10")}>
+                    className={cx("relative p-2 rounded-controlo", a ? "bg-nav-ativo text-white" : "hover:text-white hover:bg-white/10")}>
                     <Icone nome={item.icon} tamanho={17} />
+                    {contadorItem(item) > 0 && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-[#25D366] ring-2 ring-nav" aria-label="Pedidos de WhatsApp à espera" />}
                   </button>
                 );
               })}
@@ -167,6 +173,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
                         >
                           <Icone nome={item.icon} tamanho={15} className="opacity-70 shrink-0" />
                           <span className="flex-1 truncate">{item.label}</span>
+                          {!subAberto && contadorItem(item) > 0 && <Contador n={contadorItem(item)} />}
                           <Icone nome="seta" tamanho={13} className={cx("transition-transform", subAberto && "rotate-90")} />
                         </button>
                         {subAberto && (
@@ -184,7 +191,10 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
                                     className={cx("w-full text-left px-2.5 py-1.5 rounded-controlo",
                                       a ? "bg-nav-ativo text-white font-semibold" : "text-nav-fraco hover:text-white hover:bg-white/10")}
                                   >
-                                    {c.label}
+                                    <span className="flex items-center gap-2">
+                                      <span className="flex-1 truncate">{c.label}</span>
+                                      {contadorDe(c.view) > 0 && <Contador n={contadorDe(c.view)} />}
+                                    </span>
                                   </button>
                                 </li>
                               );
@@ -216,5 +226,15 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
         </div>
       </div>
     </div>
+  );
+}
+
+/** Pedidos à espera (WhatsApp). */
+function Contador({ n }: { n: number }) {
+  return (
+    <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#25D366] px-1.5 text-[11px] font-bold text-white"
+      aria-label={`${n} ${n === 1 ? "pedido à espera" : "pedidos à espera"}`} title={`${n} ${n === 1 ? "pessoa pede" : "pessoas pedem"} para falar com a equipa`}>
+      {n}
+    </span>
   );
 }

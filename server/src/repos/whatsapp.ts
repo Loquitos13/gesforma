@@ -184,3 +184,23 @@ export async function apagarConversaWhatsapp(c: Consulta, telefone: string) {
   await one(c, "DELETE FROM whatsapp_mensagens WHERE telefone = $1", [telefone]);
   await one(c, "DELETE FROM whatsapp_sessoes WHERE telefone = $1", [telefone]);
 }
+
+/**
+ * Conversas em que a pessoa pediu alguém da equipa e ainda espera: o pedido está activo, a conversa aberta e a equipa
+ * ainda não respondeu (ou a pessoa escreveu depois da última resposta da equipa).
+ */
+export function pedidosPendentesWhatsapp(c: Consulta) {
+  return many<{ telefone: string; nome_perfil: string | null; humano_desde: string }>(
+    c,
+    `SELECT s.telefone, s.nome_perfil, s.humano_desde::text AS humano_desde
+       FROM whatsapp_sessoes s
+      WHERE s.fechada_em IS NULL AND s.humano_desde IS NOT NULL AND s.humano_desde > now() - make_interval(hours => $1)
+        AND COALESCE((SELECT max(created_at) FROM whatsapp_mensagens m
+                       WHERE m.telefone = s.telefone AND m.direccao = 'out' AND m.autor IS NOT NULL AND m.autor <> ''),
+                   '-infinity'::timestamptz)
+          < COALESCE((SELECT max(created_at) FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'in'), s.humano_desde)
+      ORDER BY s.humano_desde
+      LIMIT 100`,
+    [HUMANO_EXPIRA_HORAS],
+  );
+}

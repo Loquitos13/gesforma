@@ -14,6 +14,7 @@ export const regras: Regra[] = [
   // Eliminar de vez: só a administração e as coordenações.
   ["DELETE", "/v1/crm/whatsapp/conversa", COORDENACAO],
   ["GET", "/v1/crm/whatsapp/conversas", EQUIPA],
+  ["GET", "/v1/crm/whatsapp/pendentes", EQUIPA],
   ["POST", "/v1/crm/whatsapp/responder", EQUIPA],
   ["POST", "/v1/crm/whatsapp/devolver", EQUIPA],
   ["POST", "/v1/crm/whatsapp/assumir", EQUIPA],

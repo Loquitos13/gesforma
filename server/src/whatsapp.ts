@@ -7,7 +7,7 @@ import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import {
   apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
-  leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
+  leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
   sessaoWhatsapp, ultimaEntradaWhatsapp, whatsappGuardado,
 } from "./repos/whatsapp.js";
 import { sanitizeText } from "./security.js";
@@ -380,6 +380,25 @@ export function registerWhatsappRoutes(
     await apagarWhatsapp(db);
     const n = await contarSessoesWhatsapp(db);
     return whatsappStatusPayload(await whatsappCreds(db), n);
+  });
+
+  // Pedidos para falar com a equipa à espera de resposta (contador no menu e alerta no ecrã), com a área de cada um:
+  // a da pré-inscrição com este número; sem ela, null (conta para Gold e Financiada).
+  app.get("/v1/crm/whatsapp/pendentes", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const rows = await pedidosPendentesWhatsapp(db);
+    const pendentes = [];
+    for (const r of rows) {
+      const n9 = r.telefone.slice(-9);
+      const lead = n9.length === 9 ? (await leadsPorTelefoneWhatsapp(db, r.telefone, n9))[0] : undefined;
+      pendentes.push({
+        telefone: r.telefone,
+        nome: (lead ? `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim() : "") || r.nome_perfil || "",
+        regime: lead ? (String(lead.regime) === "fin" ? "fin" : "gold") : null,
+        desde: r.humano_desde,
+      });
+    }
+    return { pendentes };
   });
 
   // Caixa de conversas: todas as conversas, as que pedem uma pessoa à frente.

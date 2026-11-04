@@ -7,6 +7,7 @@ import {
 } from "../../../partilhado/api/configuracoes";
 import { usePode } from "../../../partilhado/AuthGate";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
+import { atualizarPendentesWhatsapp } from "../../WhatsappPendentes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { AreaTexto, Aviso, Botao, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, PageHeader, Vazio, cx, useFiltrosUrl } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
@@ -163,6 +164,7 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
       setTexto("");
       conversa.recarregar();
       onMudou();
+      atualizarPendentesWhatsapp();
     } catch (err) {
       toastError(err, "A mensagem não foi enviada.");
     } finally {
@@ -178,6 +180,7 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
         toastOk("Conversa eliminada.");
         setConfirmarApagar(false);
         onMudou();
+        atualizarPendentesWhatsapp();
         onVoltar();
         return;
       }
@@ -190,6 +193,7 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
       }
       conversa.recarregar();
       onMudou();
+      atualizarPendentesWhatsapp();
     } catch (err) {
       toastError(err, "Não foi possível mudar a conversa.");
     } finally {

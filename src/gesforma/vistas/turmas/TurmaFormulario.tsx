@@ -194,8 +194,8 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
             </Campo>
           </div>
           <Campo rotulo="Vagas a anunciar no site" ajuda="O número que o site mostra («X vagas restantes»). Vazio = as vagas reais. Nunca passa das vagas livres.">
-            {p => <Entrada {...p} type="number" min={0} className="max-w-[12rem]" value={r.vagasAnunciadas ?? ""} placeholder="as reais"
-              onChange={e => mudar({ vagasAnunciadas: e.target.value === "" ? null : Math.max(0, Number(e.target.value) || 0) })} />}
+            {p => <Entrada {...p} type="number" min={1} className="max-w-[12rem]" value={r.vagasAnunciadas ?? ""} placeholder="as reais"
+              onChange={e => mudar({ vagasAnunciadas: Number(e.target.value) > 0 ? Number(e.target.value) : null })} />}
           </Campo>
           {fin && (
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">

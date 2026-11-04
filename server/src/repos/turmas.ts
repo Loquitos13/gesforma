@@ -378,6 +378,7 @@ export async function gravarProgramaTurma(c: Consulta, id: number, programa: str
   await valor(c, "UPDATE turmas_fin SET programa = $2 WHERE id = $1 RETURNING id", [id, programa.trim()]);
 }
 
+/** Vagas que o site anuncia; vazio ou 0 = as vagas livres da turma. */
 export async function gravarVagasAnunciadas(c: Consulta, regime: Regime, id: number, n: number | null) {
-  await valor(c, `UPDATE ${tabelaRegime("turmas", regime)} SET vagas_anunciadas = $2 WHERE id = $1 RETURNING id`, [id, n]);
+  await valor(c, `UPDATE ${tabelaRegime("turmas", regime)} SET vagas_anunciadas = $2 WHERE id = $1 RETURNING id`, [id, n && n > 0 ? n : null]);
 }

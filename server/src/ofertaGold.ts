@@ -36,7 +36,8 @@ export function fmtDataPt(iso: string) {
 /** Vagas livres reais e as que o site mostra (anunciadas, sem passar das reais). */
 function vagas(livres: number, anunciadas: number | null | undefined) {
   const a = anunciadas == null ? null : Number(anunciadas);
-  return { vagasLivres: livres, vagasMostradas: a == null || Number.isNaN(a) ? livres : Math.min(Math.max(0, a), livres) };
+  // Vazio ou 0 = as vagas livres (o 0 não fecha a turma: para isso, «Liberada»).
+  return { vagasLivres: livres, vagasMostradas: a == null || Number.isNaN(a) || a <= 0 ? livres : Math.min(a, livres) };
 }
 
 export async function listOfertaGold(db: Db): Promise<OfertaTurma[]> {

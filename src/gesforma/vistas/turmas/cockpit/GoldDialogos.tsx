@@ -22,13 +22,14 @@ import { inscreverNaTurma, recarregarTurma, retirarDaTurma, useLeadsDoCurso, use
 export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
   aberto: boolean; onFechar: () => void; turma: TurmaGold; onGravar: (p: Partial<DadosTurma>) => void;
 }) {
-  const [f, setF] = useState({ nome: "", local: "", horario: "", formador: "", inicio: "", vagas: 16, tolerancia: 0, valores: {} as Record<string, number> });
+  const [f, setF] = useState({ nome: "", local: "", horario: "", formador: "", inicio: "", vagas: 16, tolerancia: 0, anunciadas: "", valores: {} as Record<string, number> });
   const verCustos = useAuth().user.role !== "comercial";
   useEffect(() => {
     if (!aberto) return;
     setF({
       nome: turma.nome, local: turma.local, horario: turma.horario, formador: turma.formador, inicio: turma.dataInicio,
       vagas: turma.vagas, tolerancia: turma.toleranciaVagas ?? 0, valores: turma.valoresHoraFormador ?? {},
+      anunciadas: turma.vagasAnunciadas ? String(turma.vagasAnunciadas) : "",
     });
   }, [aberto, turma]);
   const cursos = useCursosRef("gold");
@@ -42,6 +43,8 @@ export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
     onGravar({
       nome: f.nome.trim() || turma.nome, local: f.local, horario: f.horario, formador: f.formador, dataInicio: f.inicio,
       vagas: f.vagas, toleranciaVagas: f.tolerancia, valoresHoraFormador: f.valores,
+      // Vazio (ou 0) = o site mostra as vagas livres da turma (vagas e tolerância menos os inscritos).
+      vagasAnunciadas: Number(f.anunciadas) > 0 ? Number(f.anunciadas) : null,
     });
     onFechar();
   }
@@ -72,6 +75,9 @@ export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
           <Campo rotulo="Vagas">{p => <Entrada {...p} type="number" min={1} value={f.vagas} onChange={e => setF({ ...f, vagas: Number(e.target.value) || 0 })} />}</Campo>
           <Campo rotulo="Tolerância de vagas" ajuda="Lugares extra para overbooking.">
             {p => <Entrada {...p} type="number" min={0} value={f.tolerancia} onChange={e => setF({ ...f, tolerancia: Math.max(0, Number(e.target.value) || 0) })} />}
+          </Campo>
+          <Campo rotulo="Vagas a anunciar no site (opcional)" ajuda="Vazio: o site mostra as vagas livres desta turma. Preencha só para anunciar menos.">
+            {p => <Entrada {...p} type="number" min={1} value={f.anunciadas} placeholder="as vagas da turma" onChange={e => setF({ ...f, anunciadas: e.target.value })} />}
           </Campo>
         </div>
         {verCustos && (

@@ -25,6 +25,13 @@ describe("vagas anunciadas no site", () => {
     // Vazio: volta às reais.
     expect((await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, { vagasAnunciadas: null })).statusCode).toBe(200);
     expect(await publica()).toMatchObject({ vagasMostradas: 16 });
+    // 0 é como vazio: a turma não fica bloqueada no site («Novas datas em breve»); grava-se vazio.
+    expect((await pedido(ctx, "secretaria", "PATCH", `/v1/turmas-gold/${id}`, { vagasAnunciadas: 0 })).statusCode).toBe(200);
+    expect(await publica()).toMatchObject({ vagasLivres: 16, vagasMostradas: 16 });
+    expect((await ctx.db.query<{ v: number | null }>("SELECT vagas_anunciadas AS v FROM turmas_gold WHERE id = $1", [id])).rows[0]!.v).toBeNull();
+    // Mesmo um 0 antigo na base conta como vazio.
+    await ctx.db.query("UPDATE turmas_gold SET vagas_anunciadas = 0 WHERE id = $1", [id]);
+    expect(await publica()).toMatchObject({ vagasMostradas: 16 });
     // O comercial só vende: já não mexe na turma (vê as vagas nos Cronogramas).
     expect((await pedido(ctx, "comercial", "PATCH", `/v1/turmas-gold/${id}`, { vagasAnunciadas: 2 })).statusCode).toBe(403);
   });

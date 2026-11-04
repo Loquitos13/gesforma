@@ -154,6 +154,8 @@ export type TurmaGold = {
 };
 
 export type TurmaFin = {
+  /** Vagas que o site mostra (vazio = as livres). */
+  vagasAnunciadas?: number | null;
   id: number;
   dataInicio: string;
   nome: string;

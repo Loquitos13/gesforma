@@ -133,7 +133,7 @@ function mapTurma(row: TurmaPercursoRow): TurmaPublica {
     horario: row.horario,
     dataInicio: isoData(row.data_inicio) || row.data_inicio,
     livres,
-    vagasMostradas: row.vagas_anunciadas == null ? livres : Math.min(Math.max(0, Number(row.vagas_anunciadas)), livres),
+    vagasMostradas: row.vagas_anunciadas == null || !(Number(row.vagas_anunciadas) > 0) ? livres : Math.min(Number(row.vagas_anunciadas), livres),
     sessoes: sessoesDe(row.cronograma),
     plano: planoDe(row.cronograma),
   };

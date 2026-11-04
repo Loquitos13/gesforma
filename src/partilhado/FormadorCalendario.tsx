@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { SLOTS_CCP } from "./disponibilidade";
+import { SLOTS_CCP, dataIndisponivel, slotNoDia } from "./disponibilidade";
 import { horariosSobrepoem, minutoSeguinte } from "./sessaoAcesso";
 import type { SessaoCronograma } from "./turmaModel";
 import { formatDiaMes, horaAgora, hojeIso, sessaoFormadores } from "./turmaModel";
@@ -40,13 +40,9 @@ export function eventosDoFormador(
 }
 
 function diaDisponivel(iso: string, slots: string[] | undefined) {
-  if (!slots) return false;
+  if (!slots || dataIndisponivel(slots, iso)) return false;
   const dia = new Date(`${iso}T12:00:00`).getDay();
-  return SLOTS_CCP.some(slot => {
-    if (!slots.includes(slot.id)) return false;
-    if (slot.id.startsWith("sabado")) return dia === 6;
-    return dia >= 1 && dia <= 5;
-  });
+  return SLOTS_CCP.some(slot => slotNoDia(slots, slot.id, dia));
 }
 
 function cruza(a: Evento, b: Evento) {
@@ -127,6 +123,7 @@ export function FormadorCalendario({
           const conflito = ev.some((e, idx) => ev.some((o, j) => j > idx && cruza(e, o)));
           const agoraAqui = ev.some(e => aDecorrer(e, hoje, hora));
           const livre = diaDisponivel(chave, slots);
+          const bloqueado = Boolean(slots) && dataIndisponivel(slots, chave);
           const aberto = chave === diaAberto;
           return (
             <button
@@ -142,9 +139,11 @@ export function FormadorCalendario({
                       ? "border-violet-500 ring-2 ring-violet-200"
                       : ev.length
                         ? "border-violet-200 bg-violet-50"
-                        : livre
-                          ? "border-emerald-100 bg-emerald-50/60"
-                          : "border-slate-100"
+                        : bloqueado
+                          ? "border-red-100 bg-red-50/60"
+                          : livre
+                            ? "border-emerald-100 bg-emerald-50/60"
+                            : "border-slate-100"
               } ${aberto && !eHoje ? "outline outline-2 outline-offset-1 outline-slate-800" : ""}`}
             >
               <div className="flex items-center justify-between gap-0.5">
@@ -165,7 +164,7 @@ export function FormadorCalendario({
         })}
       </div>
       <p className="text-[11px] text-slate-400">
-        {slots ? "Os dias a verde são janelas da disponibilidade. " : ""}
+        {slots ? "Os dias a verde são janelas da disponibilidade; a vermelho claro, os dias indisponíveis. " : ""}
         As sessões marcadas ficam a violeta. O dia de hoje fica a âmbar, com a hora, e a sessão a decorrer marca-se no painel. Horários que se cruzam ficam a vermelho e não podem ser gravados.
       </p>
       {diaAberto && (

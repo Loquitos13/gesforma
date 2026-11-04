@@ -227,6 +227,7 @@ export const apiPedirPagamento = (id: number) =>
   enviar.post<DossieLead & { pedido: { valor: number; iban: string; semIban: boolean } }>(`/v1/crm/leads/${id}/pedir-pagamento`, {});
 /** Gold pago: volta a concluir a inscrição que ficou a meio (ficha, conta e email de acesso). */
 export const apiConcluirInscricao = (id: number) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/concluir-inscricao`, {});
+export const apiEnviarLigacao = (id: number) => enviar.post<{ ok: true; url: string | null }>(`/v1/crm/leads/${id}/enviar-ligacao`, {});
 export const apiNovaLigacao = (id: number) => enviar.post<{ ok: boolean; url: string | null }>(`/v1/crm/leads/${id}/nova-ligacao`, {});
 export const apiTurmaCheia = (id: number) =>
   enviar.post<{ ok: boolean; enviadas: number; turmas: TurmaDestino[] }>(`/v1/crm/leads/${id}/turma-cheia`, {});

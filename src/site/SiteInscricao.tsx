@@ -327,7 +327,8 @@ function ModalInscricao({ curso, localInicial, onClose }: { curso: Course | null
             <div>
               <p className="text-[11px] font-extrabold uppercase tracking-[0.16em] text-[#FFA900]">{txt("inscRecebido")}</p>
               <p className="mt-3 text-lg leading-8 text-[color:var(--insc-p)]/75">
-                {txt("inscRecebidoTexto").replace("{email}", email)}
+                {txt(/\bccp\b/i.test(curso?.title ?? "") ? "inscRecebidoTextoCcp" : "inscRecebidoTexto")
+                  .replace("{email}", email).replace("{curso}", curso?.title ?? "")}
               </p>
               {(() => {
                 // Os contactos do local escolhido (Edição de cursos › Locais, ou a ficha do curso).

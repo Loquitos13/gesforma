@@ -113,7 +113,9 @@ function filtrar(f: FiltrosFormadores) {
   const w = new Filtros([f.regime, f.hoje, f.limiteCcp, JSON.stringify(f.docsObrigatorios)]);
   w.add("x.estado = ?", f.estado);
   w.add("x.especialidade = ?", f.especialidade);
-  w.add("jsonb_exists(COALESCE(x.disponibilidade, '[]'::jsonb), ?)", f.disponibilidade);
+  // O bloco em todos os dias ou, nos dias úteis, em pelo menos um dia («laboral@2»).
+  w.add(`EXISTS (SELECT 1 FROM jsonb_array_elements_text(COALESCE(x.disponibilidade, '[]'::jsonb)) e(v)
+                 WHERE e.v = ? OR e.v LIKE ? || '@%')`, f.disponibilidade, f.disponibilidade);
   if (f.alerta === "docs") w.sempre("x.docs_em_falta > 0");
   if (f.alerta === "ccp") w.sempre("x.ccp_a_expirar");
   if (f.alerta === "com_turma") w.sempre("x.turmas_ativas > 0");

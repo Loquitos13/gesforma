@@ -9,7 +9,9 @@ export const SITE_OMISSAO = {
   inscVerCronograma: "Ver cronograma",
   inscCheia: "Novas datas em breve",
   inscRecebido: "Pedido recebido",
-  inscRecebidoTexto: "A ENA agradece a sua pré-inscrição, que ficou associada a {email}. Iremos entrar em contacto consigo para a formalizar, num período máximo de 2 dias úteis.",
+  inscRecebidoTexto: "Parabéns! Registou com sucesso a sua pré-inscrição no curso {curso} da ENA. Acabou de receber, no seu e-mail {email}, as instruções para poder realizar a matrícula, anexando os documentos exigidos.",
+  // No CCP (Formação Pedagógica Inicial de Formadores) o texto fala do IEFP.
+  inscRecebidoTextoCcp: "Parabéns! Registou com sucesso a sua pré-inscrição no Curso de Formação Pedagógica de Formadores da ENA. Acabou de receber, no seu e-mail {email}, as instruções para poder realizar a matrícula, anexando os documentos exigidos pelo IEFP.",
   // Páginas da ligação pessoal (documentos e pagamento).
   ligCorDestaque: "#ffa900",
   ligCorFundo: "#f4f1ea",

@@ -23,6 +23,7 @@ import type { Deps } from "./tipos.js";
 import { somarDias } from "../datas.js";
 
 const SLOTS = ["laboral", "pos-laboral", "sabado-manha", "sabado-tarde"] as const;
+import { entradaDisponibilidadeValida } from "../../../src/partilhado/disponibilidade.js";
 const OBRIGATORIOS = DOCS_FORMADOR.filter(d => d.required).map(d => d.id);
 const TIPOS_DOC = new Set(DOCS_FORMADOR.map(d => d.id));
 
@@ -46,7 +47,8 @@ const formadorSchema = z.object({
   nif: z.string().trim().max(40).optional().default(""),
   regimes: z.array(regimeSchema).min(1, "Escolha pelo menos um regime.").optional().default(["gold"]),
   estado: z.enum(["Ativo", "Inactivo"]).optional().default("Ativo"),
-  disponibilidade: z.array(z.enum(SLOTS)).optional(),
+  // Blocos (todos os dias), blocos num dia («laboral@2») e datas indisponíveis («fora:2026-12-10[..2026-12-15]»).
+  disponibilidade: z.array(z.string().max(40).refine(entradaDisponibilidadeValida, "disponibilidade inválida")).max(120).optional(),
   custoHora: z.number().min(0).max(10000).optional(),
 });
 

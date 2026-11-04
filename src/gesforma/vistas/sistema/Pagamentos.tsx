@@ -1,5 +1,6 @@
 // Sistema › Pagamentos: transferência com comprovativo. Lista por situação, indicadores,
 // confirmar/recusar o comprovativo na ficha do pagamento e registo manual.
+import { acaoDoPagamento } from "./pagamentos/DetalhePagamento";
 import { useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
 import { apiExportarPagamentos, apiPagamentos, type LinhaPagamento, type SituacaoPagamento } from "../../../partilhado/api/pagamentos";
@@ -53,6 +54,7 @@ export default function Pagamentos({ navigate }: VistaProps) {
         <span className="block min-w-0">
           <span className="block font-semibold text-tinta truncate">{p.nome}</span>
           <span className="block text-xs text-tinta-suave truncate max-w-[340px]">#{p.id}{p.curso ? ` · ${p.curso}` : ""}</span>
+          {acaoDoPagamento(p) && <span className="block text-xs text-tinta-suave truncate max-w-[340px]">{acaoDoPagamento(p)}</span>}
         </span>
       ),
     },

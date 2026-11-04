@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { JANELAS, SLOTS_CCP, SLOTS_TODOS, type SlotId } from "./disponibilidade";
+import {
+  JANELAS, SLOTS_CCP, alternarSlotNoDia, comDatasIndisponiveis, datasIndisponiveis, slotNoDia, type SlotId,
+} from "./disponibilidade";
 
 const DIAS = [
   { n: 1, curto: "Seg", label: "Segunda" },
@@ -20,8 +22,8 @@ const MARGEM = 10;
 const y = (min: number) => MARGEM + ((min - INICIO) / 60) * PX_HORA;
 
 /**
- * Disponibilidade em calendário semanal (segunda a sábado, 9h–23h). Os blocos são as janelas CCP:
- * laboral e pós-laboral valem para os cinco dias úteis (marcar num dia marca nos cinco); o sábado tem manhã e tarde.
+ * Disponibilidade em calendário semanal (segunda a sábado, 9h–23h). Os blocos são as janelas CCP e marcam-se dia a dia
+ * (ex.: laboral só à segunda e à quarta); o sábado tem manhã e tarde. Por baixo, os dias (ou períodos) indisponíveis.
  */
 export function DisponibilidadeEditor({
   value,
@@ -30,18 +32,30 @@ export function DisponibilidadeEditor({
   nota,
 }: {
   value: string[] | undefined;
-  onChange?: (next: SlotId[]) => void;
+  onChange?: (next: string[]) => void;
   locked?: boolean;
   nota?: string;
 }) {
-  const activos = new Set(value ?? SLOTS_TODOS);
-  const [sobre, setSobre] = useState<SlotId | null>(null);
+  const [sobre, setSobre] = useState<string | null>(null);
+  const [novaDe, setNovaDe] = useState("");
+  const [novaAte, setNovaAte] = useState("");
   const editavel = !locked && Boolean(onChange);
-  function toggle(id: SlotId) {
+  const datas = datasIndisponiveis(value);
+  function toggle(id: SlotId, dia: number) {
     if (!editavel) return;
-    const next = activos.has(id) ? [...activos].filter(x => x !== id) : [...activos, id];
-    onChange!(SLOTS_TODOS.filter(s => next.includes(s)));
+    onChange!(alternarSlotNoDia(value, id, dia));
   }
+  function juntarData() {
+    if (!editavel || !novaDe) return;
+    onChange!(comDatasIndisponiveis(value, [...datas, { de: novaDe, ate: novaAte && novaAte > novaDe ? novaAte : novaDe }]));
+    setNovaDe("");
+    setNovaAte("");
+  }
+  function tirarData(i: number) {
+    if (!editavel) return;
+    onChange!(comDatasIndisponiveis(value, datas.filter((_, j) => j !== i)));
+  }
+  const fmt = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
   return (
     <div className="space-y-2">
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
@@ -64,8 +78,8 @@ export function DisponibilidadeEditor({
               {HORAS.map(h => <span key={h} className="absolute inset-x-0 border-t border-slate-100" style={{ top: y(h * 60) }} />)}
               {SLOTS_CCP.filter(s => JANELAS[s.id].dias.includes(d.n)).map(s => {
                 const j = JANELAS[s.id];
-                const on = activos.has(s.id);
-                const realce = sobre === s.id;
+                const on = slotNoDia(value ?? null, s.id, d.n);
+                const realce = sobre === `${s.id}@${d.n}`;
                 return (
                   <button
                     key={s.id}
@@ -73,9 +87,9 @@ export function DisponibilidadeEditor({
                     disabled={!editavel}
                     aria-pressed={on}
                     aria-label={`${s.label}, ${d.label}, ${s.horas}: ${on ? "disponível" : "indisponível"}`}
-                    title={`${s.label} · ${s.horas}${JANELAS[s.id].dias.length > 1 ? " · 2.ª a 6.ª" : ""}`}
-                    onClick={() => toggle(s.id)}
-                    onMouseEnter={() => setSobre(s.id)}
+                    title={`${s.label} · ${d.label} · ${s.horas}`}
+                    onClick={() => toggle(s.id, d.n)}
+                    onMouseEnter={() => setSobre(`${s.id}@${d.n}`)}
                     onMouseLeave={() => setSobre(null)}
                     className={`absolute inset-x-0.5 sm:inset-x-1 rounded-md border px-0 sm:px-1.5 py-1 text-left text-[10px] sm:text-[11px] leading-tight overflow-hidden transition-colors ${
                       on ? "border-amber-300 bg-amber-100 text-amber-950" : "border-dashed border-slate-300 bg-slate-50 text-slate-400"
@@ -96,8 +110,29 @@ export function DisponibilidadeEditor({
         </div>
       </div>
       <p className="text-[11px] text-slate-400">
-        {editavel ? "Clique num bloco para o marcar ou desmarcar. " : ""}Laboral e pós-laboral valem para os cinco dias úteis; o sábado tem manhã e tarde.
+        {editavel ? "Clique num bloco para o marcar ou desmarcar nesse dia (ex.: laboral só à segunda e à quarta). " : ""}O sábado tem manhã e tarde.
       </p>
+      <div className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
+        <p className="text-[12px] font-semibold text-slate-700">Datas indisponíveis</p>
+        {datas.length === 0 && <p className="text-[11px] text-slate-400">Nenhuma. {editavel ? "Junte um dia (ou um período) em que não pode dar formação." : ""}</p>}
+        {datas.length > 0 && (
+          <ul className="flex flex-wrap gap-1.5">
+            {datas.map((d, i) => (
+              <li key={`${d.de}-${d.ate}`} className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] text-red-900">
+                {d.ate !== d.de ? `${fmt(d.de)} a ${fmt(d.ate)}` : fmt(d.de)}
+                {editavel && <button type="button" className="text-red-700 hover:text-red-900" aria-label={`Tirar ${fmt(d.de)}`} onClick={() => tirarData(i)}>×</button>}
+              </li>
+            ))}
+          </ul>
+        )}
+        {editavel && (
+          <div className="flex flex-wrap items-end gap-2">
+            <label className="text-[11px] text-slate-500">Dia<input type="date" value={novaDe} onChange={e => setNovaDe(e.target.value)} className="block rounded border border-slate-300 px-2 py-1 text-xs" /></label>
+            <label className="text-[11px] text-slate-500">Até (opcional)<input type="date" value={novaAte} min={novaDe || undefined} onChange={e => setNovaAte(e.target.value)} className="block rounded border border-slate-300 px-2 py-1 text-xs" /></label>
+            <button type="button" disabled={!novaDe} onClick={juntarData} className="rounded border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-40">Juntar</button>
+          </div>
+        )}
+      </div>
       {nota && <p className="text-[11px] text-slate-500">{nota}</p>}
     </div>
   );

@@ -79,7 +79,7 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
   inquerito_turma: { publico: "Formandos", inqueritos_itens: "Inquérito de satisfação: https://…", link: "(inquérito)" },
   comprovativo_contabilidade: {
     nome_formando: "Ana Silva", nif: "123456789", telemovel: "910000000", email_formando: "ana@exemplo.pt",
-    iban_formando: "—", valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0",
+    iban_formando: "—", valor: "125,00", acao_formacao: "Lisboa · Pós-laboral · início 21-12-2026 · CCP-LX-PL-30/11", iban: "PT50 0000 0000 0000 0000 0000 0",
     faturacao_estado: "confirmados pela pessoa", faturacao_nome: "Empresa, Lda.", faturacao_nif: "501234567",
     faturacao_morada: "Rua das Flores, 10, Porto", faturacao_codigo_postal: "4000-100", faturacao_email: "contas@empresa.pt",
   },

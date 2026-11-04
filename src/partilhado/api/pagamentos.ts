@@ -29,6 +29,8 @@ export type LinhaPagamento = {
   comprovativo_em: string | null;
   /** Fatura anexada pela contabilidade (null: ainda sem fatura). */
   fatura_em: string | null;
+  /** A ação de formação: turma (código), local, horário e data de início. */
+  turma_nome?: string | null; turma_local?: string; turma_horario?: string; turma_inicio?: string;
 };
 
 /** Fatura do pagamento (PDF anexado pela contabilidade e enviado por email). */

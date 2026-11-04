@@ -99,7 +99,7 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate, abrirF
           {pendente && podeConfirmar && (
             <Aviso tom="info">
               {percurso
-                ? "Ao confirmar: a pré-inscrição fica concluída (validada), é criada a ficha de formando na turma escolhida e a conta da área do formando, e a pessoa recebe o acesso por email. A fatura pode ser anexada logo a seguir ou mais tarde."
+                ? "Ao confirmar: o pagamento fica Pago. A inserção na turma (ficha de formando, conta e acesso) faz-a depois o comercial ou a coordenação, na ficha da pré-inscrição. A fatura pode ser anexada logo a seguir ou mais tarde."
                 : "Ao confirmar: o pagamento fica Pago, a ficha Gold ligada passa a paga e sai o email de pagamento confirmado."}
             </Aviso>
           )}
@@ -107,6 +107,7 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate, abrirF
           <Detalhes itens={[
             { rotulo: "Email", valor: p.email || "—" },
             { rotulo: "Curso", valor: p.curso || "—" },
+            { rotulo: "Ação de formação", valor: acaoDoPagamento(p) || "—" },
             { rotulo: "Método", valor: p.metodo || "—" },
             { rotulo: "Criado", valor: dataHora(p.criado) },
             { rotulo: "Pedido em", valor: p.pedido_em ? dataHora(p.pedido_em) : "—" },
@@ -208,4 +209,10 @@ export function DetalhePagamento({ id, onFechar, podeConfirmar, navigate, abrirF
       />
     </Modal>
   );
+}
+
+/** A ação de formação do pagamento: local, horário, data de início e o código da turma. */
+export function acaoDoPagamento(p: { turma_nome?: string | null; turma_local?: string; turma_horario?: string; turma_inicio?: string }) {
+  const inicio = /^\d{4}-\d{2}-\d{2}/.test(p.turma_inicio ?? "") ? `início ${data(p.turma_inicio!)}` : "";
+  return [p.turma_local, p.turma_horario, inicio, p.turma_nome].filter(Boolean).join(" · ");
 }

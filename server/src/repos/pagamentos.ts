@@ -185,8 +185,11 @@ const SITUACAO = `CASE
 const BASE = `
   FROM pagamentos p
   LEFT JOIN LATERAL (
-    SELECT l.id, l.regime, l.pagamento_pedido_em FROM preinscricoes l WHERE l.pagamento_id = p.id ORDER BY l.id DESC LIMIT 1
+    SELECT l.id, l.regime, l.pagamento_pedido_em, l.local, l.horario, l.inicio_curso, l.pagamento_turma_id, l.turma_escolhida_id
+      FROM preinscricoes l WHERE l.pagamento_id = p.id ORDER BY l.id DESC LIMIT 1
   ) lead ON true
+  -- A ação de formação do pagamento: a turma do pedido de pagamento (ou a escolhida), ou a do pagamento da ficha.
+  LEFT JOIN turmas_gold tp ON tp.id = COALESCE(lead.pagamento_turma_id, lead.turma_escolhida_id, p.turma_id)
   LEFT JOIN LATERAL (
     SELECT d.id, d.estado, d.nome, d.drive_file_id, d.created_at, d.observacao FROM preinscricao_docs d
      WHERE lead.id IS NOT NULL AND d.preinscricao_id = lead.id AND d.tipo = 'comprovativo'
@@ -223,6 +226,8 @@ export type LinhaPagamento = {
   formando_id: number | null; lead_id: number | null; lead_regime: string | null; pedido_em: string | null;
   comprovativo_id: number | null; comprovativo_nome: string | null; comprovativo_ficheiro: string | null; comprovativo_em: string | null;
   fatura_em: string | null;
+  /** A ação de formação: turma (código), local, horário e data de início. */
+  turma_nome: string | null; turma_local: string; turma_horario: string; turma_inicio: string;
 };
 
 const ORDENS: Record<string, string> = {
@@ -240,7 +245,10 @@ export function listarPagamentos(c: Consulta, f: FiltrosPagamentos & { pagina: n
             p.created_at::text AS criado, p.pago_em::text AS pago_em, p.recusado_em::text AS recusado_em, p.recusa_motivo, p.referencia,
             p.formando_id, lead.id AS lead_id, lead.regime AS lead_regime, lead.pagamento_pedido_em::text AS pedido_em,
             comp.id AS comprovativo_id, comp.nome AS comprovativo_nome, NULLIF(comp.drive_file_id, '') AS comprovativo_ficheiro,
-            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em
+            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em,
+            tp.nome AS turma_nome, COALESCE(NULLIF(tp.local, ''), lead.local, '') AS turma_local,
+            COALESCE(NULLIF(tp.horario, ''), lead.horario, '') AS turma_horario,
+            COALESCE(tp.data_inicio::text, NULLIF(lead.inicio_curso, '-'), '') AS turma_inicio
        ${BASE} ${w.where}`,
     w.params,
     { pagina: f.pagina, porPagina: f.porPagina, ordem },
@@ -254,7 +262,10 @@ export function obterPagamentoDetalhe(c: Consulta, id: string) {
             p.created_at::text AS criado, p.pago_em::text AS pago_em, p.recusado_em::text AS recusado_em, p.recusa_motivo, p.referencia,
             p.formando_id, lead.id AS lead_id, lead.regime AS lead_regime, lead.pagamento_pedido_em::text AS pedido_em,
             comp.id AS comprovativo_id, comp.nome AS comprovativo_nome, NULLIF(comp.drive_file_id, '') AS comprovativo_ficheiro,
-            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em
+            comp.created_at::text AS comprovativo_em, fat.anexada_em::text AS fatura_em,
+            tp.nome AS turma_nome, COALESCE(NULLIF(tp.local, ''), lead.local, '') AS turma_local,
+            COALESCE(NULLIF(tp.horario, ''), lead.horario, '') AS turma_horario,
+            COALESCE(tp.data_inicio::text, NULLIF(lead.inicio_curso, '-'), '') AS turma_inicio
        ${BASE} WHERE p.id = $1`,
     [id],
   );

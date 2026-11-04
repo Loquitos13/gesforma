@@ -55,7 +55,8 @@ const CHAVES_INSCRICAO = [
   ["inscEtiqueta", "Etiqueta por cima do nome do curso"], ["inscTituloDatas", "Título da escolha da turma"],
   ["inscAjudaDatas", "Ajuda por baixo do título"], ["inscSemDatas", "Sem turmas no local ({local} = o local)"],
   ["inscVerCronograma", "Botão do cronograma"], ["inscCheia", "Turma cheia"], ["inscRecebido", "Etiqueta do pedido recebido"],
-  ["inscRecebidoTexto", "Texto do pedido recebido ({email} = o email da pessoa)"],
+  ["inscRecebidoTexto", "Texto do pedido recebido ({curso} = o curso, {email} = o email da pessoa)"],
+  ["inscRecebidoTextoCcp", "Texto do pedido recebido no CCP ({email} = o email da pessoa)"],
 ] as const;
 const CHAVES_LIGACAO = [
   ["ligPagamentoTexto", "Texto do passo de pagamento ({curso} = o curso)"], ["ligComprovativoAjuda", "Ajuda do comprovativo"],

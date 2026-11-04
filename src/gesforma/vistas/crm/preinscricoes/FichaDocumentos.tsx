@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Aviso, Botao, ConfirmarPerigo, Entrada, Estado, Vazio, dataHora, eur } from "../../../../partilhado/ui";
-import { apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
+import { apiEnviarLigacao, apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
@@ -30,6 +30,8 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   });
   const reenviar = useAccao(apiReenviarPedidoDocs, { ok: r => `Pedido reenviado por email: ${r.documentos.join(", ")}.` });
   const novaLigacao = useAccao(apiNovaLigacao, { ok: "Nova ligação enviada por email. A anterior deixou de funcionar." });
+  // A ligação atual (a mesma, com a turma escolhida agora) por email: pré-inscrição repetida ou email que não chegou.
+  const enviarLigacao = useAccao(apiEnviarLigacao, { ok: "Ligação pessoal enviada por email." });
 
   async function copiar() {
     try {
@@ -54,6 +56,7 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
           <Entrada readOnly value={d.docsUrl} className="mt-1 text-xs" aria-label="Ligação pessoal" onFocus={e => e.currentTarget.select()} />
           <div className="mt-2 flex flex-wrap gap-2">
             <Botao tamanho="sm" variante="secundario" onClick={() => void copiar()}>Copiar</Botao>
+            <Botao tamanho="sm" variante="secundario" aCarregar={enviarLigacao.aCorrer} onClick={() => void enviarLigacao.correr(id).then(r => r && onMudou())}>Enviar ligação por email</Botao>
             <Botao tamanho="sm" variante="secundario" aCarregar={novaLigacao.aCorrer} onClick={() => setConfirmarLigacao(true)}>Gerar nova ligação</Botao>
           </div>
         </section>

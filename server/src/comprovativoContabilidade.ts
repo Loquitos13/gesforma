@@ -41,6 +41,18 @@ export function horasDeEspera(ent: Pick<Entidade, "esperaFaturacaoHoras">) {
   return ent.esperaFaturacaoHoras?.trim() && Number.isFinite(n) && n >= 0 ? Math.min(n, 168) : 24;
 }
 
+/** A ação de formação da pré-inscrição: local, horário, data de início e o código da turma (para a contabilidade). */
+async function acaoDoLead(db: Db, lead: Record<string, unknown>) {
+  const turmaId = Number(lead.pagamento_turma_id || lead.turma_escolhida_id || 0);
+  const t = turmaId
+    ? (await db.query<{ nome: string; local: string; horario: string; data_inicio: string }>(
+      "SELECT nome, local, horario, data_inicio::text AS data_inicio FROM turmas_gold WHERE id = $1", [turmaId])).rows[0]
+    : undefined;
+  const inicio = String(t?.data_inicio || lead.inicio_curso || "");
+  const dataPt = /^\d{4}-\d{2}-\d{2}/.test(inicio) ? `início ${inicio.slice(8, 10)}-${inicio.slice(5, 7)}-${inicio.slice(0, 4)}` : "";
+  return [t?.local || lead.local, t?.horario || lead.horario, dataPt, t?.nome].map(v => String(v ?? "").trim()).filter(Boolean).join(" · ") || "—";
+}
+
 export type FaturacaoNoEmail = { dados: DadosFaturacao; confirmados: boolean };
 type Ficheiro = { nome: string; mime: string; bytes: Buffer };
 
@@ -58,7 +70,7 @@ export async function enviarComprovativoContabilidade(db: Db, lead: Record<strin
   const linhas = [
     "Chegou um comprovativo de pagamento (em anexo).",
     "Nome: {{nome_formando}}<br>NIF: {{nif}}<br>Telemóvel: {{telemovel}}<br>Email: {{email_formando}}<br>IBAN: {{iban_formando}}",
-    "Curso: {{curso}}<br>Valor: € {{valor}}",
+    "Curso: {{curso}}<br>Ação de formação: {{acao_formacao}}<br>Valor: € {{valor}}",
     "Conta de destino: {{iban}}",
     "Dados de faturação ({{faturacao_estado}}):<br>Nome ou empresa: {{faturacao_nome}}<br>NIF: {{faturacao_nif}}<br>Morada fiscal: {{faturacao_morada}}<br>Código postal: {{faturacao_codigo_postal}}<br>Email da fatura: {{faturacao_email}}",
   ];
@@ -67,6 +79,7 @@ export async function enviarComprovativoContabilidade(db: Db, lead: Record<strin
     vars: {
       nome_formando: nomeDe(lead) || "—", nif: ou(lead.nif), telemovel: ou(lead.telf), email_formando: ou(lead.email),
       iban_formando: ou(lead.iban), curso: ou(lead.curso), valor: fmtEuros(valor),
+      acao_formacao: await acaoDoLead(db, lead),
       iban: ent.iban.replace(/(.{4})/g, "$1 ").trim() || "—",
       faturacao_estado: fat.confirmados ? "confirmados pela pessoa" : "por confirmar: são os da ficha da pré-inscrição",
       faturacao_nome: ou(fat.dados.nome), faturacao_nif: ou(fat.dados.nif), faturacao_morada: ou(fat.dados.moradaFiscal),

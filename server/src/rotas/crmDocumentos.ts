@@ -181,6 +181,31 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     }
   });
 
+  /**
+   * Envia à pessoa, por email, a ligação pessoal atual (sem a trocar), com a turma escolhida agora: para quando faz uma
+   * pré-inscrição repetida ou não encontra o email. Uma ligação já expirada é renovada.
+   */
+  app.post("/v1/crm/leads/:id/enviar-ligacao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const id = v.params.id;
+    const lead = await leads.lead(db, id);
+    if (!lead) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (lead.validada_em || lead.estado === "Formando") {
+      return reply.code(409).send({ error: "A pré-inscrição já foi validada: a ligação pessoal fica encerrada." });
+    }
+    const { fechoDaLigacao } = await import("../ligacaoPessoal.js");
+    if (await fechoDaLigacao(db, lead) === "expirada") await regenerarToken(db, id);
+    const dados = lead as { id: number; nome: string; apelido: string; email: string; curso: string; regime?: string };
+    const mail = await firePreinscricaoEmail(db, dados, "preinscricao.created", `enviar-ligacao:${id}:${Date.now()}`).catch(() => null);
+    if (!mail?.queued) return reply.code(409).send({ error: "O email não saiu: confirme o email da pessoa e se a regra da pré-inscrição está ativa (Sistema › Emails)." });
+    await leads.inserirContacto(db, { leadId: id, actorId: req.actor!.id, nota: `Ligação pessoal enviada por email: ${mail.url}`, meio: "Email" });
+    await logLeadEvent(db, id, req.actor!.id, "contacto", "Ligação pessoal enviada por email", String(lead.curso ?? ""));
+    await audit(db, req.actor!.id, "preinscricao.enviar_ligacao", "preinscricao", String(id), req.ip);
+    return { ok: true, url: mail.url ?? null };
+  });
+
   app.post("/v1/crm/leads/:id/nova-ligacao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     const v = validar(reply, { params: idParam }, req);

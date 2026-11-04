@@ -270,7 +270,7 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
           <div key={i} className={cx("max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm",
             m.direccao === "in" ? "rounded-tl-sm bg-white" : m.autor ? "ml-auto rounded-tr-sm bg-[#DCF8C6]" : "ml-auto rounded-tr-sm bg-[#EAF2FB]")}>
             {m.corpo}
-            {m.anexoId ? <AnexoRecebido anexo={d.anexos?.find(a => a.id === m.anexoId)} id={m.anexoId} leads={d.leads ?? []} onGuardado={conversa.recarregar} /> : null}
+            {m.anexoId ? <AnexoRecebido anexo={d.anexos?.find(a => Number(a.id) === Number(m.anexoId))} id={m.anexoId} leads={d.leads ?? []} onGuardado={conversa.recarregar} /> : null}
             <span className="mt-1 block text-right text-[10px] text-tinta-suave">
               {m.direccao === "out" ? `${m.autor || "Assistente"} · ` : ""}{quando(m.createdAt)}
             </span>

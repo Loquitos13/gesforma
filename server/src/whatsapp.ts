@@ -575,7 +575,7 @@ export function registerWhatsappRoutes(
         corpo: r.corpo,
         createdAt: r.created_at,
         autor: r.autor ?? "",
-        anexoId: r.anexo_id ?? null,
+        anexoId: r.anexo_id == null ? null : Number(r.anexo_id),
       })),
       anexos: (await anexosDaConversaWhatsapp(db, tel)).map(a => ({
         id: Number(a.id), nome: a.nome, mime: a.mime, tamanho: a.tamanho,

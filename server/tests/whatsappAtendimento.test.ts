@@ -402,6 +402,9 @@ describe("ficheiros enviados pela pessoa", () => {
     const msg = c.mensagens.find((m: { anexoId: number | null }) => m.anexoId);
     expect(msg.corpo).toBe("📎 cc.pdf\nO meu CC");
     expect(c.anexos[0]).toMatchObject({ nome: "cc.pdf", guardado: false });
+    // O id do anexo na mensagem é o mesmo (e do mesmo tipo) que o da lista de anexos: o ecrã liga um ao outro.
+    expect(typeof msg.anexoId).toBe("number");
+    expect(c.anexos.some((a: { id: number }) => a.id === msg.anexoId)).toBe(true);
     // Ver: a equipa abre o ficheiro; a contabilidade não.
     const ver = await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/anexos/${msg.anexoId}`);
     expect(ver.statusCode).toBe(200);

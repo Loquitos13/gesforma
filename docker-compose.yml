@@ -67,6 +67,9 @@ services:
   web:
     image: caddy:2-alpine
     restart: unless-stopped
+    # A pasta deploy/ montada inteira (não o ficheiro solto): o git pull troca o Caddyfile por um ficheiro novo e um
+    # ficheiro montado sozinho continuaria a mostrar a versão antiga dentro do contentor.
+    command: caddy run --config /etc/caddy-deploy/Caddyfile --adapter caddyfile
     depends_on:
       - api
     environment:
@@ -77,7 +80,7 @@ services:
       - "443:443"
       - "443:443/udp"
     volumes:
-      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./deploy:/etc/caddy-deploy:ro
       - ./dist:/srv/dist:ro
       - caddy_data:/data
       - caddy_config:/config

@@ -15,8 +15,8 @@ docker compose --profile build run --rm construir
 
 echo "» API, Caddy e tarefas"
 docker compose up -d --build --remove-orphans
-# O Caddyfile é um ficheiro montado: muda com o git pull, mas o Caddy só o lê ao recarregar.
-docker compose exec -T web caddy reload --config /etc/caddy/Caddyfile --adapter caddyfile || docker compose restart web
+# O Caddy só relê o Caddyfile (pasta deploy/ montada) ao recarregar; se o recarregamento falhar, recria o contentor.
+docker compose exec -T web caddy reload --config /etc/caddy-deploy/Caddyfile --adapter caddyfile || docker compose up -d --force-recreate web
 docker image prune -f >/dev/null
 
 echo "» estado"

@@ -1,5 +1,6 @@
 // WhatsApp no menu e no ecrã: o menu («WhatsApp») conta as conversas com mensagens por ler; há alerta no ecrã quando
-// começa uma conversa nova e quando alguém pede para falar com a equipa. Só para a equipa da área (Gold: comerciais e
+// começa uma conversa nova e quando alguém pede para falar com a equipa (não para a administração; um alerta
+// dispensado só volta passadas 4 horas). Só para a equipa da área (Gold: comerciais e
 // coordenação Gold; Financiada: coordenação Financiada; a administração vê as duas). Um número sem pré-inscrição conta
 // para as duas.
 import { useRef, useSyncExternalStore } from "react";
@@ -14,8 +15,6 @@ type Contagem = { gold: number; fin: number };
 let contagem: Contagem = { gold: 0, fin: 0 };
 const ouvintes = new Set<() => void>();
 let pedirAgora: (() => void) | null = null;
-/** Alertas fechados nesta sessão (não voltam a aparecer para o mesmo pedido). */
-const dispensados = new Set<string>();
 
 function publicar(c: Contagem) {
   if (c.gold === contagem.gold && c.fin === contagem.fin) return;
@@ -59,12 +58,13 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
       fin: minhasPorLer.filter(c => c.regime !== "gold").length,
     });
     // Conversa nova (ainda ninguém a abriu): alerta, a não ser que já tenha o de «pede uma pessoa».
+    // Os administradores vêem o contador no menu, mas não os alertas no ecrã.
+    if (role === "admin") return;
     const comPedido = new Set(meus.map(p => p.telefone));
     const novas = minhasPorLer.filter(c => c.novaDesde && !comPedido.has(c.telefone));
     const chavesNovas = new Set(novas.map(chaveNova));
     for (const c of novas) {
       const k = chaveNova(c);
-      if (dispensados.has(k)) continue;
       const regime = c.regime ?? (role === "financiada" ? "fin" : "gold");
       pushAlertToast({
         key: k,
@@ -72,14 +72,12 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
         text: `Nova conversa no WhatsApp: ${c.nome || formatar(c.telefone)}.`,
         actionLabel: "Abrir conversa",
         onAction: () => onOpenRef.current(c.telefone, regime),
-        onDismiss: () => { dispensados.add(k); },
       });
     }
     pruneAlertKeys("wanova:", chavesNovas);
     const chaves = new Set(meus.map(chave));
     for (const p of meus) {
       const k = chave(p);
-      if (dispensados.has(k)) continue;
       // A área da conversa: a da pré-inscrição; sem ela, a da equipa de quem vê (a Financiada abre na Financiada).
       const regime = p.regime ?? (role === "financiada" ? "fin" : "gold");
       pushAlertToast({
@@ -88,7 +86,6 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
         text: `${p.nome || formatar(p.telefone)} pediu, no WhatsApp, para falar com uma pessoa da equipa.`,
         actionLabel: "Abrir conversa",
         onAction: () => onOpenRef.current(p.telefone, regime),
-        onDismiss: () => { dispensados.add(k); },
       });
     }
     pruneAlertKeys("wa:", chaves);

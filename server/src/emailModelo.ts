@@ -30,6 +30,8 @@ export type EnvioModelo = {
   /** O texto de origem do modelo, para quando o modelo foi apagado. */
   reserva: ReservaEmail;
   anexos?: { nome: string; tipo: string; conteudo: Buffer }[];
+  /** Aviso à equipa (ver `sendMail`): horário laboral e nunca aos administradores. */
+  aviso?: boolean;
   de?: { nome: string; email: string };
 };
 
@@ -56,7 +58,7 @@ export async function enviarModelo(db: Db, e: EnvioModelo) {
   const mail = await montarModelo(db, { ...e, email: e.para });
   return sendMail(db, {
     to: e.para, name: e.nome, subject: mail.subject, text: mail.text, html: mail.html,
-    ...(e.anexos ? { anexos: e.anexos } : {}), ...(e.de ? { de: e.de } : {}),
+    ...(e.anexos ? { anexos: e.anexos } : {}), ...(e.de ? { de: e.de } : {}), ...(e.aviso ? { aviso: true } : {}),
   });
 }
 

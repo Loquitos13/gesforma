@@ -161,7 +161,8 @@ export async function enviarModelo(
   const mail = renderAutomaticEmail({
     nome: para.nome, xml: m.body_xml ?? "", linhas, cta: xml.cta || m.cta, href, vars, origin: config.appOrigin,
   });
-  await sendMail(db, { to: para.email, name: para.nome, subject: fillVars(m.assunto, vars), text: mail.text, html: mail.html });
+  // O aviso à equipa (documento assinado) segue as regras dos avisos: horário laboral, nunca aos administradores.
+  await sendMail(db, { to: para.email, name: para.nome, subject: fillVars(m.assunto, vars), text: mail.text, html: mail.html, ...(tipo === "assinatura_equipa" ? { aviso: true } : {}) });
 }
 
 /**

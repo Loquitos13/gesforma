@@ -75,7 +75,7 @@ export async function enviarComprovativoContabilidade(db: Db, lead: Record<strin
     "Dados de faturação ({{faturacao_estado}}):<br>Nome ou empresa: {{faturacao_nome}}<br>NIF: {{faturacao_nif}}<br>Morada fiscal: {{faturacao_morada}}<br>Código postal: {{faturacao_codigo_postal}}<br>Email da fatura: {{faturacao_email}}",
   ];
   for (const pessoa of destinos) await enviarModelo(db, {
-    tipo: "comprovativo_contabilidade", area: "contabilidade", para: pessoa.email, nome: pessoa.nome,
+    tipo: "comprovativo_contabilidade", area: "contabilidade", para: pessoa.email, nome: pessoa.nome, aviso: true,
     vars: {
       nome_formando: nomeDe(lead) || "—", nif: ou(lead.nif), telemovel: ou(lead.telf), email_formando: ou(lead.email),
       iban_formando: ou(lead.iban), curso: ou(lead.curso), valor: fmtEuros(valor),

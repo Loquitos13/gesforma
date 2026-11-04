@@ -191,7 +191,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <DocAlertas onOpen={(id, regime) => navigate({ view: regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes", leadId: id })} />
+      {user.role !== "admin" && <DocAlertas onOpen={(id, regime) => navigate({ view: regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes", leadId: id })} />}
       <WhatsappAlertas role={user.role} onOpen={(telefone, regime) => navigate({ view: regime === "fin" ? "fin-whatsapp" : "gold-whatsapp", filtros: { telefone } })} />
       <Pesquisa aberta={pesquisaAberta} onFechar={() => setPesquisaAberta(false)} onNavigate={navigate} />
     </>

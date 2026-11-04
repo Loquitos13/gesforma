@@ -98,7 +98,7 @@ export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: 
   const grupos = p.regime ? [p.regime] : ["gold", "fin"];
   for (const pessoa of await emailsDaEquipa(db, grupos)) {
     await enviarModelo(db, {
-      tipo: "aviso_whatsapp_humano", area: p.regime ?? "gold", para: pessoa.email, nome: pessoa.nome,
+      tipo: "aviso_whatsapp_humano", area: p.regime ?? "gold", para: pessoa.email, nome: pessoa.nome, aviso: true,
       vars: { nome_contacto: nome, telefone, mensagem: p.mensagem, assunto: p.mensagem },
       link: `${origem()}/gesforma/${vista}/whatsapp?telefone=${encodeURIComponent(p.telefone)}`,
       reserva: {

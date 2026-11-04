@@ -6,7 +6,7 @@ import { parseEmailXml } from "./emailXml.js";
 import { lerEntidade } from "./regrasConfig.js";
 import { linhaContactosLocal } from "../../src/partilhado/contactosLocal.js";
 import { config, isProd } from "./config.js";
-import { sendMail } from "./mailer.js";
+import { enviarAvisosAdiados, sendMail } from "./mailer.js";
 import {
   avancarEstadoLead, devolverReservas, exemploReal, formandosDaTurma, leadsParados, libertarReservasPresas, marcarEnviado,
   ficheirosDaRegra, marcarFalha, porNaFila, regraComModelo, regrasActivasPara, registarEvento, reservarPendentes, turmasQueComecam,
@@ -226,8 +226,9 @@ async function enviarReservado(db: Db, job: EnvioReservado) {
         + `<img src="${pixel}" width="1" height="1" alt="" />`;
     // Os documentos anexados à regra seguem com cada email.
     const anexos = job.rule_id ? await ficheirosDaRegra(db, job.rule_id) : [];
+    // Emails automáticos das regras: para a equipa contam como avisos (horário laboral, nunca aos administradores).
     const mailId = await sendMail(db, {
-      to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html, ...(anexos.length ? { anexos } : {}),
+      to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html, ...(anexos.length ? { anexos } : {}), aviso: true,
     });
     const soRegisto = String(mailId).startsWith("log:");
     if (soRegisto && isProd) {
@@ -279,6 +280,7 @@ export async function processDueJobs(db: Db, fim = 0) {
   await enqueueCrmReminders(db, fim).catch(() => undefined);
   await enviarRegrasComPrazo(db, fim).catch(err => console.error("[emails] regras com prazo:", err));
   const interrompidos = await libertarReservasPresas(db, RESERVA_PRESA_MIN).catch(() => []);
+  await enviarAvisosAdiados(db).catch(err => console.error("[emails] avisos adiados:", err));
   const resta = fim - Date.now();
   const r = !fim ? await flushQueuedJobs(db, 20)
     : resta > 0 ? await flushQueuedJobs(db, 10, resta)

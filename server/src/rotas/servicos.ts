@@ -180,7 +180,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     // Aviso à equipa Gold (comerciais e coordenação pedagógica), não à administração.
     for (const pessoa of await emailsDaEquipa(db, ["gold"])) {
       await enviarModelo(db, {
-        tipo: "pedido_proposta", para: pessoa.email, nome: pessoa.nome,
+        tipo: "pedido_proposta", para: pessoa.email, nome: pessoa.nome, aviso: true,
         vars: {
           nome_contacto: p.nome, empresa: p.empresa || p.nome, email_contacto: p.email, telefone: p.telefone || "—",
           servico: p.servico || "—", mensagem: p.mensagem || "(sem mensagem)",

@@ -36,6 +36,8 @@ export function arrancar(): Promise<Ctx> {
     process.env.PGLITE_DIR = dir;
     apagarNoFim(dir);
     process.env.MAIL_MODE = "log";
+    // Os testes não dependem da hora a que correm: os avisos à equipa saem sempre (o teste do horário liga-o).
+    process.env.AVISOS_HORARIO = "sempre";
     const { config } = await import("../src/config.js");
     // config.ts fixa a base no primeiro import (ver tests/ambiente.ts): nunca correr contra a de desenvolvimento.
     if (!config.pgliteDir.includes("gesforma-test-")) throw new Error(`Testes recusados: a base não é temporária (${config.pgliteDir}).`);

@@ -254,10 +254,10 @@ export async function registarAnexoRecebidoWhatsapp(
 }
 
 export function anexoWhatsapp(c: Consulta, id: number) {
-  return one<AnexoWhatsapp & { conteudo: Buffer }>(
+  return one<AnexoWhatsapp & { conteudo: Uint8Array | null; drive_file_id: string | null }>(
     c,
     `SELECT id, telefone, nome, mime, tamanho, conteudo, created_at::text AS created_at, guardado_em::text AS guardado_em,
-            guardado_por, preinscricao_id, doc_tipo FROM whatsapp_anexos WHERE id = $1`,
+            guardado_por, preinscricao_id, doc_tipo, drive_file_id FROM whatsapp_anexos WHERE id = $1`,
     [id],
   );
 }
@@ -279,6 +279,11 @@ export async function marcarAnexoGuardadoWhatsapp(c: Consulta, id: number, por: 
       WHERE id = $1 AND guardado_em IS NULL RETURNING id`,
     [id, por.slice(0, 120), preinscricaoId, tipo],
   ));
+}
+
+/** Guardado na ficha: o conteúdo sai da base de dados (fica o ficheiro da Drive). */
+export async function passarAnexoParaDriveWhatsapp(c: Consulta, id: number, driveFileId: string) {
+  await one(c, "UPDATE whatsapp_anexos SET conteudo = NULL, drive_file_id = $2 WHERE id = $1", [id, driveFileId]);
 }
 
 /** Apaga os anexos não guardados com mais de 30 dias (o conteúdo; a mensagem fica no histórico). */

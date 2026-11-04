@@ -421,6 +421,14 @@ describe("ficheiros enviados pela pessoa", () => {
       const g = await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: lead, tipo: tipos[0]!.id });
       expect(g.statusCode, g.body).toBe(200);
       expect((await ctx.db.query("SELECT tipo FROM preinscricao_docs WHERE preinscricao_id = $1", [lead])).rows).toEqual([{ tipo: tipos[0]!.id }]);
+      // Guardado na ficha: o conteúdo sai da base de dados (fica na Drive) e «Ver ficheiro» continua a abrir.
+      const guardado = (await ctx.db.query<{ conteudo: unknown; drive_file_id: string | null }>(
+        "SELECT conteudo, drive_file_id FROM whatsapp_anexos WHERE id = $1", [msg.anexoId])).rows[0]!;
+      expect(guardado.conteudo).toBeNull();
+      expect(guardado.drive_file_id).toBeTruthy();
+      const verDepois = await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/anexos/${msg.anexoId}`);
+      expect(verDepois.statusCode).toBe(200);
+      expect(verDepois.rawPayload.subarray(0, 4).toString()).toBe("%PDF");
       expect((await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: lead, tipo: tipos[0]!.id })).statusCode).toBe(409);
     }
     config.whatsappAppSecret = "";

@@ -8,7 +8,7 @@ import { openSecret, sealSecret } from "./secretBox.js";
 import {
   apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
   conversasPorLerWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
-  anexoWhatsapp, anexosDaConversaWhatsapp, marcarAnexoGuardadoWhatsapp, registarAnexoRecebidoWhatsapp,
+  anexoWhatsapp, anexosDaConversaWhatsapp, marcarAnexoGuardadoWhatsapp, passarAnexoParaDriveWhatsapp, registarAnexoRecebidoWhatsapp,
   sessaoWhatsapp, ultimaEntradaWhatsapp, wamidJaVisto, whatsappGuardado,
 } from "./repos/whatsapp.js";
 import { sanitizeText } from "./security.js";
@@ -16,6 +16,7 @@ import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import { situacaoPagamento } from "./docsCurso.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "./docsLink.js";
 import { guardarDocDaPreinscricao } from "./docsPreinscricao.js";
+import { readDriveContent } from "./driveFicheiros.js";
 import { linhaVisivel } from "./repos/crmVisivel.js";
 import { fecharConversaWhatsapp, verificarInatividade } from "./whatsappInatividade.js";
 import { digitsPhone, handleWhatsappText, type Resposta } from "./whatsappBot.js";
@@ -622,13 +623,20 @@ export function registerWhatsappRoutes(
     if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "anexo inválido" });
     const a = await anexoWhatsapp(db, id);
     if (!a) return reply.code(404).send({ error: "O ficheiro já não está disponível (os não guardados apagam-se ao fim de 30 dias)." });
+    // Já guardado na ficha: o ficheiro está na Drive (o conteúdo saiu da base de dados).
+    let conteudo = a.conteudo ? Buffer.from(a.conteudo) : null;
+    if (!conteudo && a.drive_file_id) {
+      const f = await readDriveContent(db, a.drive_file_id).catch(() => null);
+      conteudo = f?.bytes ? Buffer.from(f.bytes) : null;
+    }
+    if (!conteudo) return reply.code(404).send({ error: "O ficheiro já não está disponível. Se foi guardado na ficha, abra-o nos documentos da pré-inscrição." });
     const mostrar = /^(image\/(jpeg|png|webp)|application\/pdf)$/.test(a.mime);
     return reply
       .header("Content-Type", mostrar ? a.mime : "application/octet-stream")
       .header("X-Content-Type-Options", "nosniff")
       .header("Content-Disposition", `${mostrar ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(a.nome)}`)
       .header("Cache-Control", "private, no-store")
-      .send(Buffer.from(a.conteudo));
+      .send(conteudo);
   });
 
   app.post("/v1/crm/whatsapp/anexos/:id/guardar", async (req, reply) => {
@@ -652,9 +660,12 @@ export function registerWhatsappRoutes(
     const por = req.actor?.name || req.actor?.email || "Equipa";
     if (!(await marcarAnexoGuardadoWhatsapp(db, id, por, Number(lead.id), tipo.id))) return reply.code(409).send({ error: "Este ficheiro já foi guardado na ficha." });
     try {
-      await guardarDocDaPreinscricao(db, lead, tipo.id, { name: a.nome, mime: a.mime, bytes: Buffer.from(a.conteudo) }, {
+      if (!a.conteudo) throw new Error("ficheiro sem conteúdo");
+      const file = await guardarDocDaPreinscricao(db, lead, tipo.id, { name: a.nome, mime: a.mime, bytes: Buffer.from(a.conteudo) }, {
         pedidos, ja, actorId: req.actor!.id, origem: `WhatsApp, por ${por}`,
       });
+      // Fica só na Drive (pasta da pessoa): não ocupa espaço a dobrar na base de dados.
+      await passarAnexoParaDriveWhatsapp(db, id, file.id);
       await syncLigacao(db, Number(lead.id));
       await abrirAlerta(db, Number(lead.id));
     } catch (err) {

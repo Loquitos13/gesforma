@@ -88,6 +88,8 @@ describe("falar com uma pessoa", () => {
     expect(aviso.map(m => m.to).sort()).toEqual(esperados);
     for (const m of aviso) expect(m.subject).toBe("WhatsApp: Rita Lopes quer falar com a equipa");
     expect(aviso[0]!.text).toContain(`/gesforma/gold/whatsapp?telefone=${t}`);
+    // O texto do botão tocado, não o número da opção.
+    expect(aviso[0]!.text).toContain("Falar com a equipa");
 
     // Em pausa: o bot não responde (nem a «olá») e não sai outro aviso.
     expect((await handleWhatsappText(ctx.db, t, "olá, ainda está aí?")).replies).toEqual([]);

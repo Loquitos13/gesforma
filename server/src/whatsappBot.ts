@@ -240,9 +240,9 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     for (const r of replies) await logMsg(db, telefone, "out", r);
     const lead = (await leadsPorTelefone(db, telefone))[0];
     const nome = lead ? `${lead.nome} ${lead.apelido}`.trim() : perfil;
-    await avisarWhatsappHumano(db, { telefone, nome, mensagem: text, regime: lead ? (lead.regime === "fin" ? "fin" : "gold") : null })
+    await avisarWhatsappHumano(db, { telefone, nome, mensagem: corpoEntrada, regime: lead ? (lead.regime === "fin" ? "fin" : "gold") : null })
       .catch(err => console.error("[whatsapp] aviso à equipa:", err));
-    if (lead) await logLeadEvent(db, lead.id, undefined, "whatsapp", "Pediu para falar com a equipa no WhatsApp", text).catch(() => undefined);
+    if (lead) await logLeadEvent(db, lead.id, undefined, "whatsapp", "Pediu para falar com a equipa no WhatsApp", corpoEntrada).catch(() => undefined);
     return { replies, mensagens, telefone, passo: "menu" as Passo, leadId: lead?.id ?? leadId, humano: true };
   }
 

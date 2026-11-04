@@ -136,12 +136,12 @@ export async function registarMensagemWhatsapp(c: Consulta, telefone: string, di
  * Regista uma mensagem recebida com o seu id da Meta, uma só vez: devolve `false` se esse id já estava registado (a Meta
  * pode entregar a mesma mensagem mais de uma vez, até em simultâneo).
  */
-export async function registarEntradaWhatsapp(c: Consulta, telefone: string, corpo: string, wamid: string) {
+export async function registarEntradaWhatsapp(c: Consulta, telefone: string, corpo: string, wamid: string, anexoId?: number) {
   const r = await one<{ id: string }>(
     c,
-    `INSERT INTO whatsapp_mensagens (telefone, direccao, corpo, wamid) VALUES ($1, 'in', $2, $3)
+    `INSERT INTO whatsapp_mensagens (telefone, direccao, corpo, wamid, anexo_id) VALUES ($1, 'in', $2, $3, $4)
      ON CONFLICT (wamid) DO NOTHING RETURNING id::text AS id`,
-    [telefone, corpo.slice(0, 4000), wamid],
+    [telefone, corpo.slice(0, 4000), wamid, anexoId ?? null],
   );
   return Boolean(r);
 }
@@ -152,10 +152,10 @@ export async function wamidJaVisto(c: Consulta, wamid: string) {
 
 /** As últimas mensagens da conversa, pela ordem em que aconteceram. */
 export function conversaWhatsapp(c: Consulta, telefone: string, limite = 200) {
-  return many<{ direccao: string; corpo: string; created_at: string; autor: string | null }>(
+  return many<{ direccao: string; corpo: string; created_at: string; autor: string | null; anexo_id: number | null }>(
     c,
-    `SELECT direccao, corpo, created_at, autor FROM (
-       SELECT id, direccao, corpo, created_at::text AS created_at, autor FROM whatsapp_mensagens
+    `SELECT direccao, corpo, created_at, autor, anexo_id FROM (
+       SELECT id, direccao, corpo, created_at::text AS created_at, autor, anexo_id FROM whatsapp_mensagens
         WHERE telefone = $1 ORDER BY id DESC LIMIT $2
      ) x ORDER BY id ASC`,
     [telefone, limite],
@@ -181,6 +181,7 @@ export async function reservarAvisoPedidoWhatsapp(c: Consulta, telefone: string)
 
 /** Apaga a conversa (mensagens e sessão) de vez. */
 export async function apagarConversaWhatsapp(c: Consulta, telefone: string) {
+  await one(c, "DELETE FROM whatsapp_anexos WHERE telefone = $1", [telefone]);
   await one(c, "DELETE FROM whatsapp_mensagens WHERE telefone = $1", [telefone]);
   await one(c, "DELETE FROM whatsapp_sessoes WHERE telefone = $1", [telefone]);
 }
@@ -233,4 +234,54 @@ export function conversasPorLerWhatsapp(c: Consulta) {
      ORDER BY x.conversa_iniciada_em DESC NULLS LAST
      LIMIT 200`,
   );
+}
+
+export type AnexoWhatsapp = {
+  id: number; telefone: string; nome: string; mime: string; tamanho: number; created_at: string;
+  guardado_em: string | null; guardado_por: string | null; preinscricao_id: number | null; doc_tipo: string | null;
+};
+
+/** Guarda o ficheiro recebido (fica à espera de alguém o passar para a ficha) e a mensagem que o mostra. */
+export async function registarAnexoRecebidoWhatsapp(
+  c: Consulta, a: { telefone: string; wamid: string; nome: string; mime: string; bytes: Buffer; legenda: string },
+) {
+  const id = Number(await valor<number>(
+    c,
+    `INSERT INTO whatsapp_anexos (telefone, wamid, nome, mime, tamanho, conteudo) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+    [a.telefone, a.wamid || null, a.nome.slice(0, 160), a.mime.slice(0, 120), a.bytes.length, a.bytes],
+  ));
+  return id;
+}
+
+export function anexoWhatsapp(c: Consulta, id: number) {
+  return one<AnexoWhatsapp & { conteudo: Buffer }>(
+    c,
+    `SELECT id, telefone, nome, mime, tamanho, conteudo, created_at::text AS created_at, guardado_em::text AS guardado_em,
+            guardado_por, preinscricao_id, doc_tipo FROM whatsapp_anexos WHERE id = $1`,
+    [id],
+  );
+}
+
+export function anexosDaConversaWhatsapp(c: Consulta, telefone: string) {
+  return many<AnexoWhatsapp>(
+    c,
+    `SELECT id, telefone, nome, mime, tamanho, created_at::text AS created_at, guardado_em::text AS guardado_em,
+            guardado_por, preinscricao_id, doc_tipo FROM whatsapp_anexos WHERE telefone = $1 ORDER BY id`,
+    [telefone],
+  );
+}
+
+/** Marca o anexo como guardado na ficha (uma vez): `false` se já estava. */
+export async function marcarAnexoGuardadoWhatsapp(c: Consulta, id: number, por: string, preinscricaoId: number, tipo: string) {
+  return Boolean(await one(
+    c,
+    `UPDATE whatsapp_anexos SET guardado_em = now(), guardado_por = $2, preinscricao_id = $3, doc_tipo = $4
+      WHERE id = $1 AND guardado_em IS NULL RETURNING id`,
+    [id, por.slice(0, 120), preinscricaoId, tipo],
+  ));
+}
+
+/** Apaga os anexos não guardados com mais de 30 dias (o conteúdo; a mensagem fica no histórico). */
+export async function limparAnexosWhatsapp(c: Consulta) {
+  await one(c, "DELETE FROM whatsapp_anexos WHERE guardado_em IS NULL AND created_at < now() - interval '30 days'");
 }

@@ -88,11 +88,15 @@ export type ConversaWhatsapp = {
   telefone: string; nome: string; humano: boolean; humanoPor: string; ultima: string; ultimaDireccao: "in" | "out";
   ultimaEm: string; podeResponder: boolean; porLer: number; fechada: boolean; fechadaPor: string;
 };
-export type MensagemWhatsapp = { direccao: "in" | "out" | "evento"; corpo: string; createdAt: string; autor?: string };
+export type MensagemWhatsapp = { direccao: "in" | "out" | "evento"; corpo: string; createdAt: string; autor?: string; anexoId?: number | null };
+export type AnexoRecebidoWhatsapp = {
+  id: number; nome: string; mime: string; tamanho: number; guardado: boolean; guardadoPor: string; preinscricaoId: number | null; tipo: string;
+};
 export type DetalheConversaWhatsapp = {
   telefone: string; humano?: boolean; podeResponder?: boolean; ultimaEntrada?: string | null; fechada?: boolean; fechadaPor?: string;
-  leads?: { id: number; nome: string; curso: string; estado: string; regime: "gold" | "fin" }[];
+  leads?: { id: number; nome: string; curso: string; estado: string; regime: "gold" | "fin"; tipos: { id: string; label: string; validado: boolean }[] }[];
   mensagens: MensagemWhatsapp[];
+  anexos?: AnexoRecebidoWhatsapp[];
 };
 
 export type PedidoPendenteWhatsapp = { telefone: string; nome: string; regime: "gold" | "fin" | null; desde: string };
@@ -108,6 +112,9 @@ export const apiWhatsappResponder = (telefone: string, texto: string) =>
 export const apiWhatsappDevolver = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/devolver", { telefone });
 export const apiWhatsappAnexo = (telefone: string, ficheiro: File, legenda: string) =>
   enviarFicheiro<{ ok: true }>("/v1/crm/whatsapp/anexo", ficheiro, { telefone, legenda }, "file");
+export const urlAnexoWhatsapp = (id: number) => `${BASE}/v1/crm/whatsapp/anexos/${id}`;
+export const apiWhatsappGuardarAnexo = (id: number, preinscricaoId: number, tipo: string) =>
+  enviar.post<{ ok: true }>(`/v1/crm/whatsapp/anexos/${id}/guardar`, { preinscricaoId, tipo });
 export const apiWhatsappApagar = (telefone: string) =>
   enviar.delete<{ ok: true }>(`/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`);
 export const apiWhatsappFechar = (telefone: string) => enviar.post<{ ok: true; despedida: boolean }>("/v1/crm/whatsapp/fechar", { telefone });

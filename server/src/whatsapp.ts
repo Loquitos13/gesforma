@@ -8,9 +8,15 @@ import { openSecret, sealSecret } from "./secretBox.js";
 import {
   apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
   conversasPorLerWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
-  sessaoWhatsapp, ultimaEntradaWhatsapp, whatsappGuardado,
+  anexoWhatsapp, anexosDaConversaWhatsapp, marcarAnexoGuardadoWhatsapp, registarAnexoRecebidoWhatsapp,
+  sessaoWhatsapp, ultimaEntradaWhatsapp, wamidJaVisto, whatsappGuardado,
 } from "./repos/whatsapp.js";
 import { sanitizeText } from "./security.js";
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
+import { situacaoPagamento } from "./docsCurso.js";
+import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "./docsLink.js";
+import { guardarDocDaPreinscricao } from "./docsPreinscricao.js";
+import { linhaVisivel } from "./repos/crmVisivel.js";
 import { fecharConversaWhatsapp, verificarInatividade } from "./whatsappInatividade.js";
 import { digitsPhone, handleWhatsappText, type Resposta } from "./whatsappBot.js";
 
@@ -226,6 +232,38 @@ async function enviarAnexoCloudApi(db: Db, to: string, a: { bytes: Buffer; nome:
   return { sent: true as const };
 }
 
+/** Tipos de documento de uma pré-inscrição onde se pode guardar um ficheiro (e se já estão validados). */
+async function tiposDoLead(db: Db, lead: Record<string, unknown>) {
+  const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+  const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
+  const ja = await listarDocsLead(db, Number(lead.id));
+  const validado = (id: string) => ja.some(d => d.tipo === id && d.estado === "validado");
+  const tipos = pedidos.map(p => ({ id: p.id, label: p.label, validado: validado(p.id) }));
+  if ((await situacaoPagamento(db, lead)).pedeComprovativo) tipos.push({ id: COMPROVATIVO.id, label: COMPROVATIVO.label, validado: validado(COMPROVATIVO.id) });
+  return { tipos, pedidos, ja };
+}
+
+/** Ficheiros recebidos até este tamanho ficam guardados para a equipa ver (a Meta aceita até 100 MB nos documentos). */
+const ANEXO_RECEBIDO_MAX = 16 * 1024 * 1024;
+
+/** Descarrega da Meta o ficheiro que a pessoa enviou e guarda-o (à espera de a equipa o passar para a ficha). */
+async function descarregarAnexoRecebido(db: Db, telefone: string, wamid: string, media: { id: string; mime: string; nome: string; legenda: string }) {
+  const c = await whatsappCreds(db);
+  if (!c.token || !telefone) return undefined;
+  const info = await graphGet(encodeURIComponent(media.id), c.token);
+  const url = typeof info.data.url === "string" ? info.data.url : "";
+  if (!info.ok || !url.startsWith("https://")) return undefined;
+  const tamanho = Number(info.data.file_size ?? 0);
+  if (tamanho > ANEXO_RECEBIDO_MAX) return undefined;
+  const res = await fetch(url, { headers: { Authorization: `Bearer ${c.token}` } });
+  if (!res.ok) return undefined;
+  const bytes = Buffer.from(await res.arrayBuffer());
+  if (!bytes.length || bytes.length > ANEXO_RECEBIDO_MAX) return undefined;
+  return registarAnexoRecebidoWhatsapp(db, {
+    telefone, wamid, nome: media.nome, mime: String(info.data.mime_type ?? media.mime), bytes, legenda: media.legenda,
+  });
+}
+
 /** Regras de inatividade (a cada minuto, dentro da API): só com o WhatsApp ligado. */
 export async function verificarInatividadeWhatsapp(db: Db) {
   if (!(await whatsappLigado(db))) return null;
@@ -251,9 +289,15 @@ async function enviarCloudApi(db: Db, to: string, mensagem: Resposta) {
   return { sent: true as const };
 }
 
+type WaMedia = { id?: string; mime_type?: string; filename?: string; caption?: string };
+
 type WaMsg = {
   from?: string;
   id?: string;
+  image?: WaMedia;
+  document?: WaMedia;
+  video?: WaMedia;
+  audio?: WaMedia;
   /** Segundos desde 1970 (texto). */
   timestamp?: string;
   type?: string;
@@ -267,7 +311,11 @@ type WaContacto = { wa_id?: string; profile?: { name?: string } };
 /** Mensagens mais antigas do que isto não têm resposta: são entregas atrasadas (a Meta repete as que falharam durante dias). */
 export const WHATSAPP_ANTIGA_MIN = 15;
 
-export type Entrada = { from: string; text: string; wamid: string; nome: string; rotulo: string; ts: number };
+export type Entrada = {
+  from: string; text: string; wamid: string; nome: string; rotulo: string; ts: number;
+  /** Ficheiro enviado pela pessoa (imagem, documento, vídeo ou áudio): o id na Meta, o tipo e o nome. */
+  media?: { id: string; mime: string; nome: string; legenda: string };
+};
 
 export function extractIncoming(body: unknown): Entrada[] {
   const out: Entrada[] = [];
@@ -286,6 +334,18 @@ export function extractIncoming(body: unknown): Entrada[] {
         const escolha = m.interactive?.button_reply ?? m.interactive?.list_reply;
         const text = escolha?.id || escolha?.title || m.text?.body || m.button?.text || "";
         const rotulo = escolha?.title ?? "";
+        const media = m.document ?? m.image ?? m.video ?? m.audio;
+        if (m.from && media?.id) {
+          const mime = media.mime_type ?? "application/octet-stream";
+          const ext = mime.split("/")[1]?.split(";")[0] ?? "bin";
+          const nomeFicheiro = media.filename || `${m.document ? "documento" : m.image ? "imagem" : m.video ? "video" : "audio"}-${m.id?.slice(-6) ?? ""}.${ext}`;
+          out.push({
+            from: m.from, text: `📎 ${nomeFicheiro}${media.caption ? `\n${media.caption}` : ""}`, wamid: m.id ?? "",
+            nome: nomes.get(m.from) ?? "", rotulo: "", ts: Number(m.timestamp) || 0,
+            media: { id: media.id, mime, nome: nomeFicheiro, legenda: media.caption ?? "" },
+          });
+          continue;
+        }
         if (m.from && text) out.push({ from: m.from, text, wamid: m.id ?? "", nome: nomes.get(m.from) ?? "", rotulo, ts: Number(m.timestamp) || 0 });
       }
     }
@@ -361,7 +421,13 @@ export function registerWhatsappRoutes(
           req.log.info({ wamid: msg.wamid, idadeMin: Math.round((Date.now() / 1000 - msg.ts) / 60) }, "WhatsApp: mensagem atrasada ignorada");
           continue;
         }
-        const out = await handleWhatsappText(db, msg.from, msg.text, msg.wamid, msg.nome, msg.rotulo);
+        let anexoId: number | undefined;
+        if (msg.media) {
+          if (msg.wamid && await wamidJaVisto(db, msg.wamid)) continue;
+          anexoId = await descarregarAnexoRecebido(db, digitsPhone(msg.from), msg.wamid, msg.media)
+            .catch(err => { req.log.warn({ err }, "WhatsApp: ficheiro recebido não descarregado"); return undefined; });
+        }
+        const out = await handleWhatsappText(db, msg.from, msg.text, msg.wamid, msg.nome, msg.rotulo, anexoId);
         for (const m of out.mensagens) {
           await enviarCloudApi(db, out.telefone, m);
         }
@@ -498,15 +564,22 @@ export function registerWhatsappRoutes(
       ultimaEntrada: ultima ?? null,
       fechada: Boolean(sessao?.fechada_em),
       fechadaPor: sessao?.fechada_por || "",
-      leads: leads.map(l => ({
+      leads: await Promise.all(leads.map(async l => ({
         id: Number(l.id), nome: `${l.nome ?? ""} ${l.apelido ?? ""}`.trim(), curso: String(l.curso ?? ""),
         estado: String(l.estado ?? ""), regime: String(l.regime ?? "gold") === "fin" ? "fin" : "gold",
-      })),
+        // Documentos onde um ficheiro recebido aqui pode ser guardado (os do curso; o comprovativo com o pagamento pedido).
+        tipos: (await tiposDoLead(db, l)).tipos.map(t => ({ id: t.id, label: t.label, validado: t.validado })),
+      }))),
       mensagens: rows.map(r => ({
         direccao: r.direccao,
         corpo: r.corpo,
         createdAt: r.created_at,
         autor: r.autor ?? "",
+        anexoId: r.anexo_id ?? null,
+      })),
+      anexos: (await anexosDaConversaWhatsapp(db, tel)).map(a => ({
+        id: Number(a.id), nome: a.nome, mime: a.mime, tamanho: a.tamanho,
+        guardado: Boolean(a.guardado_em), guardadoPor: a.guardado_por ?? "", preinscricaoId: a.preinscricao_id, tipo: a.doc_tipo ?? "",
       })),
     };
   });
@@ -539,6 +612,56 @@ export function registerWhatsappRoutes(
     await registarMensagemWhatsapp(db, tel, "out", texto, undefined, autor);
     // Quem responde fica com a conversa: o bot continua em pausa.
     await refrescarHumanoWhatsapp(db, tel, autor);
+    return { ok: true };
+  });
+
+  // Ficheiro recebido no WhatsApp: ver (só a equipa) e, com confirmação, guardar na ficha da pré-inscrição.
+  app.get("/v1/crm/whatsapp/anexos/:id", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id?: string }).id);
+    if (!Number.isInteger(id) || id <= 0) return reply.code(400).send({ error: "anexo inválido" });
+    const a = await anexoWhatsapp(db, id);
+    if (!a) return reply.code(404).send({ error: "O ficheiro já não está disponível (os não guardados apagam-se ao fim de 30 dias)." });
+    const mostrar = /^(image\/(jpeg|png|webp)|application\/pdf)$/.test(a.mime);
+    return reply
+      .header("Content-Type", mostrar ? a.mime : "application/octet-stream")
+      .header("X-Content-Type-Options", "nosniff")
+      .header("Content-Disposition", `${mostrar ? "inline" : "attachment"}; filename*=UTF-8''${encodeURIComponent(a.nome)}`)
+      .header("Cache-Control", "private, no-store")
+      .send(Buffer.from(a.conteudo));
+  });
+
+  app.post("/v1/crm/whatsapp/anexos/:id/guardar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id?: string }).id);
+    const parsed = z.object({ preinscricaoId: z.number().int().positive(), tipo: z.string().trim().min(1).max(40) }).safeParse(req.body);
+    if (!Number.isInteger(id) || id <= 0 || !parsed.success) return reply.code(400).send({ error: "Escolha a pré-inscrição e o documento." });
+    const a = await anexoWhatsapp(db, id);
+    if (!a) return reply.code(404).send({ error: "O ficheiro já não está disponível." });
+    if (a.guardado_em) return reply.code(409).send({ error: "Este ficheiro já foi guardado na ficha." });
+    // Só numa pré-inscrição com este número e que quem guarda vê.
+    const n9 = a.telefone.slice(-9);
+    const lead = (await leadsPorTelefoneWhatsapp(db, a.telefone, n9)).find(l => Number(l.id) === parsed.data.preinscricaoId);
+    if (!lead || !(await linhaVisivel(db, "preinscricoes", parsed.data.preinscricaoId, req.actor!))) {
+      return reply.code(404).send({ error: "Pré-inscrição não encontrada para este número." });
+    }
+    const { tipos, pedidos, ja } = await tiposDoLead(db, lead);
+    const tipo = tipos.find(t => t.id === parsed.data.tipo);
+    if (!tipo) return reply.code(400).send({ error: "Este documento não faz parte do curso desta pré-inscrição." });
+    if (tipo.validado) return reply.code(409).send({ error: "Este documento já está validado na ficha." });
+    const por = req.actor?.name || req.actor?.email || "Equipa";
+    if (!(await marcarAnexoGuardadoWhatsapp(db, id, por, Number(lead.id), tipo.id))) return reply.code(409).send({ error: "Este ficheiro já foi guardado na ficha." });
+    try {
+      await guardarDocDaPreinscricao(db, lead, tipo.id, { name: a.nome, mime: a.mime, bytes: Buffer.from(a.conteudo) }, {
+        pedidos, ja, actorId: req.actor!.id, origem: `WhatsApp, por ${por}`,
+      });
+      await syncLigacao(db, Number(lead.id));
+      await abrirAlerta(db, Number(lead.id));
+    } catch (err) {
+      await db.query("UPDATE whatsapp_anexos SET guardado_em = NULL, guardado_por = NULL, preinscricao_id = NULL, doc_tipo = NULL WHERE id = $1", [id]);
+      req.log.warn({ err }, "anexo WhatsApp não guardado na ficha");
+      return reply.code(502).send({ error: "Não foi possível guardar o ficheiro na ficha (Drive). Tente outra vez." });
+    }
     return { ok: true };
   });
 

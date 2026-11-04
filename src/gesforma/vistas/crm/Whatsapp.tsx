@@ -2,14 +2,15 @@
 // A equipa responde daqui pelo número da ENA (texto livre só até 24 horas depois da última mensagem da pessoa).
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  apiWhatsappAnexo, apiWhatsappAssumir, apiWhatsappApagar, apiWhatsappConversa, apiWhatsappConversas, apiWhatsappDevolver, apiWhatsappFechar, apiWhatsappResponder,
+  apiWhatsappAnexo, apiWhatsappAssumir, apiWhatsappApagar, apiWhatsappGuardarAnexo, urlAnexoWhatsapp, type AnexoRecebidoWhatsapp,
+  type DetalheConversaWhatsapp, apiWhatsappConversa, apiWhatsappConversas, apiWhatsappDevolver, apiWhatsappFechar, apiWhatsappResponder,
   type ConversaWhatsapp,
 } from "../../../partilhado/api/configuracoes";
 import { usePode } from "../../../partilhado/AuthGate";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import { atualizarPendentesWhatsapp } from "../../WhatsappPendentes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
-import { AreaTexto, Aviso, Botao, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Estado, PageHeader, Vazio, cx, useFiltrosUrl } from "../../../partilhado/ui";
+import { AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, Modal, Selecao, ErroCarregar, Esqueleto, Estado, PageHeader, Vazio, cx, useFiltrosUrl } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
 
 const ATUALIZAR_MS = 5_000;
@@ -269,6 +270,7 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
           <div key={i} className={cx("max-w-[85%] whitespace-pre-wrap rounded-2xl px-3 py-2 text-sm shadow-sm",
             m.direccao === "in" ? "rounded-tl-sm bg-white" : m.autor ? "ml-auto rounded-tr-sm bg-[#DCF8C6]" : "ml-auto rounded-tr-sm bg-[#EAF2FB]")}>
             {m.corpo}
+            {m.anexoId ? <AnexoRecebido anexo={d.anexos?.find(a => a.id === m.anexoId)} id={m.anexoId} leads={d.leads ?? []} onGuardado={conversa.recarregar} /> : null}
             <span className="mt-1 block text-right text-[10px] text-tinta-suave">
               {m.direccao === "out" ? `${m.autor || "Assistente"} · ` : ""}{quando(m.createdAt)}
             </span>
@@ -314,5 +316,60 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
         )}
       </form>
     </Cartao>
+  );
+}
+
+/** Ficheiro enviado pela pessoa: ver e, se for para ficar, guardar na ficha da pré-inscrição (escolhendo o documento). */
+function AnexoRecebido({ anexo, id, leads, onGuardado }: {
+  anexo?: AnexoRecebidoWhatsapp; id: number; leads: NonNullable<DetalheConversaWhatsapp["leads"]>; onGuardado: () => void;
+}) {
+  const [aberto, setAberto] = useState(false);
+  const [lead, setLead] = useState<number | "">(leads.length === 1 ? leads[0]!.id : "");
+  const [tipo, setTipo] = useState("");
+  const [aGuardar, setAGuardar] = useState(false);
+  if (!anexo) return <span className="mt-1 block text-xs text-tinta-suave">(ficheiro já não disponível)</span>;
+  const tipos = leads.find(l => l.id === lead)?.tipos.filter(t => !t.validado) ?? [];
+
+  async function guardar() {
+    if (!lead || !tipo) return;
+    setAGuardar(true);
+    try {
+      await apiWhatsappGuardarAnexo(id, lead, tipo);
+      toastOk("Ficheiro guardado na ficha da pré-inscrição.");
+      setAberto(false);
+      onGuardado();
+    } catch (err) {
+      toastError(err, "Não foi possível guardar na ficha.");
+    } finally {
+      setAGuardar(false);
+    }
+  }
+
+  return (
+    <span className="mt-1.5 flex flex-wrap items-center gap-2 text-xs">
+      <a href={urlAnexoWhatsapp(id)} target="_blank" rel="noreferrer" className="font-semibold text-acao-texto underline">Ver ficheiro</a>
+      {anexo.guardado
+        ? <span className="text-tinta-suave">Guardado na ficha{anexo.guardadoPor ? ` por ${anexo.guardadoPor}` : ""}</span>
+        : <Botao tamanho="sm" variante="secundario" onClick={() => setAberto(true)}>Guardar na ficha</Botao>}
+      <Modal aberto={aberto} onFechar={() => setAberto(false)} titulo="Guardar na ficha da pré-inscrição"
+        rodape={<><Botao onClick={() => setAberto(false)}>Cancelar</Botao><Botao variante="primario" disabled={!lead || !tipo} aCarregar={aGuardar} onClick={() => void guardar()}>Guardar</Botao></>}>
+        {leads.length === 0 ? (
+          <Aviso tom="aviso">Este número não tem pré-inscrição. Crie-a primeiro (CRM › Pré-inscrições) e volte aqui para guardar o ficheiro.</Aviso>
+        ) : (
+          <div className="space-y-3">
+            <p className="m-0 text-sm text-tinta-suave">«{anexo.nome}» passa para os documentos da pré-inscrição, na pasta da pessoa na Drive, como se a pessoa o tivesse enviado na ligação pessoal.</p>
+            <Campo rotulo="Pré-inscrição">
+              {a => <Selecao {...a} vazio="Escolha a pré-inscrição" value={lead === "" ? "" : String(lead)}
+                opcoes={leads.map(l => ({ valor: String(l.id), rotulo: `#${l.id} · ${l.nome} · ${l.curso || "—"}` }))}
+                onChange={e => { setLead(e.target.value ? Number(e.target.value) : ""); setTipo(""); }} />}
+            </Campo>
+            <Campo rotulo="Documento" ajuda={lead && !tipos.length ? "Não há documentos por entregar nesta pré-inscrição." : undefined}>
+              {a => <Selecao {...a} vazio="Escolha o documento" value={tipo} disabled={!lead || !tipos.length}
+                opcoes={tipos.map(t => ({ valor: t.id, rotulo: t.label }))} onChange={e => setTipo(e.target.value)} />}
+            </Campo>
+          </div>
+        )}
+      </Modal>
+    </span>
   );
 }

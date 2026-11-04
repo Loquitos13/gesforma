@@ -26,6 +26,11 @@ beforeAll(async () => {
     `INSERT INTO whatsapp_config (id, token_sealed, phone_id, verify_token, display_phone) VALUES ('meta', $1, '123456', 'vt', '')
      ON CONFLICT (id) DO UPDATE SET token_sealed = EXCLUDED.token_sealed, phone_id = EXCLUDED.phone_id`, [sealSecret("t".repeat(40))]);
   vi.stubGlobal("fetch", async (url: string, init?: { body?: unknown }) => {
+    // Ficheiro recebido: a Meta dá o endereço (GET /<media-id>) e depois o conteúdo.
+    if (/graph\.facebook\.com\/v\d+\.\d+\/media-in-/.test(String(url))) {
+      return new Response(JSON.stringify({ url: "https://lookaside.fbsbx.com/whatsapp/ficheiro", mime_type: "application/pdf", file_size: 20 }), { status: 200 });
+    }
+    if (String(url).startsWith("https://lookaside.fbsbx.com/")) return new Response(new Uint8Array(Buffer.from("%PDF-1.4\n%%EOF\n")), { status: 200 });
     // Carregamento de ficheiros (/media): devolve o id do ficheiro na Meta.
     if (String(url).endsWith("/media")) {
       const f = (init?.body as FormData).get("file") as File;
@@ -363,5 +368,58 @@ describe("anexos", () => {
     expect((await enviar("virus.exe", Buffer.from("MZ\x90\x00"))).statusCode).toBe(400);
     await ctx.db.query("UPDATE whatsapp_mensagens SET created_at = now() - interval '25 hours' WHERE telefone = $1 AND direccao = 'in'", [t]);
     expect((await enviar("Programa CCP.pdf", pdf)).statusCode).toBe(409);
+  });
+});
+
+describe("ficheiros enviados pela pessoa", () => {
+  it("ficam na conversa; só passam para a ficha quando a equipa confirma (e escolhe o documento)", async () => {
+    const { config } = await import("../src/config.js");
+    config.whatsappAppSecret = "segredo-teste-wa";
+    const t = tel();
+    const email = `wa.anexo.${t}@exemplo.pt`;
+    const curso = `Curso Anexo ${t}`;
+    expect((await pedido(ctx, "secretaria", "POST", "/v1/cursos-gold", {
+      nome: curso, categoria: "Teste", tipo: "Pré-inscrição", preco: 100, regime: "Presencial", horas: 8,
+    })).statusCode).toBe(200);
+    const lead = (await ctx.db.query<{ id: number }>(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, estado, regime)
+       VALUES (nextval('ops_id_seq')::int, to_char(now(), 'YYYY-MM-DD'), 'Ana', 'Ficheiro', $1, $2, $3, 'Não contactado', 'gold') RETURNING id`,
+      [email, t.slice(3), curso])).rows[0]!.id;
+    const corpo = JSON.stringify({ entry: [{ changes: [{ value: {
+      metadata: { display_phone_number: "351962215550" },
+      messages: [{ from: t, id: `wamid.doc.${t}`, timestamp: String(Math.floor(Date.now() / 1000)), type: "document",
+        document: { id: `media-in-${t}`, mime_type: "application/pdf", filename: "cc.pdf", caption: "O meu CC" } }],
+    } }] }] });
+    pedidosMeta.length = 0;
+    const r = await ctx.app.inject({
+      method: "POST", url: "/v1/public/whatsapp/webhook", payload: corpo,
+      headers: { "content-type": "application/json", "x-hub-signature-256": `sha256=${createHmac("sha256", "segredo-teste-wa").update(corpo).digest("hex")}` },
+    });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(pedidosMeta.some(p => JSON.stringify(p).includes("Recebemos o seu ficheiro"))).toBe(true);
+
+    const c = (await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json();
+    const msg = c.mensagens.find((m: { anexoId: number | null }) => m.anexoId);
+    expect(msg.corpo).toBe("📎 cc.pdf\nO meu CC");
+    expect(c.anexos[0]).toMatchObject({ nome: "cc.pdf", guardado: false });
+    // Ver: a equipa abre o ficheiro; a contabilidade não.
+    const ver = await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/anexos/${msg.anexoId}`);
+    expect(ver.statusCode).toBe(200);
+    expect(ver.headers["content-type"]).toBe("application/pdf");
+    expect((await pedido(ctx, "contabilidade", "GET", `/v1/crm/whatsapp/anexos/${msg.anexoId}`)).statusCode).toBe(403);
+    // Ainda não está na ficha.
+    expect((await ctx.db.query("SELECT 1 FROM preinscricao_docs WHERE preinscricao_id = $1", [lead])).rows).toHaveLength(0);
+
+    const tipos = c.leads.find((l: { id: number }) => l.id === lead).tipos as { id: string }[];
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: lead, tipo: "nao-existe" })).statusCode).toBe(400);
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: 1, tipo: "cc" })).statusCode).toBe(404);
+    expect(tipos.length).toBeGreaterThan(0);
+    {
+      const g = await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: lead, tipo: tipos[0]!.id });
+      expect(g.statusCode, g.body).toBe(200);
+      expect((await ctx.db.query("SELECT tipo FROM preinscricao_docs WHERE preinscricao_id = $1", [lead])).rows).toEqual([{ tipo: tipos[0]!.id }]);
+      expect((await pedido(ctx, "comercial", "POST", `/v1/crm/whatsapp/anexos/${msg.anexoId}/guardar`, { preinscricaoId: lead, tipo: tipos[0]!.id })).statusCode).toBe(409);
+    }
+    config.whatsappAppSecret = "";
   });
 });

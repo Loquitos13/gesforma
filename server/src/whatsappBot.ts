@@ -238,7 +238,9 @@ function isMenuCmd(t: string) {
  * Uma mensagem recebida. `rotulo` é o texto do botão ou da linha da lista tocada (o `textRaw` é então o id da opção):
  * fica no histórico em vez do id.
  */
-export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: string, wamid = "", nomePerfil = "", rotulo = "") {
+export async function handleWhatsappText(
+  db: Db, telefoneRaw: string, textRaw: string, wamid = "", nomePerfil = "", rotulo = "", anexoId?: number,
+) {
   const telefone = digitsPhone(telefoneRaw);
   const text = sanitizeText(textRaw, 500).trim();
   const replies: string[] = [];
@@ -251,7 +253,7 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
   const corpoEntrada = sanitizeText(rotulo, 500).trim() || text;
   // Com id da Meta, o registo é também a reserva: a mesma mensagem entregue duas vezes só tem uma resposta.
   if (wamid) {
-    if (!(await registarEntradaWhatsapp(db, telefone, corpoEntrada, wamid))) return { replies: [], mensagens, telefone, duplicado: true };
+    if (!(await registarEntradaWhatsapp(db, telefone, corpoEntrada, wamid, anexoId))) return { replies: [], mensagens, telefone, duplicado: true };
   } else {
     await logMsg(db, telefone, "in", corpoEntrada);
   }
@@ -279,6 +281,13 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     say(MENU);
     for (const r of replies) await logMsg(db, telefone, "out", r);
     return { replies, mensagens, telefone, passo: "menu" as Passo, leadId };
+  }
+
+  // Ficheiro enviado pela pessoa: fica na caixa de conversas para a equipa ver (e, se for o caso, guardar na ficha).
+  if (anexoId) {
+    say("Recebemos o seu ficheiro. A equipa da ENA vai vê-lo. Se quiser falar com uma pessoa, escreva *4*; para voltar ao início, escreva *menu*.");
+    for (const r of replies) await logMsg(db, telefone, "out", r);
+    return { replies, mensagens, telefone, passo, leadId };
   }
 
   if ((passo === "menu" && text === "4") || querPessoa(text)) {

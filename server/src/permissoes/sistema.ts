@@ -17,6 +17,8 @@ export const regras: Regra[] = [
   ["GET", "/v1/crm/whatsapp/pendentes", EQUIPA],
   ["POST", "/v1/crm/whatsapp/responder", EQUIPA],
   ["POST", "/v1/crm/whatsapp/anexo", EQUIPA],
+  ["GET", "/v1/crm/whatsapp/anexos/:id", EQUIPA],
+  ["POST", "/v1/crm/whatsapp/anexos/:id/guardar", EQUIPA],
   ["POST", "/v1/crm/whatsapp/devolver", EQUIPA],
   ["POST", "/v1/crm/whatsapp/assumir", EQUIPA],
   ["POST", "/v1/crm/whatsapp/fechar", EQUIPA],

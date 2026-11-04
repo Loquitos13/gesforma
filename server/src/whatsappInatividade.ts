@@ -9,7 +9,9 @@
 import { avisarPedidoWhatsapp, avisarWhatsappHumano } from "./avisosEquipa.js";
 import type { Db } from "./db/pool.js";
 import { lerDefinicao } from "./repos/settings.js";
-import { HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, marcarConversaIniciadaWhatsapp, registarMensagemWhatsapp } from "./repos/whatsapp.js";
+import {
+  HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, limparAnexosWhatsapp, marcarConversaIniciadaWhatsapp, registarMensagemWhatsapp,
+} from "./repos/whatsapp.js";
 import type { Resposta } from "./whatsappBot.js";
 
 export type EnviarWhatsapp = (to: string, mensagem: Resposta) => Promise<{ sent: boolean }>;
@@ -85,6 +87,8 @@ type Sessao = { telefone: string; passo: string; humano_desde: string | null; ul
 /** Uma volta das regras de inatividade (corre a cada minuto dentro da API). */
 export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
   const r = await lerRegrasWhatsapp(db);
+  // Ficheiros recebidos que ninguém guardou na ficha: apagam-se ao fim de 30 dias.
+  await limparAnexosWhatsapp(db).catch(() => undefined);
   // Pedidos para falar com a equipa sem assunto ao fim de uns minutos: o aviso sai sem ele (sempre, mesmo sem regras).
   const semAssunto = (await db.query<{ telefone: string }>(
     `SELECT telefone FROM whatsapp_sessoes WHERE fechada_em IS NULL AND aviso_pedido_em IS NULL AND humano_desde IS NOT NULL

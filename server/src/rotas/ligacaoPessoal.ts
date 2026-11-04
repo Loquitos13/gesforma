@@ -7,20 +7,17 @@
 import type { DadosGatilho } from "../../../src/partilhado/gatilhosDocs.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { logLeadEvent } from "../crmDossier.js";
 import { ficheiroModelo, situacaoPagamento } from "../docsCurso.js";
-import { comprovativoRecebido, faturacaoConfirmada } from "../comprovativoContabilidade.js";
+import { faturacaoConfirmada } from "../comprovativoContabilidade.js";
 import { dadosFaturacaoSchema, faturacaoDoPercurso, gravarFaturacaoDoPercurso } from "../faturacao.js";
-import { avisarDocumentoRecebido } from "../avisosEquipa.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "../docsLink.js";
-import { garantirPastaPendente } from "../driveArvore.js";
 import { formandoFinPorToken, uploadDocFormandoFin } from "../formandoFinDocs.js";
-import { apagarFicheiroSubstituido, readDriveContent, storeDriveFile } from "../driveFicheiros.js";
-import { erroFicheiroPublico, nomeIdentificado } from "../ficheirosValidacao.js";
+import { readDriveContent } from "../driveFicheiros.js";
+import { guardarDocDaPreinscricao } from "../docsPreinscricao.js";
+import { erroFicheiroPublico } from "../ficheirosValidacao.js";
 import { fechoDaLigacao, leadPorToken, marcarUso, textoFecho, vistaEncerrada } from "../ligacaoPessoal.js";
 import { DadosFinErro, aceitarTermosFin, faltaDadosFin, gravarIdentificacaoFin, gravarMoradaFin } from "../percursoDadosFin.js";
 import { PercursoErro, concluirPercurso, escolherTurmaPublica, registarConsentimento, vistaDocumentosPublica } from "../percurso.js";
-import * as docsRepo from "../repos/leadDocs.js";
 import * as leads from "../repos/leads.js";
 import { validar } from "../validacao.js";
 import type { Deps } from "./tipos.js";
@@ -229,44 +226,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     }
     await marcarUso(db, leadId);
     try {
-      const antigo = ja.find(d => d.tipo === tipo && d.drive_file_id);
-      const zona = await garantirPastaPendente(db, { id: leadId, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? "") });
-      // O ficheiro fica com o nome do documento e da pessoa («Cartão de Cidadão - Ana Silva.pdf»).
-      const rotulo = comprovativo ? COMPROVATIVO.label : pedidos.find(p => p.id === tipo)?.label ?? tipo;
-      const nome = nomeIdentificado(up.name, rotulo, `${lead.nome ?? ""} ${lead.apelido ?? ""}`);
-      const file = await storeDriveFile(db, undefined, { name: nome, mime: up.mime, bytes: up.bytes }, {
-        kind: comprovativo ? "comprovativo-pagamento" : "preinscricao-doc",
-        regime,
-        formando: `${lead.nome} ${lead.apelido}`.trim(),
-        label: tipo,
-        itemId: String(leadId),
-        parentDriveId: zona?.pastaId,
-        folderPath: zona?.path || undefined,
-      });
-      // Só o documento errado (recusado) ou ainda por rever é substituído; um ficheiro partilhado com outro registo fica.
-      if (antigo?.drive_file_id && antigo.drive_file_id !== file.id && !(await docsRepo.ficheiroEmOutroSitio(db, antigo.drive_file_id, leadId))) {
-        await apagarFicheiroSubstituido(db, antigo.drive_file_id);
-      }
-      await docsRepo.substituirDoc(db, { leadId, tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "" });
-      await logLeadEvent(db, leadId, undefined, "campo", comprovativo ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`, file.name);
-      // O comprovativo segue também para a contabilidade (com o ficheiro e os dados de faturação; sem estes, espera por
-      // eles: é o passo seguinte da ligação). Uma falha no email não recusa o envio.
-      if (comprovativo) {
-        await comprovativoRecebido(db, lead, { driveFileId: file.id, nome: file.name, mime: up.mime, bytes: up.bytes })
-          .catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
-      }
-      // Aviso à equipa: o comprovativo logo; os documentos só quando estão todos os obrigatórios (um email, não um por ficheiro).
-      if (comprovativo) {
-        await avisarDocumentoRecebido(db, lead, rotulo, file.id, { comprovativo: true }).catch(err => console.error("[emails] aviso de comprovativo recebido:", err));
-      } else {
-        const agora = await listarDocsLead(db, leadId);
-        const entregue = (id: string) => agora.some(d => d.tipo === id && d.estado !== "recusado");
-        const obrigatorios = pedidos.filter(p => p.required);
-        if (obrigatorios.length && obrigatorios.every(p => entregue(p.id))) {
-          const lista = `Todos os documentos obrigatórios: ${obrigatorios.map(p => p.label).join(", ")}`;
-          await avisarDocumentoRecebido(db, lead, lista, file.id).catch(err => console.error("[emails] aviso de documentos recebidos:", err));
-        }
-      }
+      const file = await guardarDocDaPreinscricao(db, lead, tipo, { name: up.name, mime: up.mime, bytes: up.bytes }, { pedidos, ja });
       await syncLigacao(db, leadId);
       await abrirAlerta(db, leadId);
       return { ok: true, nome: file.name };

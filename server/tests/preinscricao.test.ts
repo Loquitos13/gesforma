@@ -138,7 +138,7 @@ describe("ligação pessoal até à validação", () => {
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/pedir-pagamento`)).statusCode).toBe(409);
   });
 
-  it("documentos e turma → secretaria valida e pede o pagamento → comprovativo validado → ficha, conta e acesso", async () => {
+  it("documentos e turma → secretaria valida e pede o pagamento → comprovativo validado → inserir na turma → ficha, conta e acesso", async () => {
     const ctx = await arrancar();
     await pedido(ctx, "admin", "PUT", "/v1/settings/entidade", { values: { nome: "ENA", iban: "PT50 0002 0123 1234 5678 9015 4", titularConta: "ENA Formação" } });
     const curso = await cursoGold(ctx, 100);
@@ -181,9 +181,9 @@ describe("ligação pessoal até à validação", () => {
     // Concluir a inscrição à mão só depois de o pagamento estar confirmado.
     const cedo = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`);
     expect(cedo.statusCode, cedo.body).toBe(409);
-    // O comercial só mexe nas suas pré-inscrições: dá-se-lhe esta para provar a regra do perfil.
-    await ctx.db.query("UPDATE preinscricoes SET comercial_id = $1 WHERE id = $2", [ctx.userId.comercial, id]);
-    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
+    // O comercial também insere na turma, mas só com o pagamento confirmado.
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(409);
+    expect((await pedido(ctx, "contabilidade", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(403);
 
     expect((await upload(ctx, token, "comprovativo", "pag.pdf", PDF)).statusCode).toBe(200);
     // O comprovativo valida-o a equipa na ficha (o comercial também); duas validações ao mesmo tempo não dão erro.
@@ -196,6 +196,11 @@ describe("ligação pessoal até à validação", () => {
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${comp.rows[0]!.id}/recusar`, { observacao: "tarde" })).statusCode).toBe(409);
     const cc = await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = 'cc'", [id]);
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/documentos/${cc.rows[0]!.id}/validar`)).statusCode).toBe(403);
+    // Comprovativo validado: pagamento confirmado, mas ainda NÃO está na turma (inserção on demand).
+    expect((await ctx.db.query<{ estado: string }>("SELECT estado FROM preinscricoes WHERE id = $1", [id])).rows[0]!.estado).toBe("Pago");
+    expect((await ctx.db.query("SELECT id FROM formandos_gold WHERE lower(email) = $1", [email])).rows).toHaveLength(0);
+    const inserir = await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/concluir-inscricao`);
+    expect(inserir.statusCode, inserir.body).toBe(200);
     // Já concluída: repetir não cria nada de novo.
     expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/concluir-inscricao`)).statusCode).toBe(409);
 

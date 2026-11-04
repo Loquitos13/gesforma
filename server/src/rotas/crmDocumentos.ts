@@ -162,10 +162,13 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     }
   });
 
-  /** Volta a concluir a inscrição Gold paga que ficou a meio: ficha na turma, conta e email de acesso. */
+  /**
+   * Inserir na turma a pessoa com o pagamento confirmado (on demand, depois de validado o comprovativo): ficha de
+   * formando na turma escolhida, conta e email de acesso. O comercial e a coordenação.
+   */
   app.post("/v1/crm/leads/:id/concluir-inscricao", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    if (!staffValida(req.actor?.role)) return reply.code(403).send({ error: "Só a equipa pedagógica ou administração conclui a inscrição." });
+    if (!pode(req.actor!.role, "crm.inserirNaTurma")) return reply.code(403).send({ error: "Só o comercial, a coordenação ou a administração inserem na turma." });
     const v = validar(reply, { params: idParam }, req);
     if (!v) return;
     try {

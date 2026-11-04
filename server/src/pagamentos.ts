@@ -21,7 +21,8 @@ export const METODOS_ACEITES = ["Transferência bancária", "Numerário", "Ofert
 
 /**
  * Marca o pagamento como Pago, dispara o email e actualiza a ficha Gold e a pré-inscrição ligadas.
- * Se o pagamento foi pedido no percurso da pré-inscrição, conclui a inscrição (ficha, conta e acesso).
+ * Se o pagamento foi pedido no percurso da pré-inscrição, a pessoa NÃO entra logo na turma: o comercial ou a
+ * coordenação inserem-na quando quiserem («Inserir na turma» na ficha: ficha de formando, conta e acesso).
  */
 export async function confirmarPagamento(db: Db, row: Record<string, unknown>, actorId?: string | null, opts: { soPendente?: boolean } = {}) {
   const mapped = mapPagamento(row);
@@ -45,7 +46,7 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>, a
     return atual ? mapPagamento(atual) : mapped;
   }
   // Depois de gravado: emails e conclusão da inscrição (ambos seguros de repetir).
-  const { aposPagamentoConfirmado, leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
+  const { leadDoPagamentoPedido } = await import("./inscricaoPaga.js");
   const doPercurso = await leadDoPagamentoPedido(db, mapped.id);
   // Ficha Gold sem emails de pagamento (inscrição feita pela equipa): a confirmação não sai.
   const semEmails = formandoId != null && await semEmailsDocsPagamento(db, "gold", formandoId);
@@ -53,7 +54,11 @@ export async function confirmarPagamento(db: Db, row: Record<string, unknown>, a
     await ingestEvent(db, "payment.confirmed", { email, nome: mapped.nome, curso: mapped.curso, pagamentoId: mapped.id }, `payment:${mapped.id}:${email}`)
       .catch(() => undefined);
   }
-  if (doPercurso) await aposPagamentoConfirmado(db, mapped.id);
+  if (doPercurso) {
+    const { logLeadEvent } = await import("./crmDossier.js");
+    await logLeadEvent(db, doPercurso, actorId ?? undefined, "seguimento", "Pagamento confirmado · inserir na turma",
+      "A inscrição conclui-se quando o comercial ou a coordenação inserirem a pessoa na turma (ficha da pré-inscrição).").catch(() => undefined);
+  }
   const depois = await obterPagamento(db, mapped.id);
   return depois ? mapPagamento(depois) : mapped;
 }

@@ -205,7 +205,7 @@ describe("webhook: reentrega de um pagamento já pago", () => {
     return { email, turma, pagId, lead };
   }
 
-  it("duas reentregas ao mesmo tempo concluem a inscrição uma vez e a palavra-passe enviada é a gravada", async () => {
+  it("a reentrega do webhook não insere na turma; três «Inserir na turma» ao mesmo tempo concluem uma vez", async () => {
     const ctx = await arrancar();
     await ligarWebhook(ctx);
     const i = await inscricaoPorConcluir(ctx);
@@ -214,16 +214,23 @@ describe("webhook: reentrega de um pagamento já pago", () => {
       const entrega = () => ctx.app.inject({
         method: "POST", url: "/v1/public/pagamentos/webhook", headers: { "x-webhook-key": CHAVE_WEBHOOK }, payload: { id: i.pagId },
       });
-      const rs = await Promise.all([entrega(), entrega(), entrega()]);
-      for (const r of rs) expect(r.statusCode, r.body).toBe(200);
+      // Pagamento já pago: o webhook responde ok e não mexe na turma (a inserção é na ficha).
+      expect((await entrega()).statusCode).toBe(200);
+      expect((await ctx.db.query("SELECT id FROM formandos_gold WHERE lower(email) = $1", [i.email])).rows).toHaveLength(0);
+
+      const inserir = () => pedido(ctx, "comercial", "POST", `/v1/crm/leads/${i.lead}/concluir-inscricao`);
+      const rs = await Promise.all([inserir(), inserir(), inserir()]);
+      expect(rs.filter(r => r.statusCode === 200).length).toBeGreaterThanOrEqual(1);
+      for (const r of rs) expect([200, 409]).toContain(r.statusCode);
       const fichas = await ctx.db.query("SELECT id FROM formandos_gold WHERE lower(email) = $1", [i.email]);
       expect(fichas.rows).toHaveLength(1);
       const contas = await ctx.db.query("SELECT id FROM users WHERE lower(email) = $1", [i.email]);
       expect(contas.rows).toHaveLength(1);
       const acessos = log.mock.calls.filter(c => String(c[0]).includes(`para=${i.email}`) && String(c[0]).includes("acesso"));
       expect(acessos).toHaveLength(1);
-      // Reserva libertada; já concluída, a reentrega seguinte não repete nada.
+      // Reserva libertada; já concluída, nada se repete.
       expect((await ctx.db.query<{ r: string | null }>("SELECT conclusao_reservada_em AS r FROM preinscricoes WHERE id = $1", [i.lead])).rows[0]!.r).toBeNull();
+      expect((await inserir()).statusCode).toBe(409);
       expect((await entrega()).statusCode).toBe(200);
       expect((await ctx.db.query("SELECT id FROM formandos_gold WHERE lower(email) = $1", [i.email])).rows).toHaveLength(1);
       expect(log.mock.calls.filter(c => String(c[0]).includes(`para=${i.email}`) && String(c[0]).includes("acesso"))).toHaveLength(1);

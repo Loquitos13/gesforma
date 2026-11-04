@@ -5,7 +5,6 @@ import { config } from "../config.js";
 import { carimboUtc } from "../datas.js";
 import { normalizarEstado, validarTransicao } from "../estados.js";
 import { FaturaErro, anexarFatura, enviarFatura, faturaDoDetalhe } from "../faturas.js";
-import { aposPagamentoConfirmado } from "../inscricaoPaga.js";
 import { nextOpsId } from "../ops.js";
 import { pode } from "../permissoes/capacidades.js";
 import { METODOS_ACEITES, confirmarPagamento, findPagamentoPorReferencia, mapPagamento, PagamentoErro, recusarPagamento } from "../pagamentos.js";
@@ -288,11 +287,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const found = id ? await obterPagamento(db, id) : await findPagamentoPorReferencia(db, referencia, valor);
     if (!found) return reply.code(404).send({ error: "referência desconhecida" });
     // Reentrega do gateway: já pago responde ok sem repetir efeitos; reembolsado ou cancelado não volta a Pago.
-    // Se a entrega anterior falhou depois de gravar, conclui a inscrição que ficou a meio (seguro de repetir).
-    if (String(found.estado) === "Pago") {
-      await aposPagamentoConfirmado(db, String(found.id)).catch(err => req.log.warn({ err }, "webhook: inscrição por concluir"));
-      return { ok: true, pagamento: mapPagamento(found) };
-    }
+    // A inscrição na turma faz-se na ficha (comercial ou coordenação), não aqui.
+    if (String(found.estado) === "Pago") return { ok: true, pagamento: mapPagamento(found) };
     if (String(found.estado) !== "Pendente") return reply.code(409).send({ error: `pagamento em estado ${found.estado}` });
     if (valor != null && Number.isFinite(valor) && Math.abs(Number(found.valor) - valor) >= 0.02) {
       await audit(db, undefined, "pagamento.webhook_valor", "pagamento", String(found.id), req.ip, { referencia, valor });

@@ -15,7 +15,7 @@ const ESTADO_DOC: Record<string, { texto: string; tom: "sucesso" | "perigo" | "a
 export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; onMudou: () => void }) {
   const pode = usePode();
   const podeValidar = pode("crm.validarDocumentos");
-  // O comprovativo de pagamento: valida-o a equipa (comercial e coordenações) e a contabilidade; conclui a inscrição.
+  // O comprovativo de pagamento: valida-o a equipa (comercial e coordenações) e a contabilidade; confirma o pagamento (a turma é à parte).
   const podeComprovativo = pode("pagamentos.validarComprovativo");
   const id = d.lead.id;
   const [obs, setObs] = useState<Record<number, string>>({});

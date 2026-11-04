@@ -77,6 +77,8 @@ export function proximoPasso(l: Lead): { texto: string; tom: Tom } {
   if (l.validada) return { texto: l.regime === "gold" ? "Validada · inscrever na turma" : "Validada", tom: "sucesso" };
   if (l.estado === "Não contactado") return { texto: "Fazer o primeiro contacto", tom: "aviso" };
   if ((l.docsRecusados ?? 0) > 0) return { texto: "Aguarda correcção de documentos", tom: "perigo" };
+  // Pagamento confirmado (comprovativo validado): falta inserir na turma (on demand, comercial ou coordenação).
+  if (l.estado === "Pago" && l.regime === "gold") return { texto: "Inserir na turma", tom: "acao" };
   if (l.pagamentoPedido) return { texto: "Aguarda o comprovativo de pagamento", tom: "info" };
   // Documentos todos validados: o passo seguinte é pedir o pagamento (curso pago) ou validar a pré-inscrição.
   const env = l.docsEnviados ?? 0;

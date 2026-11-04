@@ -15,10 +15,12 @@ export const CAPACIDADES = {
   "crm.apagar": PEDAGOGIA,
   "crm.validarDocumentos": PEDAGOGIA,
   "pagamentos.ver": PAGAMENTOS,
-  // Validar o comprovativo (e com ele concluir a inscrição) é da contabilidade.
+  // Confirmar o pagamento em Pagamentos é da contabilidade.
   "pagamentos.confirmar": CONTABILIDADE,
-  // Validar ou recusar o comprovativo na ficha da pré-inscrição (confirma o pagamento e conclui a inscrição).
+  // Validar ou recusar o comprovativo na ficha da pré-inscrição (confirma o pagamento; não insere na turma).
   "pagamentos.validarComprovativo": EQUIPA,
+  // Inserir na turma (Gold) quem já tem o pagamento confirmado: o comercial e a coordenação.
+  "crm.inserirNaTurma": EQUIPA,
   // Pagamento de quem já é formando, registado na ficha (numerário, transferência): a coordenação Gold.
   "pagamentos.registarFicha": SECRETARIA,
   // Acesso à área do formando da Gold (palavra-passe gerada): a coordenação Gold.

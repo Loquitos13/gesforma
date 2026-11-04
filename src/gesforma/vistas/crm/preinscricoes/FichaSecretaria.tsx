@@ -31,14 +31,17 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
   });
   const validar = useAccao(apiValidarPreinscricao, { ok: "Pré-inscrição validada.", invalidar: ["formandos:", "turmas:", "painel:"] });
   const cheia = useAccao(apiTurmaCheia, { ok: r => r.enviadas ? `Email enviado com ${r.enviadas} turma${r.enviadas === 1 ? "" : "s"} no mesmo local.` : "Email enviado. Não há outra turma com vaga nesse local." });
-  const concluir = useAccao(apiConcluirInscricao, { ok: "Inscrição concluída: ficha, conta e email de acesso.", invalidar: ["formandos:", "turmas:", "painel:"] });
+  const concluir = useAccao(apiConcluirInscricao, { ok: "Inserido na turma: ficha de formando, conta e email de acesso.", invalidar: ["formandos:", "turmas:", "painel:", "crm:"] });
+  // Inserir na turma depois do pagamento confirmado (on demand): o comercial e a coordenação.
+  const podeInserir = usePode()("crm.inserirNaTurma");
   const inscrever = useAccao(apiInscreverGold, { ok: "Inscrito na turma. A ficha de formando foi criada.", invalidar: ["formandos:", "turmas:", "painel:"] });
-  // Comprovativo de pagamento: o comercial, as coordenações e a contabilidade validam-no aqui (conclui a inscrição).
+  // Comprovativo de pagamento: o comercial, as coordenações e a contabilidade validam-no aqui (confirma o pagamento;
+  // a inserção na turma faz-se depois, à parte).
   const podeComprovativo = usePode()("pagamentos.validarComprovativo");
   const comprovativo = d.documentos.find(x => x.tipo === "comprovativo") ?? null;
   const [motivo, setMotivo] = useState("");
   const validarComp = useAccao(apiValidarDoc, {
-    ok: "Comprovativo validado: pagamento confirmado e inscrição concluída.", invalidar: ["crm:", "pagamentos:", "formandos:", "turmas:", "painel:"],
+    ok: "Comprovativo validado: pagamento confirmado. Insira a pessoa na turma quando quiser.", invalidar: ["crm:", "pagamentos:", "formandos:", "turmas:", "painel:"],
   });
   const recusarComp = useAccao(apiRecusarDoc, { ok: "Comprovativo recusado. A pessoa recebeu o motivo e a ligação para enviar outro.", invalidar: ["crm:", "pagamentos:"] });
 
@@ -78,7 +81,7 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
         <section aria-label="Pagamento" className="flex flex-col gap-2 rounded-cartao border border-acao/40 bg-acao-suave p-3 text-[13px]">
           <p className="m-0 text-xs font-semibold uppercase tracking-wide text-acao-texto">Pagamento · {eur(d.pagamento?.valor ?? l.preco, true)} por transferência</p>
           {d.estadoPagamento === "por_pedir" && <p className="m-0">{d.podePedirPagamento ? "Documentos validados: peça o pagamento. A pessoa recebe o IBAN e o passo de pagamento abre na ligação pessoal." : d.faltaPedirPagamento}</p>}
-          {d.estadoPagamento === "pedido" && <p className="m-0">Pedido{d.pagamentoPedidoEm ? ` em ${data(d.pagamentoPedidoEm)}` : ""}. Ao validar o comprovativo a inscrição conclui-se: ficha, conta e email de acesso.</p>}
+          {d.estadoPagamento === "pedido" && <p className="m-0">Pedido{d.pagamentoPedidoEm ? ` em ${data(d.pagamentoPedidoEm)}` : ""}. Depois de validar o comprovativo, insira a pessoa na turma (ficha, conta e email de acesso).</p>}
           {d.estadoPagamento === "pedido" && (comprovativo ? (
             <div className="flex flex-col gap-2 rounded-cartao border border-linha bg-superficie p-2.5">
               <div className="flex items-center gap-2 flex-wrap">
@@ -132,10 +135,13 @@ export function FichaSecretaria({ d, role, onMudou }: { d: DossieLead; role: str
         </section>
       )}
 
-      {sec && l.regime === "gold" && d.estadoPagamento === "pago" && l.estado !== "Formando" && (
-        <section aria-label="Concluir inscrição" className="flex flex-col gap-2 rounded-cartao border border-acao/40 bg-acao-suave p-3 text-[13px]">
-          <p className="m-0">Pagamento confirmado, mas a inscrição ficou por concluir. Veja o motivo na cronologia, resolva-o e tente de novo.</p>
-          <Botao variante="primario" aCarregar={concluir.aCorrer} onClick={() => void concluir.correr(l.id).then(depois)}>Concluir inscrição</Botao>
+      {podeInserir && l.regime === "gold" && d.estadoPagamento === "pago" && l.estado !== "Formando" && (
+        <section aria-label="Inserir na turma" className="flex flex-col gap-2 rounded-cartao border border-sucesso/30 bg-sucesso-suave p-3 text-[13px]">
+          <p className="m-0">
+            Pagamento confirmado. Insira a pessoa na turma{d.turmaEscolhida ? <> <strong>{d.turmaEscolhida.nome}</strong></> : ""} quando quiser:
+            cria a ficha de formando, a conta e envia o email de acesso. Se não der (turma cheia, turma mudada…), o motivo fica na cronologia.
+          </p>
+          <Botao variante="primario" aCarregar={concluir.aCorrer} onClick={() => void concluir.correr(l.id).then(depois)}>Inserir na turma</Botao>
         </section>
       )}
 

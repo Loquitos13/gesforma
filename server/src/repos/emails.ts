@@ -70,7 +70,7 @@ export async function actualizarModelo(c: Consulta, id: number, p: {
 
 export type RegraEmail = {
   id: number; area: AreaEmail; nome: string; trigger_key: string; gatilho_label: string; template_tipo: string; template_nome: string | null;
-  delay_seconds: number; curso: string | null; ativo: boolean; dias: number | null; destinatarios: string[] | null;
+  delay_seconds: number; curso: string | null; cursos: string[] | null; ativo: boolean; dias: number | null; destinatarios: string[] | null;
   envios: number; abertos: number; falhados: number; em_fila: number; ultimo_envio: string | null;
 };
 
@@ -78,7 +78,7 @@ export type RegraEmail = {
 export function listarRegras(c: Consulta, areas?: readonly string[]) {
   return many<RegraEmail>(
     c,
-    `SELECT r.id, r.area, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.ativo, r.dias, r.destinatarios,
+    `SELECT r.id, r.area, r.nome, r.trigger_key, r.gatilho_label, r.template_tipo, t.nome AS template_nome, r.delay_seconds, r.curso, r.cursos, r.ativo, r.dias, r.destinatarios,
             COALESCE(j.envios, 0)::int AS envios, COALESCE(j.abertos, 0)::int AS abertos,
             COALESCE(j.falhados, 0)::int AS falhados, COALESCE(j.em_fila, 0)::int AS em_fila, j.ultimo_envio
        FROM email_rules r
@@ -117,21 +117,21 @@ export async function areaDoEnvio(c: Consulta, id: string) {
 
 export async function criarRegra(c: Consulta, r: {
   area: AreaEmail; nome: string; triggerKey: string; gatilho: string; templateTipo: string; atrasoSeg: number; curso: string | null; ativo: boolean;
-  dias?: number | null; destinatarios?: string[] | null;
+  dias?: number | null; destinatarios?: string[] | null; cursos?: string[];
 }) {
   const id = await valor<number>(
     c,
-    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo, dias, area, destinatarios)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text[]) RETURNING id`,
-    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.curso, r.ativo, r.dias ?? null, r.area,
-      r.destinatarios ? pgTextArray(r.destinatarios) : null],
+    `INSERT INTO email_rules (nome, trigger_key, gatilho_label, template_tipo, delay_seconds, curso, ativo, dias, area, destinatarios, cursos)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::text[], $11::text[]) RETURNING id`,
+    [r.nome, r.triggerKey, r.gatilho, r.templateTipo, r.atrasoSeg, r.cursos?.length ? null : r.curso, r.ativo, r.dias ?? null, r.area,
+      r.destinatarios ? pgTextArray(r.destinatarios) : null, r.cursos?.length ? pgTextArray(r.cursos) : null],
   );
   return Number(id);
 }
 
 export async function actualizarRegra(c: Consulta, id: number, r: {
   nome?: string; gatilho?: string; triggerKey?: string; templateTipo?: string; atrasoSeg?: number; curso?: string | null; ativo?: boolean;
-  dias?: number | null; destinatarios?: string[];
+  dias?: number | null; destinatarios?: string[]; cursos?: string[];
 }) {
   await one(
     c,
@@ -139,11 +139,13 @@ export async function actualizarRegra(c: Consulta, id: number, r: {
        template_tipo = COALESCE($5, template_tipo), delay_seconds = COALESCE($6, delay_seconds),
        curso = CASE WHEN $8::boolean THEN $7 ELSE curso END, ativo = COALESCE($9, ativo),
        dias = CASE WHEN $11::boolean THEN $10::int ELSE dias END,
-       destinatarios = CASE WHEN $13::boolean AND trigger_key LIKE 'equipa.%' THEN $12::text[] ELSE destinatarios END
+       destinatarios = CASE WHEN $13::boolean AND trigger_key LIKE 'equipa.%' THEN $12::text[] ELSE destinatarios END,
+       cursos = CASE WHEN $15::boolean THEN $14::text[] ELSE cursos END
      WHERE id = $1`,
     [id, r.nome ?? null, r.gatilho ?? null, r.triggerKey ?? null, r.templateTipo ?? null, r.atrasoSeg ?? null,
       r.curso ?? null, r.curso !== undefined, r.ativo ?? null, r.dias ?? null, r.dias !== undefined,
-      r.destinatarios ? pgTextArray(r.destinatarios) : null, r.destinatarios !== undefined],
+      r.destinatarios ? pgTextArray(r.destinatarios) : null, r.destinatarios !== undefined,
+      r.cursos?.length ? pgTextArray(r.cursos) : null, r.cursos !== undefined],
   );
 }
 
@@ -155,7 +157,7 @@ export async function apagarRegra(c: Consulta, id: number) {
 export function regrasActivasPara(c: Consulta, chaves: string[], area: AreaEmail) {
   return many<RegraComModelo>(
     c,
-    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, r.destinatarios, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
+    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, r.cursos, r.destinatarios, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
        FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo AND t.area = r.area
       WHERE r.ativo = true AND r.trigger_key = ANY($1::text[]) AND r.area = $2`,
     [pgTextArray(chaves), area],
@@ -163,14 +165,14 @@ export function regrasActivasPara(c: Consulta, chaves: string[], area: AreaEmail
 }
 
 export type RegraComModelo = {
-  id: number; template_tipo: string; delay_seconds: number; curso: string | null; destinatarios?: string[] | null; assunto: string;
+  id: number; template_tipo: string; delay_seconds: number; curso: string | null; cursos?: string[] | null; destinatarios?: string[] | null; assunto: string;
   body_lines: unknown; body_xml: string; cta: string; cta_href: string; cta_ambito: string;
 };
 
 export function regraComModelo(c: Consulta, id: number) {
   return one<RegraComModelo>(
     c,
-    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
+    `SELECT r.id, r.template_tipo, r.delay_seconds, r.curso, r.cursos, t.assunto, t.body_lines, t.body_xml, t.cta, t.cta_href, t.cta_ambito
        FROM email_rules r JOIN email_templates t ON t.tipo = r.template_tipo AND t.area = r.area WHERE r.id = $1`,
     [id],
   );
@@ -204,7 +206,7 @@ export async function porNaFila(c: Consulta, j: {
   return Boolean(r);
 }
 
-export type EnvioReservado = { id: string; to_email: string; to_name: string; subject: string; body_text: string; body_html: string; attempts: number };
+export type EnvioReservado = { id: string; rule_id: number; to_email: string; to_name: string; subject: string; body_text: string; body_html: string; attempts: number };
 
 /**
  * Reserva até `limite` envios vencidos numa só instrução (passam a «sending»). Dois processos a correr
@@ -218,7 +220,7 @@ export function reservarPendentes(c: Consulta, limite: number, eventoId: string 
       WHERE id IN (SELECT id FROM email_jobs WHERE status = 'queued' AND scheduled_at <= now()
                     ORDER BY (event_id = $2::uuid) IS TRUE DESC, scheduled_at LIMIT $1 FOR UPDATE SKIP LOCKED)
         AND status = 'queued'
-      RETURNING id, to_email, to_name, subject, body_text, body_html, attempts`,
+      RETURNING id, rule_id, to_email, to_name, subject, body_text, body_html, attempts`,
     [limite, eventoId],
   );
 }
@@ -428,4 +430,41 @@ export async function avancarEstadoLead(
         AND estado NOT IN ('Formando', 'Desistiu') AND ($1 <> 'Pago' OR regime = 'gold')`,
     [alvo, rank, leadId, email, filtro.curso ?? "", filtro.pagamentoId ?? ""],
   );
+}
+
+// ─── Anexos das regras ───────────────────────────────────────────────────────
+
+export type AnexoRegra = { id: number; rule_id: number; nome: string; mime: string; tamanho: number; created_at: string };
+
+export function anexosDasRegras(c: Consulta, regraIds: number[]) {
+  if (!regraIds.length) return Promise.resolve([] as AnexoRegra[]);
+  return many<AnexoRegra>(
+    c,
+    `SELECT id, rule_id, nome, mime, tamanho, created_at::text AS created_at FROM email_regra_anexos
+      WHERE rule_id = ANY($1::int[]) ORDER BY id`,
+    [`{${regraIds.join(",")}}`],
+  );
+}
+
+/** Os ficheiros a juntar a cada email da regra. */
+export async function ficheirosDaRegra(c: Consulta, regraId: number) {
+  const rows = await many<{ nome: string; mime: string; conteudo: Uint8Array }>(
+    c, "SELECT nome, mime, conteudo FROM email_regra_anexos WHERE rule_id = $1 ORDER BY id", [regraId]);
+  return rows.map(r => ({ nome: r.nome, tipo: r.mime, conteudo: Buffer.from(r.conteudo) }));
+}
+
+export async function juntarAnexoRegra(c: Consulta, regraId: number, a: { nome: string; mime: string; bytes: Buffer }) {
+  return Number(await valor<number>(
+    c,
+    "INSERT INTO email_regra_anexos (rule_id, nome, mime, tamanho, conteudo) VALUES ($1, $2, $3, $4, $5) RETURNING id",
+    [regraId, a.nome.slice(0, 160), a.mime, a.bytes.length, a.bytes],
+  ));
+}
+
+export async function tirarAnexoRegra(c: Consulta, regraId: number, anexoId: number) {
+  return Boolean(await one(c, "DELETE FROM email_regra_anexos WHERE id = $2 AND rule_id = $1 RETURNING id", [regraId, anexoId]));
+}
+
+export async function contarAnexosRegra(c: Consulta, regraId: number) {
+  return Number((await valor<number>(c, "SELECT count(*)::int FROM email_regra_anexos WHERE rule_id = $1", [regraId])) ?? 0);
 }

@@ -7,6 +7,7 @@ import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { processDueJobs } from "./automations.js";
 import { enviarAvisosDocumentos } from "./avisosDocumentos.js";
 import { verificarInatividadeWhatsapp } from "./whatsapp.js";
+import { anexarGuiaNetforce, avisarEntradasNaTurma } from "./entradasTurma.js";
 import { allowedOrigins, config, onVercel } from "./config.js";
 import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
@@ -175,6 +176,8 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
   });
 
   await registarRotas(app, { db, requireAuth, audit });
+  // O guia do Netforce junta-se à regra do CCP (uma vez).
+  await anexarGuiaNetforce(db).catch(err => app.log.warn({ err }, "guia do Netforce não anexado à regra"));
 
 
   if (opts.worker !== false && !onVercel) {
@@ -188,6 +191,9 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       if (Date.now() - ultimaInatividade >= 60_000) {
         ultimaInatividade = Date.now();
         try { await verificarInatividadeWhatsapp(db); }
+        catch (err) { app.log.error(err); }
+        // Formandos que passaram a estar numa turma: o aviso «formando inserido numa turma» (ex.: Netforce no CCP).
+        try { await avisarEntradasNaTurma(db); }
         catch (err) { app.log.error(err); }
       }
     };

@@ -10,9 +10,11 @@ import {
   actualizarModelo, actualizarRegra, apagarModelo, apagarRegra, areaDaRegra, areaDoEnvio, areaDoModelo, cancelarEmFila, criarModelo, criarRegra,
   destinatarioConhecido, emailDaPreinscricao, estatisticasEnvios30Dias, existeModeloTipo, listarEnvios, listarModelos, listarRegras, marcarAberto,
   obterEnvio, obterModelo, reenviarFalhado, regrasDoModelo,
+  anexosDasRegras, contarAnexosRegra, juntarAnexoRegra, tirarAnexoRegra,
 } from "../repos/emails.js";
 import { AREAS_EMAIL, areaDoRegime, areasDoPerfil, type AreaEmail } from "../../../src/partilhado/emailAreas.js";
 import { GATILHOS_COM_PRAZO } from "../regrasAgendadas.js";
+import { tipoAnexo } from "../whatsapp.js";
 import { eAvisoEquipa, GRUPOS_EQUIPA, gruposPorOmissao, type GrupoEquipa } from "../../../src/partilhado/equipasAviso.js";
 import { delayLabelFromSeconds, delaySecondsFromLabel, isEmail, TRIGGER_MAP } from "../security.js";
 import { getSmtpStatus } from "../smtpConfig.js";
@@ -43,10 +45,17 @@ const DESCRICAO_GATILHO: Record<string, string> = {
   "Antes do prazo dos documentos": "A quem ainda tem documentos em falta, X dias antes da data limite de matrícula (ou do início da turma).",
   "Pagamento pedido sem comprovativo": "X dias depois de pedido o pagamento, se ainda não chegou o comprovativo.",
   "Antes do início da turma (integração)": "Aos formandos da turma, X dias antes do início: local, horário e área do formando.",
+  "Formando inserido numa turma": "Quando a pessoa passa a estar numa turma (inscrição concluída, inserida pela equipa ou mudada de turma). Sai do email do local.",
   "Documentos recebidos (aviso à equipa)": "Vai para a equipa escolhida em «Enviar para» quando a pessoa entrega todos os documentos obrigatórios.",
   "Comprovativo de pagamento recebido (aviso à equipa)": "Vai para a equipa escolhida em «Enviar para» quando chega o comprovativo de pagamento.",
   "Formador atribuído a uma turma": "Vai para o formador quando é atribuído a uma turma (ficha da turma ou cronograma).",
 };
+/** Cursos de uma regra (sem repetidos); aceita ainda o «curso» único antigo. Vazio = todos. */
+function cursosDaRegra(lista: readonly string[] | null | undefined, curso?: string | null) {
+  const todos = [...(lista ?? []), ...(curso ? [curso] : [])].map(c => c.trim()).filter(Boolean);
+  return [...new Map(todos.map(c => [c.toLowerCase(), c])).values()];
+}
+
 /** Equipas de um aviso interno (sem repetidos); vazio = as da área por omissão. */
 function gruposValidos(lista: readonly GrupoEquipa[] | null | undefined, area: AreaEmail, trigger = "") {
   const unicos = [...new Set(lista ?? [])];
@@ -73,6 +82,8 @@ const regraSchema = z.object({
   templateTipo: z.string().min(2).max(64),
   atraso: z.string().max(40).optional(),
   curso: z.string().max(200).optional().nullable(),
+  /** Um ou vários cursos (vazio = todos). */
+  cursos: z.array(z.string().trim().min(1).max(200)).max(50).optional().nullable(),
   ativo: z.boolean().optional(),
   /** Regras com prazo: dias antes (ou depois) da data de referência; vazio = o valor por omissão do gatilho. */
   dias: z.number().int().min(0).max(365).nullable().optional(),
@@ -101,6 +112,8 @@ const previewSchema = modeloSchema.extend({
   tipo: z.string().min(2).max(64),
   area: z.enum(AREAS_EMAIL).optional(),
   curso: z.string().max(200).optional().nullable(),
+  /** Um ou vários cursos (vazio = todos). */
+  cursos: z.array(z.string().trim().min(1).max(200)).max(50).optional().nullable(),
 });
 const eventSchema = z.object({
   type: z.enum([
@@ -164,6 +177,7 @@ function mapRegra(r: Awaited<ReturnType<typeof listarRegras>>[number]) {
     templateNome: r.template_nome,
     atraso: delayLabelFromSeconds(r.delay_seconds),
     curso: r.curso,
+    cursos: r.cursos?.length ? r.cursos : r.curso ? [r.curso] : [],
     ativo: r.ativo,
     dias: r.dias,
     destinatarios: r.destinatarios ?? null,
@@ -286,7 +300,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   for (const caminho of ["/v1/email/rules", "/v1/email/regras"]) {
     app.get(caminho, async (req, reply) => {
       if (!requireAuth(req, reply)) return;
-      return { rules: (await listarRegras(db, areasDe(req))).map(mapRegra) };
+      const regras = await listarRegras(db, areasDe(req));
+      const anexos = await anexosDasRegras(db, regras.map(r => r.id));
+      return {
+        rules: regras.map(r => ({
+          ...mapRegra(r),
+          anexos: anexos.filter(a => a.rule_id === r.id).map(a => ({ id: a.id, nome: a.nome, mime: a.mime, tamanho: a.tamanho })),
+        })),
+      };
     });
   }
 
@@ -303,6 +324,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       area, nome: v.body.nome, triggerKey: key, gatilho: v.body.gatilho, templateTipo: v.body.templateTipo,
       atrasoSeg: delaySecondsFromLabel(v.body.atraso ?? "Imediatamente"), curso: v.body.curso || null, ativo: v.body.ativo ?? true,
       dias: GATILHOS_COM_PRAZO[key] ? v.body.dias ?? null : null,
+      cursos: cursosDaRegra(v.body.cursos, v.body.curso),
       destinatarios: eAvisoEquipa(key) ? gruposValidos(v.body.destinatarios, area, key) : null,
     });
     await audit(db, actor(req).id, "email.rule_create", "email_rule", String(id), req.ip);
@@ -322,10 +344,47 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await actualizarRegra(db, v.params.id, {
       nome: d.nome, gatilho: d.gatilho, triggerKey: key, templateTipo: d.templateTipo,
       atrasoSeg: d.atraso != null ? delaySecondsFromLabel(d.atraso) : undefined,
-      curso: d.curso === undefined ? undefined : (d.curso || null), ativo: d.ativo, dias: d.dias,
+      curso: d.curso === undefined && d.cursos === undefined ? undefined : null, ativo: d.ativo, dias: d.dias,
+      cursos: d.cursos === undefined && d.curso === undefined ? undefined : cursosDaRegra(d.cursos, d.curso),
       destinatarios: d.destinatarios === undefined ? undefined : gruposValidos(d.destinatarios, area!),
     });
     await audit(db, actor(req).id, "email.rule_update", "email_rule", String(v.params.id), req.ip, { ...d });
+    return { ok: true };
+  });
+
+  // Documentos anexados à regra: seguem com cada email da regra (PDF, imagem, Word ou Excel; até 8 MB, 5 por regra).
+  app.post("/v1/email/rules/:id/anexos", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    if (!doPerfil(req, await areaDaRegra(db, v.params.id))) return reply.code(404).send({ error: "regra inexistente" });
+    let bytes: Buffer | null = null;
+    let nome = "anexo";
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === "file") { nome = part.filename || nome; bytes = await part.toBuffer(); }
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!bytes?.length) return reply.code(400).send({ error: "Escolha o ficheiro." });
+    if (bytes.length > 8 * 1024 * 1024) return reply.code(400).send({ error: "O ficheiro tem mais de 8 MB." });
+    const tipo = tipoAnexo(bytes, nome);
+    if (!tipo) return reply.code(400).send({ error: "Só PDF, imagens (JPG, PNG), Word (.docx) ou Excel (.xlsx)." });
+    if ((await contarAnexosRegra(db, v.params.id)) >= 5) return reply.code(409).send({ error: "Esta regra já tem 5 anexos." });
+    const id = await juntarAnexoRegra(db, v.params.id, { nome: nome.replace(/[\\/\r\n]/g, "_"), mime: tipo.mime, bytes });
+    await audit(db, actor(req).id, "email.rule_anexo", "email_rule", String(v.params.id), req.ip, { nome });
+    return { id };
+  });
+
+  app.delete("/v1/email/rules/:id/anexos/:anexoId", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const id = Number((req.params as { id?: string }).id);
+    const anexoId = Number((req.params as { anexoId?: string }).anexoId);
+    if (!Number.isInteger(id) || !Number.isInteger(anexoId)) return reply.code(400).send({ error: "pedido inválido" });
+    if (!doPerfil(req, await areaDaRegra(db, id))) return reply.code(404).send({ error: "regra inexistente" });
+    if (!(await tirarAnexoRegra(db, id, anexoId))) return reply.code(404).send({ error: "anexo inexistente" });
+    await audit(db, actor(req).id, "email.rule_anexo_apagado", "email_rule", String(id), req.ip, { anexoId });
     return { ok: true };
   });
 

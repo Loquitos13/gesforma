@@ -1,5 +1,5 @@
 // API do domínio "emails": regras, modelos, pré-visualização e histórico de envios.
-import { api, enviar, qs, type Pagina } from "./cliente";
+import { api, enviar, enviarFicheiro, qs, type Pagina } from "./cliente";
 import type { GrupoEquipa } from "../equipasAviso";
 import type { AreaEmail } from "../emailAreas";
 
@@ -38,6 +38,10 @@ export type RegraEmail = {
   dias?: number | null;
   /** Avisos internos: as equipas que recebem (Gold, Financiada, Contabilidade). */
   destinatarios?: GrupoEquipa[] | null;
+  /** Cursos a que a regra se aplica (vazio = todos). */
+  cursos?: string[];
+  /** Documentos que seguem com cada email da regra. */
+  anexos?: { id: number; nome: string; mime: string; tamanho: number }[];
   envios: number;
   abertos: number;
   falhados: number;
@@ -78,10 +82,13 @@ export const apiModelosEmail = (signal?: AbortSignal) => api<{ templates: Modelo
 export type CorpoRegra = {
   area?: AreaEmail; nome: string; gatilho: string; templateTipo: string; atraso: string; curso: string | null; ativo: boolean; dias?: number | null;
   destinatarios?: GrupoEquipa[] | null;
+  cursos?: string[];
 };
 
 export const apiCriarRegra = (corpo: CorpoRegra) => enviar.post<{ id: number }>("/v1/email/rules", corpo);
 export const apiAlterarRegra = (id: number, corpo: Partial<CorpoRegra>) => enviar.patch<{ ok: true }>(`/v1/email/rules/${id}`, corpo);
+export const apiAnexarRegra = (id: number, ficheiro: File) => enviarFicheiro<{ id: number }>(`/v1/email/rules/${id}/anexos`, ficheiro);
+export const apiTirarAnexoRegra = (id: number, anexoId: number) => enviar.delete<{ ok: true }>(`/v1/email/rules/${id}/anexos/${anexoId}`);
 export const apiApagarRegra = (id: number) => enviar.delete<{ ok: true }>(`/v1/email/rules/${id}`);
 export const apiTestarRegra = (id: number) => enviar.post<{ ok: true; to: string; logged: boolean }>(`/v1/email/rules/${id}/teste`);
 

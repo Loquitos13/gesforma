@@ -54,7 +54,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
   const sel = regras.find(r => r.id === selId) ?? grupos[0]?.lista[0] ?? null;
   const varias = (opcoes?.areas?.length ?? 0) > 1;
   const modelo = sel ? (modelos?.templates ?? []).find(m => m.tipo === sel.template && m.area === sel.area) : undefined;
-  const pedido = modelo ? { tipo: modelo.tipo, area: modelo.area, assunto: modelo.assunto, body_xml: modelo.body_xml, cta: modelo.cta, curso: sel?.curso ?? null } : null;
+  const pedido = modelo ? { tipo: modelo.tipo, area: modelo.area, assunto: modelo.assunto, body_xml: modelo.body_xml, cta: modelo.cta, curso: sel?.cursos?.[0] ?? sel?.curso ?? null } : null;
   const { dados: prev, aCarregar: aPrever } = useRecurso(
     pedido ? `emails:prev:regra:${sel?.id}:${modelo?.updated_at}` : null,
     signal => apiPrevisualizarEmail(pedido!, signal),
@@ -101,7 +101,7 @@ export function Regras({ opcoes, onEditarModelo }: { opcoes?: OpcoesEmail; onEdi
                     >
                       <div className="min-w-0">
                         <p className="m-0 flex items-center gap-2 text-[13px] font-semibold text-tinta"><span className="min-w-0 truncate">{r.nome}</span>{varias && <EtiquetaArea area={r.area} className="shrink-0" />}</p>
-                        <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {quando(r)}{r.curso ? ` · só ${r.curso}` : ""}</p>
+                        <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Quando: {r.gatilho} · {quando(r)}{r.cursos?.length ? ` · só ${r.cursos.join(", ")}` : r.curso ? ` · só ${r.curso}` : ""}{r.anexos?.length ? ` · 📎 ${r.anexos.length}` : ""}</p>
                         {r.destinatarios?.length ? <p className="m-0 mt-0.5 text-xs text-tinta-suave truncate">Para: {r.destinatarios.map(g => ROTULO_GRUPO_CURTO[g]).join(", ")}</p> : null}
                       </div>
                       <div className="text-xs text-tinta-suave text-right">

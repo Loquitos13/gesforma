@@ -71,6 +71,11 @@ export function renderAutomaticEmail(input: {
   note?: string;
 }) {
   const first = esc(input.nome.split(" ")[0] || input.nome);
+  // O texto que já começa pela sua própria saudação («Caro(a) Formando(a)», «Olá…», «Bom dia»…) não leva «Olá …»
+  // (também com <email saudacao="nao">).
+  const primeiro = (input.xml.match(/<p\b[^>]*>([\s\S]*?)<\/p>/i)?.[1] ?? input.linhas[0] ?? "").replace(/<[^>]+>/g, "").trim();
+  const comSaudacao = !/<email\b[^>]*\bsaudacao=["']nao["']/i.test(input.xml)
+    && !/^(car[oa]\b|caro\(a\)|exm[oa]|prezad[oa]|olá\b|ola\b|bom dia|boa tarde|boa noite)/i.test(primeiro);
   const rawParas = [...(input.xml.matchAll(/<p\b[^>]*>([\s\S]*?)<\/p>/gi) ?? [])].map(m => m[1]);
   // Um parágrafo com listas ({{…_itens}}) que ficaram todas vazias não sai (ex.: sem documentos em falta).
   const comLista = (p: string) => [...p.matchAll(/\{\{(\w+_itens)\}\}/g)].map(m => m[1]!);
@@ -106,7 +111,7 @@ export function renderAutomaticEmail(input: {
 <table role="presentation" width="560" cellpadding="0" cellspacing="0" style="max-width:560px;width:100%;background:#ffffff;border-radius:12px;border:1px solid #e2e8f0;">
 <tr><td style="padding:28px 28px 8px;font-family:Arial,Helvetica,sans-serif;">
 <img src="${esc(logo)}" alt="ENA" width="140" style="display:block;width:140px;max-width:140px;height:auto;border:0;outline:none;text-decoration:none;margin-bottom:18px;" />
-<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">Olá ${first},</p>
+${comSaudacao ? `<p style="margin:0 0 14px;font-size:15px;line-height:1.5;color:#0f172a;">Olá ${first},</p>` : ""}
 ${paraHtml}
 ${button}
 ${contactosHtml}
@@ -125,8 +130,7 @@ ${pixel}
     })]
     : [];
   const text = [
-    `Olá ${input.nome.split(" ")[0] || input.nome},`,
-    "",
+    ...(comSaudacao ? [`Olá ${input.nome.split(" ")[0] || input.nome},`, ""] : []),
     ...plainParas.flatMap(l => fillVars(l, input.vars).replace(/<br\s*\/?>/gi, "\n").replace(/<\/?(?:strong|em)>/gi, "").split("\n")),
     "",
     cta,

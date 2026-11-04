@@ -126,6 +126,7 @@ export const TRIGGER_MAP: Record<string, string> = {
   "Antes do prazo dos documentos": "documentos.antes_prazo",
   "Pagamento pedido sem comprovativo": "pagamento.sem_comprovativo",
   "Antes do início da turma (integração)": "turma.integracao",
+  "Formando inserido numa turma": "formando.inserido_turma",
   // Avisos internos.
   "Documentos recebidos (aviso à equipa)": "equipa.documentos_recebidos",
   "Comprovativo de pagamento recebido (aviso à equipa)": "equipa.comprovativo_recebido",
@@ -152,6 +153,7 @@ export const EVENT_ALIASES: Record<string, string[]> = {
   "documentos.antes_prazo": ["documentos.antes_prazo"],
   "pagamento.sem_comprovativo": ["pagamento.sem_comprovativo"],
   "turma.integracao": ["turma.integracao"],
+  "formando.inserido_turma": ["formando.inserido_turma"],
   "equipa.documentos_recebidos": ["equipa.documentos_recebidos"],
   "equipa.comprovativo_recebido": ["equipa.comprovativo_recebido"],
   "formador.atribuido": ["formador.atribuido"],

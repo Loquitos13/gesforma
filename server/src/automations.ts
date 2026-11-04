@@ -9,7 +9,7 @@ import { config, isProd } from "./config.js";
 import { sendMail } from "./mailer.js";
 import {
   avancarEstadoLead, devolverReservas, exemploReal, formandosDaTurma, leadsParados, libertarReservasPresas, marcarEnviado,
-  marcarFalha, porNaFila, regraComModelo, regrasActivasPara, registarEvento, reservarPendentes, turmasQueComecam,
+  ficheirosDaRegra, marcarFalha, porNaFila, regraComModelo, regrasActivasPara, registarEvento, reservarPendentes, turmasQueComecam,
   type EnvioReservado, type RegraComModelo,
 } from "./repos/emails.js";
 import { enviarRegrasComPrazo } from "./regrasAgendadas.js";
@@ -139,7 +139,9 @@ export async function ingestEvent(
   for (const [k, v] of Object.entries(opts.vars ?? {})) (vars as Record<string, string>)[k] = sanitizeText(String(v ?? ""), 2000);
   let queued = 0;
   for (const regra of regras) {
-    if (regra.curso && curso && regra.curso.trim().toLowerCase() !== curso.trim().toLowerCase()) continue;
+    // Só para certos cursos: a lista da regra (ou o «curso» único antigo). Vazio = todos.
+    const daRegra = (regra.cursos?.length ? regra.cursos : regra.curso ? [regra.curso] : []).map(c => c.trim().toLowerCase());
+    if (daRegra.length && !daRegra.includes(curso.trim().toLowerCase())) continue;
     const jobId = randomUUID();
     const mail = renderModelo(regra, nome, vars, { pixelUrl: `${origem()}/api/v1/email/open/${jobId}.gif` });
     const posto = await porNaFila(db, {
@@ -220,7 +222,11 @@ async function enviarReservado(db: Db, job: EnvioReservado) {
       ? job.body_html
       : job.body_text.split("\n").map(l => (l ? `<p>${l.replace(/&/g, "&amp;").replace(/</g, "&lt;")}</p>` : "<br>")).join("")
         + `<img src="${pixel}" width="1" height="1" alt="" />`;
-    const mailId = await sendMail(db, { to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html });
+    // Os documentos anexados à regra seguem com cada email.
+    const anexos = job.rule_id ? await ficheirosDaRegra(db, job.rule_id) : [];
+    const mailId = await sendMail(db, {
+      to: job.to_email, name: job.to_name, subject: job.subject, text: job.body_text, html, ...(anexos.length ? { anexos } : {}),
+    });
     const soRegisto = String(mailId).startsWith("log:");
     if (soRegisto && isProd) {
       await marcarFalha(db, job.id, true, SEM_SMTP_PRODUCAO);
@@ -313,7 +319,7 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
   if (!isEmail(email)) throw new Error("Email de teste inválido");
   const regra = await regraComModelo(db, ruleId);
   if (!regra) throw new Error("Regra desconhecida");
-  const vars = await varsDeExemplo(db, regra.curso, { email, nome });
+  const vars = await varsDeExemplo(db, regra.cursos?.[0] ?? regra.curso, { email, nome });
   const jobId = randomUUID();
   const mail = renderModelo(regra, nome, vars, {
     pixelUrl: `${origem()}/api/v1/email/open/${jobId}.gif`,
@@ -329,7 +335,8 @@ export async function sendRuleTest(db: Db, ruleId: number, to: { email: string; 
     estado: "sending",
   });
   try {
-    const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html: mail.html });
+    const anexos = await ficheirosDaRegra(db, regra.id);
+    const mailId = await sendMail(db, { to: email, name: nome, subject, text: body, html: mail.html, ...(anexos.length ? { anexos } : {}) });
     const logged = String(mailId).startsWith("log:");
     await marcarEnviado(db, jobId, logged ? "SMTP desligado: ficou só no registo da API" : null);
     return { ok: true as const, to: email, logged, id: String(mailId) };

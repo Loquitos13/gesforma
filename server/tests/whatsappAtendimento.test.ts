@@ -301,3 +301,26 @@ describe("pedidos à espera (contador e alerta)", () => {
     expect(await pendente()).toBeUndefined();
   });
 });
+
+describe("conversas novas e por ler (menu e alerta)", () => {
+  it("a primeira mensagem dá «nova conversa» até alguém abrir; reabrir uma fechada também", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    const linha = async () => ((await pedido(ctx, "comercial", "GET", "/v1/crm/whatsapp/pendentes")).json().porLer as
+      { telefone: string; porLer: number; novaDesde: string | null }[]).find(c => c.telefone === t);
+    await handleWhatsappText(ctx.db, t, "olá");
+    const nova = await linha();
+    expect(nova).toMatchObject({ telefone: t, porLer: 1 });
+    expect(nova!.novaDesde).toBeTruthy();
+    // Abrir a conversa marca-a como lida: sai do contador e do alerta.
+    await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`);
+    expect(await linha()).toBeUndefined();
+    // Uma mensagem a seguir conta para o menu, mas já não é conversa nova.
+    await handleWhatsappText(ctx.db, t, "2");
+    expect((await linha())!.novaDesde).toBeNull();
+    // Fechada e a pessoa volta a escrever: nova outra vez.
+    await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/fechar", { telefone: t });
+    await handleWhatsappText(ctx.db, t, "olá de novo");
+    expect((await linha())!.novaDesde).toBeTruthy();
+  });
+});

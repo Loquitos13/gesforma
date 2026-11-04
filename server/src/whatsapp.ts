@@ -7,7 +7,7 @@ import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import {
   apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
-  leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
+  conversasPorLerWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
   sessaoWhatsapp, ultimaEntradaWhatsapp, whatsappGuardado,
 } from "./repos/whatsapp.js";
 import { sanitizeText } from "./security.js";
@@ -386,19 +386,35 @@ export function registerWhatsappRoutes(
   // a da pré-inscrição com este número; sem ela, null (conta para Gold e Financiada).
   app.get("/v1/crm/whatsapp/pendentes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const rows = await pedidosPendentesWhatsapp(db);
+    // A área de cada número: a da pré-inscrição com este número; sem ela, null (conta para Gold e Financiada).
+    const areas = new Map<string, { nome: string; regime: "gold" | "fin" | null }>();
+    const areaDe = async (telefone: string) => {
+      if (!areas.has(telefone)) {
+        const n9 = telefone.slice(-9);
+        const lead = n9.length === 9 ? (await leadsPorTelefoneWhatsapp(db, telefone, n9))[0] : undefined;
+        areas.set(telefone, {
+          nome: lead ? `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim() : "",
+          regime: lead ? (String(lead.regime) === "fin" ? "fin" : "gold") : null,
+        });
+      }
+      return areas.get(telefone)!;
+    };
     const pendentes = [];
-    for (const r of rows) {
-      const n9 = r.telefone.slice(-9);
-      const lead = n9.length === 9 ? (await leadsPorTelefoneWhatsapp(db, r.telefone, n9))[0] : undefined;
-      pendentes.push({
-        telefone: r.telefone,
-        nome: (lead ? `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim() : "") || r.nome_perfil || "",
-        regime: lead ? (String(lead.regime) === "fin" ? "fin" : "gold") : null,
-        desde: r.humano_desde,
+    for (const r of await pedidosPendentesWhatsapp(db)) {
+      const a = await areaDe(r.telefone);
+      pendentes.push({ telefone: r.telefone, nome: a.nome || r.nome_perfil || "", regime: a.regime, desde: r.humano_desde });
+    }
+    // Conversas com mensagens por ler (contador do menu); as que começaram há pouco e ninguém abriu dão o alerta.
+    const porLer = [];
+    for (const r of await conversasPorLerWhatsapp(db)) {
+      const a = await areaDe(r.telefone);
+      const nova = Boolean(r.conversa_iniciada_em) && (!r.lida_em || r.lida_em < r.conversa_iniciada_em!);
+      porLer.push({
+        telefone: r.telefone, nome: a.nome || r.nome_perfil || "", regime: a.regime, porLer: r.por_ler,
+        novaDesde: nova ? r.conversa_iniciada_em : null,
       });
     }
-    return { pendentes };
+    return { pendentes, porLer };
   });
 
   // Caixa de conversas: todas as conversas, as que pedem uma pessoa à frente.

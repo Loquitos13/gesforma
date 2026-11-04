@@ -204,3 +204,33 @@ export function pedidosPendentesWhatsapp(c: Consulta) {
     [HUMANO_EXPIRA_HORAS],
   );
 }
+
+/** A conversa começou agora (primeira mensagem da pessoa, ou reaberta). */
+export async function marcarConversaIniciadaWhatsapp(c: Consulta, telefone: string) {
+  await one(
+    c,
+    `INSERT INTO whatsapp_sessoes (telefone, conversa_iniciada_em, actualizado_em) VALUES ($1, now(), now())
+     ON CONFLICT (telefone) DO UPDATE SET conversa_iniciada_em = now()`,
+    [telefone],
+  );
+}
+
+/** Quantas mensagens a pessoa já escreveu nesta conversa (para saber se é a primeira). */
+export async function entradasWhatsapp(c: Consulta, telefone: string) {
+  return Number((await valor<number>(c, "SELECT count(*)::int FROM whatsapp_mensagens WHERE telefone = $1 AND direccao = 'in'", [telefone])) ?? 0);
+}
+
+/** Conversas abertas com mensagens por ler (contador do menu) e quando começou cada uma (alerta «nova conversa»). */
+export function conversasPorLerWhatsapp(c: Consulta) {
+  return many<{ telefone: string; nome_perfil: string | null; conversa_iniciada_em: string | null; lida_em: string | null; por_ler: number }>(
+    c,
+    `SELECT * FROM (
+       SELECT s.telefone, s.nome_perfil, s.conversa_iniciada_em::text AS conversa_iniciada_em, s.lida_em::text AS lida_em,
+              (SELECT count(*)::int FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'in'
+                 AND m.created_at > COALESCE(s.lida_em, '-infinity'::timestamptz)) AS por_ler
+         FROM whatsapp_sessoes s WHERE s.fechada_em IS NULL
+     ) x WHERE x.por_ler > 0
+     ORDER BY x.conversa_iniciada_em DESC NULLS LAST
+     LIMIT 200`,
+  );
+}

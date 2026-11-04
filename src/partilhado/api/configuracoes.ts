@@ -96,8 +96,9 @@ export type DetalheConversaWhatsapp = {
 };
 
 export type PedidoPendenteWhatsapp = { telefone: string; nome: string; regime: "gold" | "fin" | null; desde: string };
+export type ConversaPorLerWhatsapp = { telefone: string; nome: string; regime: "gold" | "fin" | null; porLer: number; novaDesde: string | null };
 export const apiWhatsappPendentes = (signal?: AbortSignal) =>
-  api<{ pendentes: PedidoPendenteWhatsapp[] }>("/v1/crm/whatsapp/pendentes", { signal });
+  api<{ pendentes: PedidoPendenteWhatsapp[]; porLer: ConversaPorLerWhatsapp[] }>("/v1/crm/whatsapp/pendentes", { signal });
 export const apiWhatsappConversas = (signal?: AbortSignal) =>
   api<{ ligado: boolean; conversas: ConversaWhatsapp[] }>("/v1/crm/whatsapp/conversas", { signal });
 export const apiWhatsappConversa = (telefone: string, signal?: AbortSignal) =>

@@ -12,7 +12,7 @@ import { avisarPedidoWhatsapp } from "./avisosEquipa.js";
 import { reabrirConversaWhatsapp } from "./whatsappInatividade.js";
 import {
   gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
-  pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
+  entradasWhatsapp, marcarConversaIniciadaWhatsapp, pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
 } from "./repos/whatsapp.js";
 
 type Passo =
@@ -255,8 +255,10 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
   } else {
     await logMsg(db, telefone, "in", corpoEntrada);
   }
-  // Conversa fechada e a pessoa voltou a escrever: reabre com o assistente (o histórico fica).
-  await reabrirConversaWhatsapp(db, telefone);
+  // Conversa fechada e a pessoa voltou a escrever: reabre com o assistente (o histórico fica). Primeira mensagem de
+  // sempre: conversa nova. As duas dão o alerta «nova conversa» no GesForma.
+  const reaberta = await reabrirConversaWhatsapp(db, telefone);
+  if (!reaberta && (await entradasWhatsapp(db, telefone)) === 1) await marcarConversaIniciadaWhatsapp(db, telefone);
   const perfil = sanitizeHeader(nomePerfil).slice(0, 120);
   if (perfil) await gravarNomePerfilWhatsapp(db, telefone, perfil).catch(() => undefined);
   const sess = await getSessao(db, telefone);

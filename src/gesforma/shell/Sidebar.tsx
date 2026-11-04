@@ -38,7 +38,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
   );
   const modalPasse = <AlterarPalavraPasse aberto={mudarPasse} onFechar={() => setMudarPasse(false)} />;
   const menu = useMemo(() => menuDoPerfil(user.role), [user.role]);
-  // Pedidos de WhatsApp à espera de uma pessoa da equipa: contador no «WhatsApp» (e no «CRM» fechado).
+  // Conversas de WhatsApp com mensagens por ler: contador no «WhatsApp» (e no «CRM» fechado).
   const pendentes = useWhatsappPendentes();
   const contadorDe = (v?: Vista) => (v === "gold-whatsapp" ? pendentes.gold : v === "fin-whatsapp" ? pendentes.fin : 0);
   const contadorItem = (item: ItemMenu) => contadorDe(item.view) + (item.children ?? []).reduce((n, c) => n + contadorDe(c.view), 0);
@@ -87,7 +87,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
                     onClick={() => destino && ir(destino)} onMouseEnter={() => destino && preCarregarVista(destino)}
                     className={cx("relative p-2 rounded-controlo", a ? "bg-nav-ativo text-white" : "hover:text-white hover:bg-white/10")}>
                     <Icone nome={item.icon} tamanho={17} />
-                    {contadorItem(item) > 0 && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-[#25D366] ring-2 ring-nav" aria-label="Pedidos de WhatsApp à espera" />}
+                    {contadorItem(item) > 0 && <span className="absolute right-0.5 top-0.5 h-2.5 w-2.5 rounded-full bg-[#25D366] ring-2 ring-nav" aria-label="Conversas de WhatsApp por ler" />}
                   </button>
                 );
               })}
@@ -229,11 +229,11 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
   );
 }
 
-/** Pedidos à espera (WhatsApp). */
+/** Conversas por ler (WhatsApp). */
 function Contador({ n }: { n: number }) {
   return (
     <span className="grid h-5 min-w-5 place-items-center rounded-full bg-[#25D366] px-1.5 text-[11px] font-bold text-white"
-      aria-label={`${n} ${n === 1 ? "pedido à espera" : "pedidos à espera"}`} title={`${n} ${n === 1 ? "pessoa pede" : "pessoas pedem"} para falar com a equipa`}>
+      aria-label={`${n} ${n === 1 ? "conversa por ler" : "conversas por ler"}`} title={`${n} ${n === 1 ? "conversa com mensagens por ler" : "conversas com mensagens por ler"}`}>
       {n}
     </span>
   );

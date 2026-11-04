@@ -9,7 +9,7 @@
 import { avisarPedidoWhatsapp, avisarWhatsappHumano } from "./avisosEquipa.js";
 import type { Db } from "./db/pool.js";
 import { lerDefinicao } from "./repos/settings.js";
-import { HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, registarMensagemWhatsapp } from "./repos/whatsapp.js";
+import { HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, marcarConversaIniciadaWhatsapp, registarMensagemWhatsapp } from "./repos/whatsapp.js";
 import type { Resposta } from "./whatsappBot.js";
 
 export type EnviarWhatsapp = (to: string, mensagem: Resposta) => Promise<{ sent: boolean }>;
@@ -73,7 +73,10 @@ export async function fecharConversaWhatsapp(db: Db, telefone: string, por: stri
 export async function reabrirConversaWhatsapp(db: Db, telefone: string) {
   const r = await db.query(
     "UPDATE whatsapp_sessoes SET fechada_em = NULL, fechada_por = NULL WHERE telefone = $1 AND fechada_em IS NOT NULL RETURNING telefone", [telefone]);
-  if (r.rows.length) await registarMensagemWhatsapp(db, telefone, "evento", "Conversa reaberta");
+  if (r.rows.length) {
+    await registarMensagemWhatsapp(db, telefone, "evento", "Conversa reaberta");
+    await marcarConversaIniciadaWhatsapp(db, telefone);
+  }
   return r.rows.length > 0;
 }
 

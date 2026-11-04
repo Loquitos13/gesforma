@@ -152,7 +152,8 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
   useEffect(() => { if (ultimaNaLista) recarregarConversa(); }, [ultimaNaLista, recarregarConversa]);
   // Abrir a conversa marca-a como lida: a lista acerta a contagem.
   const carregada = Boolean(d);
-  useEffect(() => { if (carregada) onMudou(); }, [carregada]);
+  // Abrir marca a conversa como lida: actualiza a lista, o contador do menu e os alertas.
+  useEffect(() => { if (carregada) { onMudou(); atualizarPendentesWhatsapp(); } }, [carregada]);
 
   async function responder(e?: FormEvent) {
     e?.preventDefault();

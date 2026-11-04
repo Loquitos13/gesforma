@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { SLOTS_CCP, dataIndisponivel, slotNoDia } from "./disponibilidade";
+import { dataIndisponivel, disponibilidadeDoDia } from "./disponibilidade";
 import { horariosSobrepoem, minutoSeguinte } from "./sessaoAcesso";
 import type { SessaoCronograma } from "./turmaModel";
 import { formatDiaMes, horaAgora, hojeIso, sessaoFormadores } from "./turmaModel";
@@ -40,9 +40,7 @@ export function eventosDoFormador(
 }
 
 function diaDisponivel(iso: string, slots: string[] | undefined) {
-  if (!slots || dataIndisponivel(slots, iso)) return false;
-  const dia = new Date(`${iso}T12:00:00`).getDay();
-  return SLOTS_CCP.some(slot => slotNoDia(slots, slot.id, dia));
+  return Boolean(slots) && disponibilidadeDoDia(slots, iso).disponivel.length > 0;
 }
 
 function cruza(a: Evento, b: Evento) {
@@ -123,7 +121,7 @@ export function FormadorCalendario({
           const conflito = ev.some((e, idx) => ev.some((o, j) => j > idx && cruza(e, o)));
           const agoraAqui = ev.some(e => aDecorrer(e, hoje, hora));
           const livre = diaDisponivel(chave, slots);
-          const bloqueado = Boolean(slots) && dataIndisponivel(slots, chave);
+          const bloqueado = Boolean(slots) && (dataIndisponivel(slots, chave) || disponibilidadeDoDia(slots, chave).indisponivel.length > 0 && !livre);
           const aberto = chave === diaAberto;
           return (
             <button

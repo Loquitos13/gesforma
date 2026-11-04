@@ -2,7 +2,8 @@
 // pagamento (Lisete); «Enviar ligação por email» na ficha da pré-inscrição (Aguiar).
 import { describe, expect, it } from "vitest";
 import {
-  alternarSlotNoDia, comDatasIndisponiveis, dataIndisponivel, entradaDisponibilidadeValida, sessaoCabeNoSlot, slotNoDia, slotsDoFormador,
+  alternarDiaInteiro, alternarSlotNoDia, comDatasIndisponiveis, dataIndisponivel, disponibilidadeDoDia, entradaDisponibilidadeValida,
+  juntarHorasNoDia, sessaoCabeNoSlot, slotNoDia, slotsDoFormador, tirarEntrada,
 } from "../../src/partilhado/disponibilidade.js";
 import { arrancar, pedido } from "./helpers.js";
 
@@ -39,10 +40,46 @@ describe("disponibilidade do formador", () => {
     expect(entradaDisponibilidadeValida("laboral@7")).toBe(false);
   });
 
+  it("calendário: horas indisponíveis (ou disponíveis a mais) numa data, sobre a semana tipo", () => {
+    // Semana tipo: laboral e pós-laboral. 2026-12-09 é quarta.
+    let s: string[] = ["laboral", "pos-laboral"];
+    expect(disponibilidadeDoDia(s, "2026-12-09")).toEqual({
+      disponivel: [{ inicio: 540, fim: 780 }, { inicio: 990, fim: 1380 }], indisponivel: [], diaInteiro: false,
+    });
+    // Indisponível das 10h às 12h: fica verde 9h–10h e 12h–13h, vermelho 10h–12h.
+    s = juntarHorasNoDia(s, "2026-12-09", "fora", 600, 720);
+    expect(s).toContain("fora:2026-12-09@10:00-12:00");
+    const dia = disponibilidadeDoDia(s, "2026-12-09");
+    expect(dia.disponivel).toEqual([{ inicio: 540, fim: 600 }, { inicio: 720, fim: 780 }, { inicio: 990, fim: 1380 }]);
+    expect(dia.indisponivel).toEqual([{ inicio: 600, fim: 720 }]);
+    expect(sessaoCabeNoSlot("2026-12-09", "09:00", "13:00", s)).toBe(false);
+    expect(sessaoCabeNoSlot("2026-12-09", "18:00", "22:00", s)).toBe(true);
+    // Os outros dias não mudam.
+    expect(sessaoCabeNoSlot("2026-12-16", "09:00", "13:00", s)).toBe(true);
+    // Disponível a mais num sábado (não está na semana tipo).
+    expect(sessaoCabeNoSlot("2026-12-12", "09:00", "13:00", s)).toBe(false);
+    s = juntarHorasNoDia(s, "2026-12-12", "livre", 540, 780);
+    expect(sessaoCabeNoSlot("2026-12-12", "09:00", "13:00", s)).toBe(true);
+    // Dia inteiro: tira as horas desse dia e fica todo indisponível; desmarcar volta à semana tipo.
+    s = alternarDiaInteiro(s, "2026-12-09");
+    expect(s).toContain("fora:2026-12-09");
+    expect(s.some(v => v.startsWith("fora:2026-12-09@"))).toBe(false);
+    expect(disponibilidadeDoDia(s, "2026-12-09").diaInteiro).toBe(true);
+    s = alternarDiaInteiro(s, "2026-12-09");
+    expect(sessaoCabeNoSlot("2026-12-09", "09:00", "13:00", s)).toBe(true);
+    // Mudar a semana tipo mantém as exceções; tudo válido para o servidor.
+    s = alternarSlotNoDia(s, "laboral", 2);
+    expect(s).toContain("livre:2026-12-12@09:00-13:00");
+    for (const v of s) expect(entradaDisponibilidadeValida(v)).toBe(true);
+    s = tirarEntrada(s, "livre:2026-12-12@09:00-13:00");
+    expect(sessaoCabeNoSlot("2026-12-12", "09:00", "13:00", s)).toBe(false);
+    expect(entradaDisponibilidadeValida("fora:2026-12-09@12:00-10:00")).toBe(false);
+  });
+
   it("o servidor grava e filtra a disponibilidade nova", async () => {
     const ctx = await arrancar();
     const r = await pedido(ctx, "secretaria", "POST", "/v1/formadores", {
-      nome: `Formador Disp ${Date.now()}`, email: "", regimes: ["gold"], disponibilidade: ["laboral@1", "laboral@3", "fora:2026-12-10"],
+      nome: `Formador Disp ${Date.now()}`, email: "", regimes: ["gold"], disponibilidade: ["laboral@1", "laboral@3", "fora:2026-12-10", "fora:2026-12-11@14:00-16:00"],
     });
     expect(r.statusCode, r.body).toBe(200);
     const id = r.json().formador.id as number;

@@ -45,10 +45,15 @@ function minutos(hhmm: string) {
  */
 const RE_DIA = /^(laboral|pos-laboral)@([1-5])$/;
 const RE_FORA = /^fora:(\d{4}-\d{2}-\d{2})(?:\.\.(\d{4}-\d{2}-\d{2}))?$/;
+/** Exceções num dia, com horas: «fora:2026-12-10@14:00-16:00» (indisponível) e «livre:2026-12-12@09:00-13:00» (disponível). */
+const RE_HORAS = /^(fora|livre):(\d{4}-\d{2}-\d{2})@([01]\d|2[0-3]):([0-5]\d)-([01]\d|2[0-4]):([0-5]\d)$/;
+const eDeData = (v: string) => RE_FORA.test(v) || RE_HORAS.test(v);
 const SLOTS_DIAS_UTEIS: SlotId[] = ["laboral", "pos-laboral"];
 
 /** A entrada é válida (bloco, bloco num dia ou data indisponível)? */
 export function entradaDisponibilidadeValida(v: string) {
+  const h = RE_HORAS.exec(v);
+  if (h) return Number(h[5]) * 60 + Number(h[6]) > Number(h[3]) * 60 + Number(h[4]);
   return SLOTS_TODOS.includes(v as SlotId) || RE_DIA.test(v) || RE_FORA.test(v);
 }
 
@@ -87,8 +92,8 @@ export function dataIndisponivel(disponibilidade: string[] | undefined | null, d
 /** Liga/desliga um bloco num dia (laboral e pós-laboral por dia; o sábado é um só dia). Arruma a lista. */
 export function alternarSlotNoDia(disponibilidade: string[] | undefined | null, slot: SlotId, dia: number): string[] {
   const base = disponibilidade ?? [...SLOTS_TODOS];
-  const datas = base.filter(v => RE_FORA.test(v));
-  const resto = base.filter(v => !RE_FORA.test(v));
+  const datas = base.filter(eDeData);
+  const resto = base.filter(v => !eDeData(v));
   if (!SLOTS_DIAS_UTEIS.includes(slot)) {
     const on = resto.includes(slot);
     return arrumar([...(on ? resto.filter(v => v !== slot) : [...resto, slot]), ...datas]);
@@ -103,7 +108,8 @@ export function alternarSlotNoDia(disponibilidade: string[] | undefined | null, 
 
 /** Troca as datas indisponíveis (mantém os blocos). */
 export function comDatasIndisponiveis(disponibilidade: string[] | undefined | null, datas: { de: string; ate: string }[]): string[] {
-  const blocos = (disponibilidade ?? [...SLOTS_TODOS]).filter(v => !RE_FORA.test(v));
+  const base = disponibilidade ?? [...SLOTS_TODOS];
+  const blocos = base.filter(v => !RE_FORA.test(v));
   const fora = datas.filter(d => /^\d{4}-\d{2}-\d{2}$/.test(d.de))
     .map(d => (d.ate && d.ate > d.de ? `fora:${d.de}..${d.ate}` : `fora:${d.de}`));
   return arrumar([...blocos, ...fora]);
@@ -123,18 +129,123 @@ export function formadorForaDoSlot(disponibilidade: string[] | undefined | null,
   return !slotsDoFormador(disponibilidade).includes(slot);
 }
 
-/** A sessão cabe inteira numa janela CCP que o formador marcou (nesse dia da semana) e o dia não está indisponível. */
+/**
+ * A sessão cabe inteira numa parte disponível desse dia: as janelas da semana, com as exceções da data (dia inteiro
+ * indisponível, horas indisponíveis ou horas disponíveis a mais).
+ */
 export function sessaoCabeNoSlot(data: string, inicio: string, fim: string, disponibilidade: string[] | undefined | null) {
   if (!data || !inicio || !fim) return true;
-  if (dataIndisponivel(disponibilidade, data)) return false;
-  const slots = slotsDoFormador(disponibilidade);
-  if (slots.length === 0) return false;
-  const dia = new Date(`${data}T12:00:00`).getDay();
   const a = minutos(inicio);
   const b = minutos(fim);
-  if (a == null || b == null || b <= a) return true;
-  return slots.some(id => {
-    const janela = JANELAS[id];
-    return slotNoDia(disponibilidade, id, dia) && a >= janela.inicio && b <= janela.fim;
+  if (a == null || b == null || b <= a) return !dataIndisponivel(disponibilidade, data);
+  return disponibilidadeDoDia(disponibilidade, data).disponivel.some(j => a >= j.inicio && b <= j.fim);
+}
+
+// ─── Calendário: disponibilidade de cada data, com horas ─────────────────────
+
+export type Intervalo = { inicio: number; fim: number };
+
+const hhmm = (min: number) => `${String(Math.floor(min / 60)).padStart(2, "0")}:${String(min % 60).padStart(2, "0")}`;
+
+/** «9h», «16h30»: para mostrar. */
+export function horaCurta(min: number) {
+  const h = Math.floor(min / 60);
+  const m = min % 60;
+  return m ? `${h}h${String(m).padStart(2, "0")}` : `${h}h`;
+}
+
+function juntar(xs: Intervalo[]): Intervalo[] {
+  const ord = [...xs].filter(x => x.fim > x.inicio).sort((a, b) => a.inicio - b.inicio);
+  const out: Intervalo[] = [];
+  for (const x of ord) {
+    const ult = out[out.length - 1];
+    if (ult && x.inicio <= ult.fim) ult.fim = Math.max(ult.fim, x.fim);
+    else out.push({ ...x });
+  }
+  return out;
+}
+
+function tirar(base: Intervalo[], menos: Intervalo[]): Intervalo[] {
+  let res = juntar(base);
+  for (const m of juntar(menos)) {
+    res = res.flatMap(x => {
+      if (m.fim <= x.inicio || m.inicio >= x.fim) return [x];
+      const partes: Intervalo[] = [];
+      if (m.inicio > x.inicio) partes.push({ inicio: x.inicio, fim: m.inicio });
+      if (m.fim < x.fim) partes.push({ inicio: m.fim, fim: x.fim });
+      return partes;
+    });
+  }
+  return res;
+}
+
+function intersectar(a: Intervalo[], b: Intervalo[]): Intervalo[] {
+  const out: Intervalo[] = [];
+  for (const x of juntar(a)) for (const y of juntar(b)) {
+    const inicio = Math.max(x.inicio, y.inicio);
+    const fim = Math.min(x.fim, y.fim);
+    if (fim > inicio) out.push({ inicio, fim });
+  }
+  return juntar(out);
+}
+
+/** As exceções com horas de uma data (indisponível e disponível a mais). */
+function excecoesDoDia(disponibilidade: string[] | undefined | null, data: string) {
+  const fora: Intervalo[] = [];
+  const livre: Intervalo[] = [];
+  for (const v of disponibilidade ?? []) {
+    const m = RE_HORAS.exec(v);
+    if (!m || m[2] !== data) continue;
+    const iv = { inicio: Number(m[3]) * 60 + Number(m[4]), fim: Number(m[5]) * 60 + Number(m[6]) };
+    (m[1] === "fora" ? fora : livre).push(iv);
+  }
+  return { fora, livre };
+}
+
+/** As janelas da semana (blocos) num dia, sem exceções. */
+export function janelasDaSemana(disponibilidade: string[] | undefined | null, data: string): Intervalo[] {
+  const dia = new Date(`${data}T12:00:00`).getDay();
+  return juntar(SLOTS_TODOS.filter(s => slotNoDia(disponibilidade, s, dia)).map(s => ({ inicio: JANELAS[s].inicio, fim: JANELAS[s].fim })));
+}
+
+/**
+ * Disponibilidade de uma data, com horas: as janelas da semana, mais as horas disponíveis a mais nesse dia, menos as
+ * indisponíveis (o dia inteiro, se marcado). «indisponivel» são as horas que deixaram de estar disponíveis nesse dia.
+ */
+export function disponibilidadeDoDia(disponibilidade: string[] | undefined | null, data: string) {
+  const semana = janelasDaSemana(disponibilidade, data);
+  const { fora, livre } = excecoesDoDia(disponibilidade, data);
+  const base = juntar([...semana, ...livre]);
+  if (dataIndisponivel(disponibilidade, data)) return { disponivel: [] as Intervalo[], indisponivel: base.length ? base : [{ inicio: 9 * 60, fim: 23 * 60 }], diaInteiro: true };
+  return { disponivel: tirar(base, fora), indisponivel: intersectar(base, fora).length ? intersectar(base, fora) : juntar(fora), diaInteiro: false };
+}
+
+/** Marca (ou desmarca) o dia inteiro como indisponível; tira as exceções com horas desse dia. */
+export function alternarDiaInteiro(disponibilidade: string[] | undefined | null, data: string): string[] {
+  const base = disponibilidade ?? [...SLOTS_TODOS];
+  const estava = base.includes(`fora:${data}`);
+  const sem = base.filter(v => v !== `fora:${data}` && !(RE_HORAS.exec(v)?.[2] === data));
+  return arrumar(estava ? sem : [...sem, `fora:${data}`]);
+}
+
+/** Junta uma exceção com horas numa data: «fora» (indisponível) ou «livre» (disponível a mais). */
+export function juntarHorasNoDia(disponibilidade: string[] | undefined | null, data: string, tipo: "fora" | "livre", inicio: number, fim: number): string[] {
+  const base = (disponibilidade ?? [...SLOTS_TODOS]).filter(v => v !== `fora:${data}`);
+  if (!(fim > inicio)) return arrumar(base);
+  return arrumar([...base, `${tipo}:${data}@${hhmm(inicio)}-${hhmm(fim)}`]);
+}
+
+/** Tira uma exceção (pelo texto exato). */
+export function tirarEntrada(disponibilidade: string[] | undefined | null, entrada: string): string[] {
+  return arrumar((disponibilidade ?? [...SLOTS_TODOS]).filter(v => v !== entrada));
+}
+
+/** As exceções de uma data, para listar e tirar. */
+export function excecoesListaveis(disponibilidade: string[] | undefined | null, data: string) {
+  return (disponibilidade ?? []).filter(v => v === `fora:${data}` || RE_HORAS.exec(v)?.[2] === data).map(v => {
+    const m = RE_HORAS.exec(v);
+    return m
+      ? { entrada: v, tipo: m[1] as "fora" | "livre", texto: `${m[1] === "fora" ? "Indisponível" : "Disponível"} das ${horaCurta(Number(m[3]) * 60 + Number(m[4]))} às ${horaCurta(Number(m[5]) * 60 + Number(m[6]))}` }
+      : { entrada: v, tipo: "fora" as const, texto: "Indisponível todo o dia" };
   });
 }

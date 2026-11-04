@@ -1,7 +1,6 @@
 import { useState } from "react";
-import {
-  JANELAS, SLOTS_CCP, alternarSlotNoDia, comDatasIndisponiveis, datasIndisponiveis, slotNoDia, type SlotId,
-} from "./disponibilidade";
+import { CalendarioDisponibilidade } from "./CalendarioDisponibilidade";
+import { JANELAS, SLOTS_CCP, alternarSlotNoDia, slotNoDia, type SlotId } from "./disponibilidade";
 
 const DIAS = [
   { n: 1, curto: "Seg", label: "Segunda" },
@@ -23,7 +22,8 @@ const y = (min: number) => MARGEM + ((min - INICIO) / 60) * PX_HORA;
 
 /**
  * Disponibilidade em calendário semanal (segunda a sábado, 9h–23h). Os blocos são as janelas CCP e marcam-se dia a dia
- * (ex.: laboral só à segunda e à quarta); o sábado tem manhã e tarde. Por baixo, os dias (ou períodos) indisponíveis.
+ * (ex.: laboral só à segunda e à quarta); o sábado tem manhã e tarde. Por baixo, o calendário do mês: a verde o que está
+ * disponível e a vermelho o que não está, com as horas; aí marcam-se as datas e as horas específicas de indisponibilidade.
  */
 export function DisponibilidadeEditor({
   value,
@@ -37,27 +37,32 @@ export function DisponibilidadeEditor({
   nota?: string;
 }) {
   const [sobre, setSobre] = useState<string | null>(null);
-  const [novaDe, setNovaDe] = useState("");
-  const [novaAte, setNovaAte] = useState("");
   const editavel = !locked && Boolean(onChange);
-  const datas = datasIndisponiveis(value);
+  // Quem só vê (coordenação) abre no calendário; quem edita abre na semana tipo.
+  const [vista, setVista] = useState<"simples" | "calendario">(editavel ? "simples" : "calendario");
   function toggle(id: SlotId, dia: number) {
     if (!editavel) return;
     onChange!(alternarSlotNoDia(value, id, dia));
   }
-  function juntarData() {
-    if (!editavel || !novaDe) return;
-    onChange!(comDatasIndisponiveis(value, [...datas, { de: novaDe, ate: novaAte && novaAte > novaDe ? novaAte : novaDe }]));
-    setNovaDe("");
-    setNovaAte("");
-  }
-  function tirarData(i: number) {
-    if (!editavel) return;
-    onChange!(comDatasIndisponiveis(value, datas.filter((_, j) => j !== i)));
-  }
-  const fmt = (iso: string) => `${iso.slice(8, 10)}-${iso.slice(5, 7)}-${iso.slice(0, 4)}`;
   return (
     <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <p className="text-[12px] font-semibold text-slate-700">
+          {vista === "simples"
+            ? <>Semana tipo <span className="font-normal text-slate-400">· vale para todas as semanas</span></>
+            : <>Calendário <span className="font-normal text-slate-400">· datas e horas específicas</span></>}
+        </p>
+        <div role="tablist" aria-label="Vista da disponibilidade" className="inline-flex rounded-md border border-slate-200 bg-slate-50 p-0.5">
+          {([["simples", "Simples"], ["calendario", "Calendário"]] as const).map(([id, label]) => (
+            <button key={id} type="button" role="tab" aria-selected={vista === id} onClick={() => setVista(id)}
+              className={`rounded px-2.5 py-0.5 text-[11px] font-semibold ${vista === id ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}>
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
+      {vista === "calendario" && <CalendarioDisponibilidade value={value} onChange={onChange} editavel={editavel} />}
+      {vista === "simples" && <>
       <div className="rounded-lg border border-slate-200 bg-white overflow-hidden">
         <div className="grid grid-cols-[2.25rem_repeat(6,minmax(0,1fr))] border-b border-slate-200 bg-slate-50">
           <span />
@@ -112,27 +117,7 @@ export function DisponibilidadeEditor({
       <p className="text-[11px] text-slate-400">
         {editavel ? "Clique num bloco para o marcar ou desmarcar nesse dia (ex.: laboral só à segunda e à quarta). " : ""}O sábado tem manhã e tarde.
       </p>
-      <div className="rounded-lg border border-slate-200 bg-white p-2.5 space-y-2">
-        <p className="text-[12px] font-semibold text-slate-700">Datas indisponíveis</p>
-        {datas.length === 0 && <p className="text-[11px] text-slate-400">Nenhuma. {editavel ? "Junte um dia (ou um período) em que não pode dar formação." : ""}</p>}
-        {datas.length > 0 && (
-          <ul className="flex flex-wrap gap-1.5">
-            {datas.map((d, i) => (
-              <li key={`${d.de}-${d.ate}`} className="inline-flex items-center gap-1 rounded-full border border-red-200 bg-red-50 px-2.5 py-0.5 text-[11px] text-red-900">
-                {d.ate !== d.de ? `${fmt(d.de)} a ${fmt(d.ate)}` : fmt(d.de)}
-                {editavel && <button type="button" className="text-red-700 hover:text-red-900" aria-label={`Tirar ${fmt(d.de)}`} onClick={() => tirarData(i)}>×</button>}
-              </li>
-            ))}
-          </ul>
-        )}
-        {editavel && (
-          <div className="flex flex-wrap items-end gap-2">
-            <label className="text-[11px] text-slate-500">Dia<input type="date" value={novaDe} onChange={e => setNovaDe(e.target.value)} className="block rounded border border-slate-300 px-2 py-1 text-xs" /></label>
-            <label className="text-[11px] text-slate-500">Até (opcional)<input type="date" value={novaAte} min={novaDe || undefined} onChange={e => setNovaAte(e.target.value)} className="block rounded border border-slate-300 px-2 py-1 text-xs" /></label>
-            <button type="button" disabled={!novaDe} onClick={juntarData} className="rounded border border-slate-300 bg-slate-50 px-3 py-1 text-xs font-semibold text-slate-700 disabled:opacity-40">Juntar</button>
-          </div>
-        )}
-      </div>
+      </>}
       {nota && <p className="text-[11px] text-slate-500">{nota}</p>}
     </div>
   );

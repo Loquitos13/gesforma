@@ -22,6 +22,7 @@ import {
 import { idParam, validar } from "../../validacao.js";
 import { many } from "../../repos/sql.js";
 import { DOCS_FORMANDO_FIN } from "../../../../src/partilhado/dossierDocs.js";
+import { docsDefinidosDoFormando, guardarDocsDoCursoNaFicha } from "../../formandoDocsLista.js";
 import type { Deps } from "../tipos.js";
 import { carimboUtc, hojeLisboa } from "../../datas.js";
 
@@ -30,6 +31,14 @@ const DOCS_FIN = ["cc", "ch", "cu", "ci", "ce", "morada", "contrato", "rgpd"] as
 
 /** Documentos sem os quais a Financiada não associa ninguém a uma acção (o contrato de formação assina-se ao entrar). */
 const DOCS_PARA_TURMA_FIN = DOCS_FORMANDO_FIN.filter(d => d.required && d.id !== "contrato");
+
+/** Como `erroDocsParaTurma`, para fichas com os documentos do curso: os obrigatórios do curso (sem o contrato). */
+function erroDocsDoCursoParaTurma(defs: { id: string; label: string; required: boolean }[], ok: (id: string) => boolean) {
+  const falta = defs.filter(d => d.required && d.id !== "contrato" && !ok(d.id)).map(d => d.label);
+  return falta.length
+    ? `Não pode associar à acção sem os documentos obrigatórios. Falta: ${falta.join(", ")}. Carregue-os primeiro na ficha do formando.`
+    : "";
+}
 
 function erroDocsParaTurma(ok: (id: string) => boolean) {
   const falta = DOCS_PARA_TURMA_FIN.filter(d => !ok(d.id)).map(d => d.label);
@@ -76,7 +85,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
   app.post("/v1/formandos-gold", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (proibidoFormador(req.actor!.role)) return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
-    const v = validar(reply, { body: formandoGold.extend({ semEmails: z.boolean().optional() }) }, req);
+    const v = validar(reply, { body: formandoGold.extend({ semEmails: z.boolean().optional(), docsCurso: z.boolean().optional() }) }, req);
     if (!v) return;
     const d = v.body;
     let horario = "";
@@ -124,6 +133,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       throw err;
     }
     if (d.semEmails) await definirSemEmails(db, "gold", id, true);
+    if (d.docsCurso && curso) await guardarDocsDoCursoNaFicha(db, "gold", id, curso);
     await audit(db, req.actor!.id, "formando.inscrever", "formandos_gold", String(id), req.ip, { turmaId: d.turmaId ?? null, metodo, semEmails: Boolean(d.semEmails) });
     await ligarPreinscricaoAoFormandoGold(db, id, req.actor!.id).catch(err => req.log.warn({ err }, "pré-inscrição não ligada ao formando"));
     const row = await linhaFormando(db, "gold", id);
@@ -238,7 +248,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
   app.post("/v1/formandos-fin", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
     if (proibidoFormador(req.actor!.role)) return reply.code(403).send({ error: "O formador não inscreve nem transfere formandos." });
-    const v = validar(reply, { body: formandoFin.extend({ semEmails: z.boolean().optional() }) }, req);
+    const v = validar(reply, { body: formandoFin.extend({ semEmails: z.boolean().optional(), docsCurso: z.boolean().optional() }) }, req);
     if (!v) return;
     const d = v.body;
     const vazio = { ok: false, data: "" };
@@ -272,6 +282,7 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
       if (doc.ok) await registarDocManualFin(db, id, docId, true, { id: req.actor!.id, name: req.actor!.name });
     }
     if (d.semEmails) await definirSemEmails(db, "fin", id, true);
+    if (d.docsCurso) await guardarDocsDoCursoNaFicha(db, "fin", id, d.curso || turma?.curso || "");
     await audit(db, req.actor!.id, "formando.inscrever", "formandos_fin", String(id), req.ip, { turmaId, semEmails: Boolean(d.semEmails) });
     if (turmaId) await reavaliarDocsDoFormando(db, "fin", id, req.actor!.id).catch(() => undefined);
     const row = await linhaFormando(db, "fin", id);
@@ -301,10 +312,13 @@ export function registarEscrita(app: FastifyInstance, deps: Deps) {
     if (turmaNova && turmaAntes == null) {
       const validados = new Set((await many<{ doc_id: string }>(db, `SELECT doc_id FROM formando_docs
         WHERE regime = 'fin' AND formando_id = $1 AND COALESCE(estado, '') <> 'recusado' AND (estado = 'validado' OR ok)`, [id])).map(r => r.doc_id));
-      const semDocs = erroDocsParaTurma(doc => {
+      const ok = (doc: string) => {
         const noPedido = d[doc as (typeof DOCS_FIN)[number]];
         return noPedido ? noPedido.ok : validados.has(doc) || Boolean((prev as unknown as Record<string, { ok?: boolean }>)[doc]?.ok);
-      });
+      };
+      const semDocs = current.docs_lista
+        ? erroDocsDoCursoParaTurma(await docsDefinidosDoFormando(db, "fin", id, current as Record<string, unknown>), ok)
+        : erroDocsParaTurma(ok);
       if (semDocs) return reply.code(409).send({ error: semDocs });
     }
     if (turmaNova && Number(turmaNova.id) !== turmaAntes) {

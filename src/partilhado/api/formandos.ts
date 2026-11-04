@@ -104,6 +104,8 @@ export type NovaFichaGold = {
   turmaId?: number; pago?: boolean; valor?: number; metodo?: string;
   /** Sem emails de documentos nem de pagamento (inscrição feita pela equipa). */
   semEmails?: boolean;
+  /** Ficha nova: guarda os documentos do curso de agora (Formandos › Nova ficha). */
+  docsCurso?: boolean;
 };
 
 export function apiCriarFormandoGold(corpo: NovaFichaGold) {
@@ -114,7 +116,7 @@ export function apiAlterarFormandoGold(id: number, corpo: Partial<NovaFichaGold>
   return enviar.patch<{ formando: { id: number } | null }>(`/v1/formandos-gold/${id}`, corpo);
 }
 
-export type NovaFichaFin = { nome: string; apelido?: string; email?: string; telf?: string; curso?: string; turmaId?: number; estado?: string; semEmails?: boolean };
+export type NovaFichaFin = { nome: string; apelido?: string; email?: string; telf?: string; curso?: string; turmaId?: number; estado?: string; semEmails?: boolean; docsCurso?: boolean };
 
 export function apiCriarFormandoFin(corpo: NovaFichaFin) {
   return enviar.post<{ formando: { id: number } }>("/v1/formandos-fin", corpo);
@@ -140,8 +142,22 @@ export function apiSemEmailsFormando(regime: Regime, id: number, ativo: boolean)
 }
 
 /** A equipa carrega o ficheiro de um documento (fica logo validado; não sai email). */
-export function apiCarregarDocFormando(regime: Regime, id: number, docId: string, ficheiro: File) {
-  return enviarFicheiro<{ ok: boolean; nome: string }>(`/v1/formandos/${regime}/${id}/documentos/${encodeURIComponent(docId)}/ficheiro`, ficheiro);
+export function apiCarregarDocFormando(regime: Regime, id: number, docId: string, ficheiro: File, rotulo = "") {
+  return enviarFicheiro<{ ok: boolean; nome: string }>(
+    `/v1/formandos/${regime}/${id}/documentos/${encodeURIComponent(docId)}/ficheiro${rotulo ? qs({ rotulo }) : ""}`, ficheiro);
+}
+
+/** «Outro documento» anexado pela equipa (vai para a Drive, na pasta do formando). O nome é o que aparece na ficha. */
+export function apiAnexarOutroDocFormando(regime: Regime, id: number, ficheiro: File, rotulo: string) {
+  const docId = `outro-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
+  return apiCarregarDocFormando(regime, id, docId, ficheiro, rotulo);
+}
+
+export type DocDoCursoFicha = { id: string; label: string; required: boolean; condicional: boolean };
+
+/** Documentos do curso para a Nova ficha: obrigatórios como no curso; opcionais e condicionais como opcionais. */
+export function apiDocsDoCursoFicha(regime: Regime, curso: string, signal?: AbortSignal) {
+  return api<{ documentos: DocDoCursoFicha[] }>(`/v1/formandos/${regime}/docs-do-curso${qs({ curso })}`, { signal });
 }
 
 export function apiValidarDocFormando(regime: Regime, id: number, docId: string) {

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { docsDefinidosDoFormando } from "./formandoDocsLista.js";
 import { config } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { DOCS_FORMANDO_FIN } from "../../src/partilhado/dossierDocs.js";
@@ -44,7 +45,8 @@ export async function vistaDocumentosFormandoFin(db: Db, formandoId: number) {
   const stored = await docsDoFormando(db, "fin", formandoId);
   const byId = new Map(stored.map(r => [r.doc_id, r]));
   const docsJson = readFormandoDocs(pessoa as unknown as Record<string, unknown>);
-  const documentos = DOCS_FORMANDO_FIN.map(def => {
+  const defs = await docsDefinidosDoFormando(db, "fin", formandoId);
+  const documentos = defs.map(def => {
     const row = byId.get(def.id);
     const leg = docsJson[def.id] && typeof docsJson[def.id] === "object"
       ? docsJson[def.id] as { ok?: boolean; data?: string }
@@ -103,7 +105,8 @@ export async function uploadDocFormandoFin(
   file: { name: string; mime: string; bytes: Buffer },
   opts: { actorId?: string; viaFormando?: boolean } = {},
 ) {
-  const permitido = new Set(DOCS_FORMANDO_FIN.map(d => d.id));
+  const defs = await docsDefinidosDoFormando(db, "fin", formandoId);
+  const permitido = new Set(defs.map(d => d.id));
   if (!permitido.has(tipo)) return { error: "Este documento não faz parte do dossiê financiado." as const };
   if (opts.viaFormando) {
     const erroFicheiro = erroFicheiroPublico(file.name, file.bytes);
@@ -120,7 +123,7 @@ export async function uploadDocFormandoFin(
   }
   const p = await pessoaFin(db, formandoId);
   if (!p) return { error: "Formando inexistente." as const };
-  const label = DOCS_FORMANDO_FIN.find(d => d.id === tipo)?.label ?? tipo;
+  const label = defs.find(d => d.id === tipo)?.label ?? tipo;
   const nome = nomeIdentificado(file.name, label, `${p.nome} ${p.apelido}`);
   // Na pasta do formando, com os outros documentos dele (sem Drive ligada, a regra habitual).
   const pasta = await pastaDoFormando(db, "fin", formandoId).catch(() => null);

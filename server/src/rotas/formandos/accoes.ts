@@ -5,6 +5,7 @@ import { z } from "zod";
 import { avisarRecusasFin } from "../../avisosDocumentos.js";
 import { config } from "../../config.js";
 import { carregarDocPelaEquipa } from "../../formandoDocsEquipa.js";
+import { docsDoCursoParaFicha } from "../../formandoDocsLista.js";
 import { recusarDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
 import { nextOpsId } from "../../ops.js";
 import { pode } from "../../permissoes/capacidades.js";
@@ -86,6 +87,13 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     return { nota: { id: Number(saved?.id ?? 0), autor: req.actor!.name, texto: v.body.texto, data: iso(saved?.created_at ?? new Date()) } };
   });
 
+  // Documentos do curso para a «Nova ficha»: obrigatórios como no curso; opcionais e condicionais como opcionais.
+  app.get("/v1/formandos/:regime/docs-do-curso", async (req, reply) => {
+    const v = validar(reply, { params: z.object({ regime: regimeEnum }), query: z.object({ curso: z.string().trim().max(240).default("") }) }, req);
+    if (!v || !equipa(req, reply, v.params.regime)) return;
+    return { documentos: await docsDoCursoParaFicha(db, v.params.regime, v.query.curso) };
+  });
+
   app.get("/v1/formandos/fin/:id/documentos", async (req, reply) => {
     const v = validar(reply, { params: z.object({ id: idNum }) }, req);
     if (!v || !equipa(req, reply, "fin")) return;
@@ -112,7 +120,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
 
   // A equipa carrega o ficheiro de um documento (entregue em papel ou na plataforma antiga): fica logo validado.
   app.post("/v1/formandos/:regime/:id/documentos/:docId/ficheiro", async (req, reply) => {
-    const v = validar(reply, { params: docParam }, req);
+    const v = validar(reply, { params: docParam, query: z.object({ rotulo: z.string().max(160).optional() }) }, req);
     if (!v || !equipa(req, reply, v.params.regime)) return;
     const { regime, id, docId } = v.params;
     let ficheiro: { name: string; mime: string; bytes: Buffer } | null = null;
@@ -124,7 +132,7 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
       return reply.code(400).send({ error: "upload inválido" });
     }
     if (!ficheiro?.bytes.length) return reply.code(400).send({ error: "Escolha o ficheiro do documento." });
-    const r = await carregarDocPelaEquipa(db, regime, id, docId, ficheiro, { id: req.actor!.id, name: req.actor!.name });
+    const r = await carregarDocPelaEquipa(db, regime, id, docId, ficheiro, { id: req.actor!.id, name: req.actor!.name }, v.query.rotulo ?? "");
     if (!r.ok) return reply.code(r.status).send({ error: r.error });
     await audit(db, req.actor!.id, "formando.doc_carregado", `formandos_${regime}`, String(id), req.ip, { docId });
     return { ok: true, nome: r.nome };

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import {
-  apiCarregarDocFormando, apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiSemEmailsFormando, apiValidarDocFormando,
+  apiAnexarOutroDocFormando, apiCarregarDocFormando, apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiSemEmailsFormando, apiValidarDocFormando,
   type DocFicha, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
@@ -30,6 +30,11 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
   const [alvo, setAlvo] = useState<string | null>(null);
   const carregar = useAccao((docId: string, f: File) => apiCarregarDocFormando(ficha.regime, ficha.id, docId, f), {
     invalidar: INVALIDAR, ok: r => `Documento carregado e validado (${r.nome}).`,
+  });
+  // «Outros documentos»: qualquer ficheiro, com o nome do ficheiro, para a Drive (pasta do formando).
+  const escolhaOutro = useRef<HTMLInputElement>(null);
+  const anexar = useAccao((f: File) => apiAnexarOutroDocFormando(ficha.regime, ficha.id, f, f.name.replace(/\.[a-z0-9]{2,5}$/i, "")), {
+    invalidar: INVALIDAR, ok: r => `Documento anexado (${r.nome}).`,
   });
   const fin = ficha.regime === "fin";
   const pasta = ["GesForma", fin ? "Financiada" : "Gold", "Turmas", ficha.turma?.nome, "Formandos", `${ficha.nome} ${ficha.apelido}`.trim()].filter(Boolean).join(" › ");
@@ -113,6 +118,18 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
             );
           })}
         </ul>
+      )}
+      {podeEditar && (
+        <div className="px-5 py-3 border-t border-linha flex items-center gap-3 flex-wrap">
+          <input ref={escolhaOutro} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" className="sr-only" tabIndex={-1} aria-hidden="true"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f) void anexar.correr(f);
+            }} />
+          <Botao tamanho="sm" aCarregar={anexar.aCorrer} onClick={() => escolhaOutro.current?.click()}>Anexar outro documento</Botao>
+          <span className="text-xs text-tinta-suave">Fica na ficha com o nome do ficheiro e vai para a Drive.</span>
+        </div>
       )}
       <p className="m-0 px-5 py-3 border-t border-linha text-xs text-tinta-suave">Os documentos validados ficam no Drive: {pasta}.</p>
       <RecusarDoc alvo={recusar} onFechar={() => setRecusar(null)} ficha={ficha} />

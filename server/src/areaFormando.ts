@@ -1,4 +1,5 @@
 import { DOCS_FORMANDO_GOLD } from "../../src/partilhado/dossierDocs.js";
+import { docsDefinidosDoFormando } from "./formandoDocsLista.js";
 import { eur as eurPt } from "../../src/partilhado/ui/formatos.js";
 import { randomBytes, randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -365,10 +366,10 @@ export async function montarArea(db: Db, user: Actor) {
   // Gold: os documentos chegam da ligação pessoal só depois de validada a pré-inscrição e de a pessoa
   // estar inscrita numa turma do curso (docsParaFormando.ts). Aqui só se mostram, já validados.
   const documentosGold = [];
-  const labels = new Map(DOCS_FORMANDO_GOLD.map(d => [d.id, d.label]));
   for (const ins of inscricoes.filter(i => i.regime === "gold" && i.turmaId)) {
     const docs = await docsGoldValidados(db, ins.id);
     if (!docs.length) continue;
+    const labels = new Map([...DOCS_FORMANDO_GOLD, ...await docsDefinidosDoFormando(db, "gold", ins.id)].map(d => [d.id, d.label]));
     documentosGold.push({
       formandoId: ins.id,
       curso: ins.curso,

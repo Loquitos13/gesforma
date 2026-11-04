@@ -1,5 +1,5 @@
 /** Monta a ficha completa de um formando (Gold ou Financiada) a partir dos repositórios. */
-import { DOCS_FORMANDO_GOLD } from "../../../../src/partilhado/dossierDocs.js";
+import { docsDefinidosDoFormando } from "../../formandoDocsLista.js";
 import type { Db } from "../../db/pool.js";
 import { vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
 import { readFormandoPii } from "../../pii.js";
@@ -66,9 +66,10 @@ export async function montarFicha(db: Db, regime: Regime, id: number) {
   } else {
     const linhas = await docsDoFormando(db, "gold", id);
     const porId = new Map(linhas.map(l => [l.doc_id, l]));
-    const ids = [...DOCS_FORMANDO_GOLD.map(d => d.id), ...linhas.map(l => l.doc_id).filter(d => !DOCS_FORMANDO_GOLD.some(b => b.id === d))];
+    const defs = await docsDefinidosDoFormando(db, "gold", id, row as Record<string, unknown>);
+    const ids = [...defs.map(d => d.id), ...linhas.map(l => l.doc_id).filter(d => !defs.some(b => b.id === d))];
     documentos = ids.map(docId => {
-      const def = DOCS_FORMANDO_GOLD.find(d => d.id === docId);
+      const def = defs.find(d => d.id === docId);
       const l = porId.get(docId);
       const estado = l?.estado === "validado" || (l?.ok && l.estado !== "recusado") ? "validado" : l?.estado === "recusado" ? "recusado" : l?.file_name ? "pendente" : "em_falta";
       return {

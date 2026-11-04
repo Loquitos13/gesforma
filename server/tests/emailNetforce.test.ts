@@ -26,9 +26,9 @@ async function turma(curso: string) {
   return r.json().turma.id as number;
 }
 
-async function formando(turmaId: number) {
+async function formando(turmaId: number, semEmails = false) {
   const email = `netforce.${Date.now()}.${++seq}@exemplo.pt`;
-  const r = await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Rui", apelido: "Pinto", email, turmaId, metodo: "Oferta" });
+  const r = await pedido(ctx, "secretaria", "POST", "/v1/formandos-gold", { nome: "Rui", apelido: "Pinto", email, turmaId, metodo: "Oferta", semEmails });
   expect(r.statusCode, r.body).toBe(200);
   return email;
 }
@@ -65,6 +65,16 @@ describe("email do Netforce", () => {
     // Outra volta: não repete.
     await correr();
     expect(enviados.filter(e => e.to === email)).toHaveLength(1);
+  });
+
+  it("inscrição feita pela equipa com «Sem emails de documentos nem de pagamento»: o email do Netforce não sai", async () => {
+    const t = await turma(CCP);
+    const sem = await formando(t, true);
+    const com = await formando(t);
+    enviados.length = 0;
+    await correr();
+    expect(enviados.some(e => e.to === sem)).toBe(false);
+    expect(enviados.filter(e => e.to === com)).toHaveLength(1);
   });
 
   it("regras com vários cursos e documentos anexados à regra", async () => {

@@ -142,6 +142,8 @@ export async function ingestEvent(
     // Só para certos cursos: a lista da regra (ou o «curso» único antigo). Vazio = todos.
     const daRegra = (regra.cursos?.length ? regra.cursos : regra.curso ? [regra.curso] : []).map(c => c.trim().toLowerCase());
     if (daRegra.length && !daRegra.includes(curso.trim().toLowerCase())) continue;
+    // Inscrição feita pela equipa com «Sem emails de documentos nem de pagamento»: sem o email do registo no Netforce.
+    if (payload.semNetforce === true && regra.template_tipo === "registo_netforce") continue;
     const jobId = randomUUID();
     const mail = renderModelo(regra, nome, vars, { pixelUrl: `${origem()}/api/v1/email/open/${jobId}.gif` });
     const posto = await porNaFila(db, {

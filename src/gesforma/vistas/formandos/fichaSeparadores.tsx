@@ -88,7 +88,7 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
               onMudar={v => void semEmails.correr(v)} />
             <p className="m-0 mt-1 text-xs text-tinta-suave">
               {ficha.semEmails
-                ? "Inscrição tratada pela equipa: o formando não recebe pedidos nem lembretes de documentos, avisos de recusa nem emails de pagamento. Carregue os documentos aqui. Os emails da turma continuam."
+                ? "Inscrição tratada pela equipa: o formando não recebe pedidos nem lembretes de documentos, avisos de recusa, emails de pagamento nem o email do registo no Netforce (CCP). Carregue os documentos aqui. Os outros emails da turma continuam."
                 : "O formando recebe os emails de documentos e de pagamento."}
             </p>
           </div>

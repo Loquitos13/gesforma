@@ -271,7 +271,7 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
         )}
         <Caixa
           rotulo="Sem emails de documentos nem de pagamento"
-          ajuda="Para inscrições já tratadas pela equipa (ex.: plataforma antiga): o formando não recebe pedidos nem lembretes de documentos, nem emails de pagamento. Os documentos carregam-se na ficha. Os emails da turma continuam."
+          ajuda="Para inscrições já tratadas pela equipa (ex.: plataforma antiga): o formando não recebe pedidos nem lembretes de documentos, emails de pagamento nem o email do registo no Netforce (CCP). Os documentos carregam-se na ficha. Os outros emails da turma continuam."
           checked={semEmails}
           onChange={e => setSemEmails(e.target.checked)}
         />

@@ -12,7 +12,7 @@ import { isEmail, normalizeEmail } from "./security.js";
 
 type Entrada = {
   regime: "gold" | "fin"; formando_id: number; turma_id: number; email: string; nome: string; apelido: string;
-  curso: string; turma: string; local: string; horario: string; data_inicio: string;
+  curso: string; turma: string; local: string; horario: string; data_inicio: string; sem_emails: boolean;
 };
 
 export async function avisarEntradasNaTurma(db: Db) {
@@ -20,12 +20,14 @@ export async function avisarEntradasNaTurma(db: Db) {
   const novas = (await db.query<Entrada>(
     `WITH candidatas AS (
        SELECT 'gold' AS regime, f.id AS formando_id, f.turma_id, f.email, f.nome, f.apelido,
-              COALESCE(NULLIF(t.curso, ''), f.curso) AS curso, t.nome AS turma, t.local, t.horario, t.data_inicio::text AS data_inicio
+              COALESCE(NULLIF(t.curso, ''), f.curso) AS curso, t.nome AS turma, t.local, t.horario, t.data_inicio::text AS data_inicio,
+              f.sem_emails_docs_pagamento AS sem_emails
          FROM formandos_gold f JOIN turmas_gold t ON t.id = f.turma_id
         WHERE f.estado NOT ILIKE 'desist%'
        UNION ALL
        SELECT 'fin', f.id, f.turma_id, f.email, f.nome, f.apelido,
-              COALESCE(NULLIF(t.curso, ''), f.curso), t.nome, t.local, '' AS horario, t.data_inicio::text
+              COALESCE(NULLIF(t.curso, ''), f.curso), t.nome, t.local, '' AS horario, t.data_inicio::text,
+              f.sem_emails_docs_pagamento
          FROM formandos_fin f JOIN turmas_fin t ON t.id = f.turma_id
         WHERE f.estado NOT ILIKE 'desist%'
      ), reservadas AS (
@@ -45,7 +47,7 @@ export async function avisarEntradasNaTurma(db: Db) {
     if (!isEmail(email)) continue;
     const r = await ingestEvent(db, "formando.inserido_turma", {
       email, nome: `${e.nome ?? ""} ${e.apelido ?? ""}`.trim(), curso: e.curso, turma: e.turma, regime: e.regime,
-      local: e.local, horario: e.horario,
+      local: e.local, horario: e.horario, ...(e.sem_emails ? { semNetforce: true } : {}),
     }, `inserido-turma:${e.regime}:${e.formando_id}:${e.turma_id}`).catch(err => {
       console.error("[emails] aviso de entrada na turma:", err);
       return null;

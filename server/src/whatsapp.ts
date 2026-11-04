@@ -6,11 +6,12 @@ import { config, newToken } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import {
-  apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
+  apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
   leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
   sessaoWhatsapp, ultimaEntradaWhatsapp, whatsappGuardado,
 } from "./repos/whatsapp.js";
 import { sanitizeText } from "./security.js";
+import { fecharConversaWhatsapp, verificarInatividade } from "./whatsappInatividade.js";
 import { digitsPhone, handleWhatsappText, type Resposta } from "./whatsappBot.js";
 
 export { digitsPhone, handleWhatsappText } from "./whatsappBot.js";
@@ -180,6 +181,12 @@ export function corpoCloudApi(to: string, r: Resposta): Record<string, unknown> 
       },
     },
   };
+}
+
+/** Regras de inatividade (a cada minuto, dentro da API): só com o WhatsApp ligado. */
+export async function verificarInatividadeWhatsapp(db: Db) {
+  if (!(await whatsappLigado(db))) return null;
+  return verificarInatividade(db, (to, m) => enviarCloudApi(db, to, m));
 }
 
 async function enviarCloudApi(db: Db, to: string, mensagem: Resposta) {
@@ -392,6 +399,8 @@ export function registerWhatsappRoutes(
         ultimaEm: r.ultima_em,
         podeResponder: dentroDas24h(r.ultima_entrada),
         porLer: r.por_ler,
+        fechada: Boolean(r.fechada_em),
+        fechadaPor: r.fechada_por || "",
       })),
     };
   });
@@ -409,6 +418,8 @@ export function registerWhatsappRoutes(
       humano: Boolean(sessao?.humano_desde) && Date.now() - new Date(sessao!.humano_desde!).getTime() < HUMANO_EXPIRA_HORAS * 3600_000,
       podeResponder: dentroDas24h(ultima),
       ultimaEntrada: ultima ?? null,
+      fechada: Boolean(sessao?.fechada_em),
+      fechadaPor: sessao?.fechada_por || "",
       leads: leads.map(l => ({
         id: Number(l.id), nome: `${l.nome ?? ""} ${l.apelido ?? ""}`.trim(), curso: String(l.curso ?? ""),
         estado: String(l.estado ?? ""), regime: String(l.regime ?? "gold") === "fin" ? "fin" : "gold",
@@ -459,6 +470,25 @@ export function registerWhatsappRoutes(
     const tel = digitsPhone(String((req.body as { telefone?: string } | undefined)?.telefone ?? ""));
     if (!tel) return reply.code(400).send({ error: "telefone em falta" });
     await libertarHumanoWhatsapp(db, tel);
+    return { ok: true };
+  });
+
+  // Fechar a conversa: despedida à pessoa (dentro das 24 horas), o assistente volta a responder; o histórico fica.
+  app.post("/v1/crm/whatsapp/fechar", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const tel = digitsPhone(String((req.body as { telefone?: string } | undefined)?.telefone ?? ""));
+    if (!tel) return reply.code(400).send({ error: "telefone em falta" });
+    const r = await fecharConversaWhatsapp(db, tel, req.actor?.name || req.actor?.email || "Equipa", (to, m) => enviarCloudApi(db, to, m));
+    return { ok: true, ...r };
+  });
+
+  // Eliminar a conversa de vez (mensagens e estado). Se a pessoa voltar a escrever, começa uma conversa nova.
+  app.delete("/v1/crm/whatsapp/conversa", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const tel = digitsPhone(String((req.query as { telefone?: string }).telefone ?? ""));
+    if (!tel) return reply.code(400).send({ error: "telefone em falta" });
+    await apagarConversaWhatsapp(db, tel);
+    req.log.info({ por: req.actor?.email, telefone: `…${tel.slice(-3)}` }, "conversa WhatsApp eliminada");
     return { ok: true };
   });
 

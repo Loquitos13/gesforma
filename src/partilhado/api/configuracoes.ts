@@ -86,11 +86,11 @@ export const apiDesligarWhatsapp = () => enviar.post<EstadoWhatsapp>("/v1/crm/wh
 
 export type ConversaWhatsapp = {
   telefone: string; nome: string; humano: boolean; humanoPor: string; ultima: string; ultimaDireccao: "in" | "out";
-  ultimaEm: string; podeResponder: boolean; porLer: number;
+  ultimaEm: string; podeResponder: boolean; porLer: number; fechada: boolean; fechadaPor: string;
 };
-export type MensagemWhatsapp = { direccao: "in" | "out"; corpo: string; createdAt: string; autor?: string };
+export type MensagemWhatsapp = { direccao: "in" | "out" | "evento"; corpo: string; createdAt: string; autor?: string };
 export type DetalheConversaWhatsapp = {
-  telefone: string; humano?: boolean; podeResponder?: boolean; ultimaEntrada?: string | null;
+  telefone: string; humano?: boolean; podeResponder?: boolean; ultimaEntrada?: string | null; fechada?: boolean; fechadaPor?: string;
   leads?: { id: number; nome: string; curso: string; estado: string; regime: "gold" | "fin" }[];
   mensagens: MensagemWhatsapp[];
 };
@@ -102,6 +102,9 @@ export const apiWhatsappConversa = (telefone: string, signal?: AbortSignal) =>
 export const apiWhatsappResponder = (telefone: string, texto: string) =>
   enviar.post<{ ok: true }>("/v1/crm/whatsapp/responder", { telefone, texto });
 export const apiWhatsappDevolver = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/devolver", { telefone });
+export const apiWhatsappApagar = (telefone: string) =>
+  enviar.delete<{ ok: true }>(`/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`);
+export const apiWhatsappFechar = (telefone: string) => enviar.post<{ ok: true; despedida: boolean }>("/v1/crm/whatsapp/fechar", { telefone });
 export const apiWhatsappAssumir = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/assumir", { telefone });
 export const apiWhatsappSimular = (telefone: string, texto: string) =>
   enviar.post<{ replies: string[]; telefone: string; passo?: string; leadId?: number | null; ligado: boolean }>(

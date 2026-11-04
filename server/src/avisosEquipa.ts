@@ -15,6 +15,7 @@ import type { Db } from "./db/pool.js";
 import { enviarModelo } from "./emailModelo.js";
 import { emailsDaEquipa } from "./equipaDestinatarios.js";
 import { regrasActivasPara } from "./repos/emails.js";
+import { leadsPorTelefoneWhatsapp, reservarAvisoPedidoWhatsapp } from "./repos/whatsapp.js";
 import { gruposPorOmissao } from "../../src/partilhado/equipasAviso.js";
 import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
 import { isEmail, normalizeEmail } from "./security.js";
@@ -98,17 +99,32 @@ export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: 
   for (const pessoa of await emailsDaEquipa(db, grupos)) {
     await enviarModelo(db, {
       tipo: "aviso_whatsapp_humano", area: p.regime ?? "gold", para: pessoa.email, nome: pessoa.nome,
-      vars: { nome_contacto: nome, telefone, mensagem: p.mensagem },
+      vars: { nome_contacto: nome, telefone, mensagem: p.mensagem, assunto: p.mensagem },
       link: `${origem()}/gesforma/${vista}/whatsapp?telefone=${encodeURIComponent(p.telefone)}`,
       reserva: {
         assunto: "WhatsApp: {{nome_contacto}} quer falar com a equipa",
         linhas: [
           "{{nome_contacto}} ({{telefone}}) pediu, no WhatsApp da ENA, para falar com uma pessoa da equipa.",
-          "Última mensagem: {{mensagem}}",
+          "Assunto: {{mensagem}}",
           "O assistente automático fica em pausa nesta conversa. Responda pela caixa de conversas do GesForma.",
         ],
         cta: "Abrir a conversa",
       },
     });
   }
+}
+
+/**
+ * Aviso à equipa de um pedido para falar com a equipa, uma vez por pedido. Sai com o assunto (a mensagem que a pessoa
+ * escreveu a seguir, como o assistente lhe pede) ou, sem ele, passados uns minutos (regras de inatividade).
+ */
+export async function avisarPedidoWhatsapp(db: Db, telefone: string, mensagem: string, nomePerfil = "") {
+  if (!(await reservarAvisoPedidoWhatsapp(db, telefone))) return false;
+  const n9 = telefone.slice(-9);
+  const lead = n9.length === 9 ? (await leadsPorTelefoneWhatsapp(db, telefone, n9))[0] : undefined;
+  const perfil = nomePerfil || (await db.query<{ nome_perfil: string | null }>(
+    "SELECT nome_perfil FROM whatsapp_sessoes WHERE telefone = $1", [telefone])).rows[0]?.nome_perfil || "";
+  const nome = lead ? `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim() : perfil;
+  await avisarWhatsappHumano(db, { telefone, nome, mensagem, regime: lead ? (String(lead.regime) === "fin" ? "fin" : "gold") : null });
+  return true;
 }

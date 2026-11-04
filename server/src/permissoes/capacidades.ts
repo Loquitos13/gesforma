@@ -27,6 +27,8 @@ export const CAPACIDADES = {
   "pagamentos.faturas": CONTABILIDADE,
   // Pedir (e reenviar) o pagamento de uma pré-inscrição: a coordenação, que valida os documentos.
   "pagamentos.pedir": PEDAGOGIA,
+  // Eliminar de vez uma conversa do WhatsApp (CRM › WhatsApp).
+  "whatsapp.eliminar": PEDAGOGIA,
   "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
   // Histórico dos envios: as coordenações e a contabilidade, cada uma só da sua área.
   "emails.historico": [...COORDENACAO, "contabilidade"] as Perfil[],

@@ -6,6 +6,7 @@ import rateLimit from "@fastify/rate-limit";
 import Fastify, { type FastifyReply, type FastifyRequest } from "fastify";
 import { processDueJobs } from "./automations.js";
 import { enviarAvisosDocumentos } from "./avisosDocumentos.js";
+import { verificarInatividadeWhatsapp } from "./whatsapp.js";
 import { allowedOrigins, config, onVercel } from "./config.js";
 import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
@@ -177,11 +178,18 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
 
 
   if (opts.worker !== false && !onVercel) {
+    let ultimaInatividade = 0;
     const tick = async () => {
       try { await processDueJobs(db); }
       catch (err) { app.log.error(err); }
       try { await enviarAvisosDocumentos(db); }
       catch (err) { app.log.error(err); }
+      // Regras de inatividade do WhatsApp: uma volta por minuto.
+      if (Date.now() - ultimaInatividade >= 60_000) {
+        ultimaInatividade = Date.now();
+        try { await verificarInatividadeWhatsapp(db); }
+        catch (err) { app.log.error(err); }
+      }
     };
     const timer = setInterval(tick, 2500);
     timer.unref();

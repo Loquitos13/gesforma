@@ -5,7 +5,8 @@ import { mapPreinscricao } from "./ops.js";
 import { criarPreinscricaoPublica, politicaPrivacidade } from "./preinscricaoPublica.js";
 import { filtrarOferta, fmtDataPt, listCursosGoldActivos, listOfertaGold, uniqueOferta, type OfertaTurma } from "./ofertaGold.js";
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
-import { avisarWhatsappHumano } from "./avisosEquipa.js";
+import { avisarPedidoWhatsapp } from "./avisosEquipa.js";
+import { reabrirConversaWhatsapp } from "./whatsappInatividade.js";
 import {
   gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
   pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
@@ -158,7 +159,7 @@ function querPessoa(t: string) {
 
 export const RESPOSTA_HUMANO = [
   "Combinado. Uma pessoa da equipa da ENA vai responder-lhe aqui, nesta conversa (dias úteis, das 9h às 18h).",
-  "Se quiser, escreva já o que precisa, para adiantarmos.",
+  "Para ajudarmos mais depressa, escreva numa mensagem o assunto (por exemplo, o curso ou a dúvida).",
   "Para voltar ao assistente automático, escreva *menu*.",
 ].join("\n");
 
@@ -216,6 +217,8 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
   } else {
     await logMsg(db, telefone, "in", corpoEntrada);
   }
+  // Conversa fechada e a pessoa voltou a escrever: reabre com o assistente (o histórico fica).
+  await reabrirConversaWhatsapp(db, telefone);
   const perfil = sanitizeHeader(nomePerfil).slice(0, 120);
   if (perfil) await gravarNomePerfilWhatsapp(db, telefone, perfil).catch(() => undefined);
   const sess = await getSessao(db, telefone);
@@ -227,7 +230,11 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
 
   // Em atendimento por uma pessoa o bot fica calado; só *menu* devolve a conversa ao assistente.
   if (sess.humano) {
-    if (!/^(menu|0)$/i.test(text)) return { replies, mensagens, telefone, passo, leadId, humano: true };
+    if (!/^(menu|0)$/i.test(text)) {
+      // A primeira mensagem depois do pedido é o assunto: é com ela que sai o aviso à equipa (uma vez por pedido).
+      await avisarPedidoWhatsapp(db, telefone, corpoEntrada, perfil).catch(err => console.error("[whatsapp] aviso à equipa:", err));
+      return { replies, mensagens, telefone, passo, leadId, humano: true };
+    }
     await libertarHumanoWhatsapp(db, telefone);
     say(MENU);
     for (const r of replies) await logMsg(db, telefone, "out", r);
@@ -239,9 +246,11 @@ export async function handleWhatsappText(db: Db, telefoneRaw: string, textRaw: s
     say(RESPOSTA_HUMANO_BOTAO);
     for (const r of replies) await logMsg(db, telefone, "out", r);
     const lead = (await leadsPorTelefone(db, telefone))[0];
-    const nome = lead ? `${lead.nome} ${lead.apelido}`.trim() : perfil;
-    await avisarWhatsappHumano(db, { telefone, nome, mensagem: corpoEntrada, regime: lead ? (lead.regime === "fin" ? "fin" : "gold") : null })
-      .catch(err => console.error("[whatsapp] aviso à equipa:", err));
+    // Pedido escrito com o assunto (ex.: a frase do site, «… falar com um operador sobre o curso X»): o aviso sai já.
+    // Pela opção 4, o assistente pede o assunto e o aviso espera por ele (ou sai sem ele, passados uns minutos).
+    if (text !== "4" && text.length > 25) {
+      await avisarPedidoWhatsapp(db, telefone, corpoEntrada, perfil).catch(err => console.error("[whatsapp] aviso à equipa:", err));
+    }
     if (lead) await logLeadEvent(db, lead.id, undefined, "whatsapp", "Pediu para falar com a equipa no WhatsApp", corpoEntrada).catch(() => undefined);
     return { replies, mensagens, telefone, passo: "menu" as Passo, leadId: lead?.id ?? leadId, humano: true };
   }

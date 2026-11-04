@@ -60,7 +60,8 @@ function upload(token: string, tipo: string, nome: string) {
 const vista = async (token: string) => (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
 const faturacao = (token: string, dados: Record<string, string>) =>
   ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}/faturacao`, payload: dados });
-const paraContabilidade = () => enviados.filter(e => e.to === CONTAS);
+// Só o email do comprovativo com os dados de faturação (a contabilidade também recebe o aviso «comprovativo recebido», pela fila).
+const paraContabilidade = () => enviados.filter(e => e.to === CONTAS && e.subject.startsWith("Comprovativo de pagamento"));
 /** O comprovativo chegou há `horas` (para a espera e o lembrete sem esperar de verdade). */
 const recuar = (id: number, horas: number) =>
   ctx.db.query(`UPDATE comprovativo_contabilidade SET recebido_em = now() - ($2::float8 * interval '1 hour') WHERE preinscricao_id = $1`, [id, horas]);

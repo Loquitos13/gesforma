@@ -80,6 +80,9 @@ describe("falar com uma pessoa", () => {
     const pede = await handleWhatsappText(ctx.db, t, "4", "", "Rita Lopes", "Falar com a equipa");
     expect(pede.humano).toBe(true);
     expect(pede.replies[0]).toMatch(/Uma pessoa da equipa da ENA vai responder-lhe aqui/);
+    // O aviso à equipa espera pelo assunto (a mensagem seguinte), que o assistente pede.
+    expect(enviados.length).toBe(antes);
+    expect((await handleWhatsappText(ctx.db, t, "Quero saber o preço do curso CCP")).replies).toEqual([]);
     // Sem pré-inscrição: vai às equipas Gold (comerciais e coordenação) e Financiada; nunca à administração nem à contabilidade.
     const aviso = enviados.slice(antes);
     const equipa = (await ctx.db.query<{ email: string; role: string }>(
@@ -88,8 +91,7 @@ describe("falar com uma pessoa", () => {
     expect(aviso.map(m => m.to).sort()).toEqual(esperados);
     for (const m of aviso) expect(m.subject).toBe("WhatsApp: Rita Lopes quer falar com a equipa");
     expect(aviso[0]!.text).toContain(`/gesforma/gold/whatsapp?telefone=${t}`);
-    // O texto do botão tocado, não o número da opção.
-    expect(aviso[0]!.text).toContain("Falar com a equipa");
+    expect(aviso[0]!.text).toContain("Assunto: Quero saber o preço do curso CCP");
 
     // Em pausa: o bot não responde (nem a «olá») e não sai outro aviso.
     expect((await handleWhatsappText(ctx.db, t, "olá, ainda está aí?")).replies).toEqual([]);
@@ -101,12 +103,14 @@ describe("falar com uma pessoa", () => {
     expect(lista.statusCode, lista.body).toBe(200);
     const primeira = lista.json().conversas[0];
     expect(primeira).toMatchObject({ telefone: t, nome: "Rita Lopes", humano: true, podeResponder: true });
-    expect(primeira.porLer).toBeGreaterThanOrEqual(3);
+    expect(primeira.porLer).toBeGreaterThanOrEqual(4);
     expect((await pedido(ctx, "contabilidade", "GET", "/v1/crm/whatsapp/conversas")).statusCode).toBe(403);
 
     const conversa = (await pedido(ctx, "financiada", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json();
     expect(conversa.humano).toBe(true);
     expect(conversa.mensagens.map((m: { corpo: string }) => m.corpo)).toContain("Falar com a equipa");
+    // Eliminar de vez: só a administração e as coordenações (o teste usa outra conversa, abaixo).
+    expect((await pedido(ctx, "comercial", "DELETE", `/v1/crm/whatsapp/conversa?telefone=${t}`)).statusCode).toBe(403);
     const lida = (await pedido(ctx, "comercial", "GET", "/v1/crm/whatsapp/conversas")).json().conversas.find((c: { telefone: string }) => c.telefone === t);
     expect(lida.porLer).toBe(0);
 
@@ -126,8 +130,11 @@ describe("falar com uma pessoa", () => {
   it("a frase do site («falar com um operador») também pede uma pessoa; *menu* devolve ao assistente", async () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");
     const t = tel();
+    const antes = enviados.length;
     const out = await handleWhatsappText(ctx.db, t, "Olá! Sou Rui. Vim do site da ENA e gostava de falar com um operador sobre o curso «CCP».");
     expect(out.humano).toBe(true);
+    // O pedido já traz o assunto: o aviso sai logo, com ele.
+    expect(enviados.slice(antes).some(m => m.text.includes("sobre o curso «CCP»"))).toBe(true);
     expect((await handleWhatsappText(ctx.db, t, "menu")).replies[0]).toContain("Como posso ajudar?");
   });
 
@@ -167,5 +174,86 @@ describe("webhook: sem respostas repetidas", () => {
     expect([a.statusCode, b.statusCode]).toEqual([200, 200]);
     expect(pedidosMeta.filter(p => p.to === t)).toHaveLength(1);
     config.whatsappAppSecret = "";
+  });
+});
+
+describe("fechar conversas e inatividade", () => {
+  it("fechar: despedida, assistente de volta, histórico fica; a pessoa volta a escrever e reabre", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    await handleWhatsappText(ctx.db, t, "4");
+    pedidosMeta.length = 0;
+    const r = await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/fechar", { telefone: t });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(r.json().despedida).toBe(true);
+    expect(pedidosMeta[0]).toMatchObject({ to: t, type: "text", text: { body: expect.stringContaining("Esta conversa foi encerrada") } });
+
+    const fechada = (await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json();
+    expect(fechada).toMatchObject({ fechada: true, humano: false });
+    expect(fechada.mensagens.at(-1)).toMatchObject({ direccao: "evento", corpo: expect.stringMatching(/^Conversa fechada por /) });
+    expect((await pedido(ctx, "comercial", "GET", "/v1/crm/whatsapp/conversas")).json().conversas.find((c: { telefone: string }) => c.telefone === t).fechada).toBe(true);
+
+    // Volta a escrever: reabre com o assistente e o histórico anterior continua lá.
+    expect((await handleWhatsappText(ctx.db, t, "olá")).replies[0]).toContain("Como posso ajudar?");
+    const aberta = (await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json();
+    expect(aberta.fechada).toBe(false);
+    const corpos = aberta.mensagens.map((m: { corpo: string }) => m.corpo);
+    expect(corpos).toContain("Conversa reaberta");
+    expect(corpos.some((c: string) => c.startsWith("Combinado."))).toBe(true);
+  });
+
+  it("regras: lembra quem parou a meio, avisa a equipa sem resposta e fecha sem mensagens", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const { verificarInatividade } = await import("../src/whatsappInatividade.js");
+    await ctx.db.query(
+      `INSERT INTO app_settings (id, values) VALUES ('whatsapp_regras', '{"lembreteMin": "30", "avisoEquipaHoras": "4", "fecharHoras": "24"}'::jsonb)
+       ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values`);
+    const enviadas: { to: string; m: unknown }[] = [];
+    const enviar = async (to: string, m: unknown) => { enviadas.push({ to, m }); return { sent: true }; };
+    const recuar = (t: string, intervalo: string) => ctx.db.query(
+      `UPDATE whatsapp_mensagens SET created_at = created_at - $2::interval WHERE telefone = $1`, [t, intervalo]);
+
+    // A meio da pré-inscrição há 40 minutos: um lembrete (e só um).
+    const meio = tel();
+    await handleWhatsappText(ctx.db, meio, "1");
+    await recuar(meio, "40 minutes");
+    await verificarInatividade(ctx.db, enviar);
+    await verificarInatividade(ctx.db, enviar);
+    expect(enviadas.filter(e => e.to === meio).map(e => e.m)).toEqual([expect.stringContaining("Ainda está aí?")]);
+
+    // Pediu a equipa há 5 horas e ninguém respondeu: novo aviso por email (uma vez).
+    const espera = tel();
+    await handleWhatsappText(ctx.db, espera, "4", "", "Marta");
+    await ctx.db.query("UPDATE whatsapp_sessoes SET humano_desde = humano_desde - interval '5 hours' WHERE telefone = $1", [espera]);
+    const antes = enviados.length;
+    await verificarInatividade(ctx.db, enviar);
+    await verificarInatividade(ctx.db, enviar);
+    const novos = enviados.slice(antes).filter(m => m.text.includes("Ainda sem resposta da equipa"));
+    expect(novos.length).toBeGreaterThan(0);
+    expect(new Set(novos.map(m => m.to)).size).toBe(novos.length);
+
+    // Sem mensagens há 30 horas: fecha (sem despedida: passaram as 24 horas da Meta).
+    const parada = tel();
+    await handleWhatsappText(ctx.db, parada, "olá");
+    await recuar(parada, "30 hours");
+    await verificarInatividade(ctx.db, enviar);
+    expect(enviadas.filter(e => e.to === parada)).toHaveLength(0);
+    const c = (await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${parada}`)).json();
+    expect(c.fechada).toBe(true);
+    expect(c.mensagens.at(-1).corpo).toBe("Conversa fechada por inatividade");
+    await ctx.db.query("DELETE FROM app_settings WHERE id = 'whatsapp_regras'");
+  });
+});
+
+describe("eliminar conversa", () => {
+  it("a coordenação elimina de vez; a pessoa volta a escrever e começa uma conversa nova", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    await handleWhatsappText(ctx.db, t, "olá");
+    expect((await pedido(ctx, "secretaria", "DELETE", `/v1/crm/whatsapp/conversa?telefone=${t}`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json().mensagens).toEqual([]);
+    expect((await pedido(ctx, "secretaria", "GET", "/v1/crm/whatsapp/conversas")).json().conversas.some((c: { telefone: string }) => c.telefone === t)).toBe(false);
+    await handleWhatsappText(ctx.db, t, "olá");
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json().mensagens).toHaveLength(2);
   });
 });

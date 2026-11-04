@@ -28,8 +28,11 @@ export async function contarSessoesWhatsapp(c: Consulta) {
 }
 
 export function sessaoWhatsapp(c: Consulta, telefone: string) {
-  return one<{ passo: string; dados: unknown; lead_id: number | null; humano_desde: string | null }>(
-    c, "SELECT passo, dados, lead_id, humano_desde::text AS humano_desde FROM whatsapp_sessoes WHERE telefone = $1", [telefone],
+  return one<{ passo: string; dados: unknown; lead_id: number | null; humano_desde: string | null; fechada_em: string | null; fechada_por: string | null }>(
+    c,
+    `SELECT passo, dados, lead_id, humano_desde::text AS humano_desde, fechada_em::text AS fechada_em, fechada_por
+       FROM whatsapp_sessoes WHERE telefone = $1`,
+    [telefone],
   );
 }
 
@@ -42,6 +45,9 @@ export async function pedirHumanoWhatsapp(c: Consulta, telefone: string) {
     c,
     `INSERT INTO whatsapp_sessoes (telefone, passo, humano_desde, actualizado_em) VALUES ($1, 'menu', now(), now())
      ON CONFLICT (telefone) DO UPDATE SET passo = 'menu', dados = '{}'::jsonb, actualizado_em = now(),
+       aviso_pedido_em = CASE WHEN whatsapp_sessoes.humano_desde IS NULL
+                                OR whatsapp_sessoes.humano_desde < now() - make_interval(hours => $2)
+                              THEN NULL ELSE whatsapp_sessoes.aviso_pedido_em END,
        humano_desde = CASE WHEN whatsapp_sessoes.humano_desde IS NULL
                              OR whatsapp_sessoes.humano_desde < now() - make_interval(hours => $2)
                            THEN now() ELSE whatsapp_sessoes.humano_desde END`,
@@ -85,6 +91,7 @@ export function ultimaEntradaWhatsapp(c: Consulta, telefone: string) {
 export type ConversaResumo = {
   telefone: string; nome_perfil: string | null; humano_desde: string | null; humano_por: string | null;
   ultima_em: string; ultima: string; ultima_direccao: string; ultima_entrada: string | null; por_ler: number;
+  fechada_em: string | null; fechada_por: string | null;
 };
 
 /** Conversas, as mais recentes primeiro; as que pedem uma pessoa vêm à frente. */
@@ -93,15 +100,17 @@ export function conversasWhatsapp(c: Consulta, limite = 200) {
     c,
     `WITH ult AS (
        SELECT DISTINCT ON (telefone) telefone, corpo, direccao, created_at
-         FROM whatsapp_mensagens ORDER BY telefone, id DESC
+         FROM whatsapp_mensagens WHERE direccao <> 'evento' ORDER BY telefone, id DESC
      )
      SELECT u.telefone, s.nome_perfil, s.humano_desde::text AS humano_desde, s.humano_por,
+            s.fechada_em::text AS fechada_em, s.fechada_por,
             u.created_at::text AS ultima_em, left(u.corpo, 160) AS ultima, u.direccao AS ultima_direccao,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = u.telefone AND m.direccao = 'in') AS ultima_entrada,
             (SELECT count(*)::int FROM whatsapp_mensagens m WHERE m.telefone = u.telefone AND m.direccao = 'in'
                AND m.created_at > COALESCE(s.lida_em, '-infinity'::timestamptz)) AS por_ler
        FROM ult u LEFT JOIN whatsapp_sessoes s ON s.telefone = u.telefone
-      ORDER BY (s.humano_desde IS NOT NULL AND s.humano_desde > now() - make_interval(hours => $2)) DESC, u.created_at DESC
+      ORDER BY (s.fechada_em IS NULL) DESC,
+               (s.humano_desde IS NOT NULL AND s.humano_desde > now() - make_interval(hours => $2)) DESC, u.created_at DESC
       LIMIT $1`,
     [limite, HUMANO_EXPIRA_HORAS],
   );
@@ -116,7 +125,7 @@ export async function gravarSessaoWhatsapp(c: Consulta, telefone: string, passo:
   );
 }
 
-export async function registarMensagemWhatsapp(c: Consulta, telefone: string, direccao: "in" | "out", corpo: string, wamid?: string, autor?: string) {
+export async function registarMensagemWhatsapp(c: Consulta, telefone: string, direccao: "in" | "out" | "evento", corpo: string, wamid?: string, autor?: string) {
   await one(
     c, "INSERT INTO whatsapp_mensagens (telefone, direccao, corpo, wamid, autor) VALUES ($1, $2, $3, $4, $5)",
     [telefone, direccao, corpo.slice(0, 4000), wamid || null, autor || null],
@@ -160,4 +169,18 @@ export function leadsPorTelefoneWhatsapp(c: Consulta, telefone: string, ultimos9
     "SELECT * FROM preinscricoes WHERE telf LIKE $1 OR telf LIKE $2 OR telf LIKE $3 ORDER BY id DESC LIMIT 8",
     [`%${ultimos9}%`, `%351${ultimos9}%`, `%${telefone}%`],
   );
+}
+
+/** Reserva o aviso à equipa do pedido em curso (uma vez por pedido): `true` só a quem o reservou. */
+export async function reservarAvisoPedidoWhatsapp(c: Consulta, telefone: string) {
+  return Boolean(await one(
+    c, "UPDATE whatsapp_sessoes SET aviso_pedido_em = now() WHERE telefone = $1 AND humano_desde IS NOT NULL AND aviso_pedido_em IS NULL RETURNING telefone",
+    [telefone],
+  ));
+}
+
+/** Apaga a conversa (mensagens e sessão) de vez. */
+export async function apagarConversaWhatsapp(c: Consulta, telefone: string) {
+  await one(c, "DELETE FROM whatsapp_mensagens WHERE telefone = $1", [telefone]);
+  await one(c, "DELETE FROM whatsapp_sessoes WHERE telefone = $1", [telefone]);
 }

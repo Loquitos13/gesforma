@@ -61,3 +61,19 @@ export const CAMPOS_FIN: CampoDefinicao[] = [
   { chave: "Turma sem documentos", rotulo: "Turma sem documentos" },
   { chave: "Financiador", rotulo: "Financiador habitual" },
 ];
+
+/** Regras de inatividade do WhatsApp (server/src/whatsappInatividade.ts). 0 desliga a regra. */
+export const CAMPOS_WHATSAPP_REGRAS: CampoDefinicao[] = [
+  {
+    chave: "despedida", rotulo: "Mensagem ao fechar a conversa", largo: true,
+    placeholder: "Esta conversa foi encerrada. Obrigado pelo contacto! Se precisar de mais alguma coisa, escreva *menu*.",
+    ajuda: "Sai quando a equipa fecha a conversa (ou a regra abaixo a fecha), se a pessoa escreveu nas últimas 24 horas. Vazio: o texto do exemplo.",
+  },
+  { chave: "fecharHoras", rotulo: "Fechar conversas sem mensagens há (horas)", tipo: "numero", placeholder: "24", ajuda: "0 desliga. O histórico fica; se a pessoa voltar a escrever, a conversa reabre com o assistente." },
+  { chave: "lembreteMin", rotulo: "Lembrar quem parou a meio ao fim de (minutos)", tipo: "numero", placeholder: "30", ajuda: "Só a meio da pré-inscrição pelo assistente; um lembrete por pausa. 0 desliga." },
+  {
+    chave: "lembreteTexto", rotulo: "Texto do lembrete", largo: true,
+    placeholder: "Ainda está aí? Pode continuar onde ficou ou escrever *menu* para recomeçar.",
+  },
+  { chave: "avisoEquipaHoras", rotulo: "Avisar a equipa outra vez se ninguém responder em (horas)", tipo: "numero", placeholder: "4", ajuda: "Quando a pessoa pediu para falar com a equipa. Um novo email por pedido. 0 desliga." },
+];

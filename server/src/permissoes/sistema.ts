@@ -11,10 +11,13 @@ export const regras: Regra[] = [
   ["*", "/v1/crm/whatsapp/simular", ADMIN],
   // Caixa de conversas do WhatsApp: a equipa (comercial e coordenações) lê e responde.
   ["GET", "/v1/crm/whatsapp/conversa", EQUIPA],
+  // Eliminar de vez: só a administração e as coordenações.
+  ["DELETE", "/v1/crm/whatsapp/conversa", COORDENACAO],
   ["GET", "/v1/crm/whatsapp/conversas", EQUIPA],
   ["POST", "/v1/crm/whatsapp/responder", EQUIPA],
   ["POST", "/v1/crm/whatsapp/devolver", EQUIPA],
   ["POST", "/v1/crm/whatsapp/assumir", EQUIPA],
+  ["POST", "/v1/crm/whatsapp/fechar", EQUIPA],
   ["*", "/v1/auth/microsoft/config", ADMIN],
   ["*", "/v1/auth/microsoft/disconnect", ADMIN],
   ["*", "/v1/settings/smtp*", ADMIN],

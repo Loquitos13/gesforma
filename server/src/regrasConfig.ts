@@ -199,6 +199,17 @@ export function validarDefinicoes(
   id: string,
   values: Record<string, string>,
 ): { ok: true; values: Record<string, string> } | { ok: false; erro: string } {
+  if (id === "whatsapp_regras") {
+    const limites: Record<string, [number, string]> = {
+      fecharHoras: [720, "Fechar conversas sem mensagens: de 0 a 720 horas."],
+      lembreteMin: [1440, "Lembrar quem parou a meio: de 0 a 1440 minutos."],
+      avisoEquipaHoras: [168, "Avisar a equipa sem resposta: de 0 a 168 horas."],
+    };
+    for (const [k, [max, erro]] of Object.entries(limites)) {
+      const v = (values[k] ?? "").trim().replace(",", ".");
+      if (v && !(/^\d+(\.\d+)?$/.test(v) && Number(v) <= max)) return { ok: false, erro };
+    }
+  }
   if (id === "regras_pedagogicas") {
     for (const k of ["assiduidadeMinGold", "assiduidadeMinFin", "elearningMin"] as const) {
       if (values[k] != null && values[k] !== "") {

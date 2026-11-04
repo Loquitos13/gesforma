@@ -39,7 +39,7 @@ export function WhatsappSimulador({ open, onClose, onLeadCreated }: { open: bool
   async function historico() {
     try {
       const c = await apiWhatsappConversa(telefone);
-      setMsgs(c.mensagens.map(m => ({ direccao: m.direccao, corpo: m.corpo })));
+      setMsgs(c.mensagens.flatMap(m => (m.direccao === "evento" ? [] : [{ direccao: m.direccao, corpo: m.corpo }])));
     } catch (err) {
       toastError(err, "Não foi possível ler o histórico.");
     }

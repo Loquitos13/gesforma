@@ -14,7 +14,7 @@ import { LogoEntidade } from "./configuracoes/LogoEntidade";
 import { LogoDocumento } from "../../LogoDocumento";
 import { LOGO_DGERT } from "../../../partilhado/api/logosDocumentos";
 import { SeccaoDefinicoes } from "./configuracoes/SeccaoDefinicoes";
-import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS } from "./configuracoes/secoes";
+import { CAMPOS_ENTIDADE, CAMPOS_FIN, CAMPOS_FORMACAO, CAMPOS_GOLD, CAMPOS_LEMBRETE, CAMPOS_REGRAS, CAMPOS_WHATSAPP_REGRAS } from "./configuracoes/secoes";
 import { SeccaoSeloAssinatura } from "./configuracoes/SeloAssinatura";
 import { SeccaoSeguranca } from "./configuracoes/Seguranca";
 
@@ -99,7 +99,14 @@ export default function Configuracoes({ params, navigate }: VistaProps) {
         return <SeccaoDefinicoes id="lembrete_pre" titulo="Lembrete da pré-inscrição" soAdmin podeEditar={admin} campos={CAMPOS_LEMBRETE}
           valores={settings.lembrete_pre ?? comoTexto(estado.lembrete)} descricao="Email automático enquanto a pré-inscrição não estiver validada (e aos formandos da Financiada com documentos do dossiê em falta, depois de um lembrete manual ou de uma recusa). A ligação pessoal fica aberta enquanto faltarem documentos ou houver recusados por corrigir; sem nada pendente, expira ao fim de 90 dias sem actividade." />;
       case "smtp": return <SeccaoSmtp />;
-      case "whatsapp": return <SeccaoWhatsapp />;
+      case "whatsapp":
+        return (
+          <div className="space-y-4">
+            <SeccaoWhatsapp />
+            <SeccaoDefinicoes id="whatsapp_regras" titulo="Conversas: fecho e inatividade" soAdmin podeEditar={admin} campos={CAMPOS_WHATSAPP_REGRAS}
+              valores={settings.whatsapp_regras} descricao="O que acontece às conversas paradas. A equipa também pode fechar uma conversa em CRM › WhatsApp." />
+          </div>
+        );
       case "drive": return <SeccaoDrive resultado={f.drive || undefined} onResultadoVisto={() => setF({ drive: "" })} />;
       case "microsoft": return <SeccaoMicrosoft />;
       case "google-avaliacoes": return <SeccaoAvaliacoesGoogle />;

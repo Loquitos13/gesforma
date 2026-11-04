@@ -3,6 +3,7 @@ type Toast = {
   kind: "error" | "ok" | "alert";
   text: string;
   key?: string;
+  titulo?: string;
   leadId?: number;
   actionLabel?: string;
   onAction?: () => void;
@@ -49,6 +50,8 @@ export function pushToast(kind: "error" | "ok", text: string) {
 
 export function pushAlertToast(input: {
   key: string;
+  /** Título do alerta (por omissão, «Documentos para validar»). */
+  titulo?: string;
   leadId?: number;
   text: string;
   actionLabel?: string;

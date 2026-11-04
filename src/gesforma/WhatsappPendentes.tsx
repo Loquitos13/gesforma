@@ -68,6 +68,7 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
       const regime = c.regime ?? (role === "financiada" ? "fin" : "gold");
       pushAlertToast({
         key: k,
+        titulo: "Nova conversa no WhatsApp",
         text: `Nova conversa no WhatsApp: ${c.nome || formatar(c.telefone)}.`,
         actionLabel: "Abrir conversa",
         onAction: () => onOpenRef.current(c.telefone, regime),
@@ -83,6 +84,7 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
       const regime = p.regime ?? (role === "financiada" ? "fin" : "gold");
       pushAlertToast({
         key: k,
+        titulo: "WhatsApp: pedido para falar com a equipa",
         text: `${p.nome || formatar(p.telefone)} pediu, no WhatsApp, para falar com uma pessoa da equipa.`,
         actionLabel: "Abrir conversa",
         onAction: () => onOpenRef.current(p.telefone, regime),

@@ -11,7 +11,7 @@ export function ToastHost() {
     <div className="fixed bottom-4 right-4 z-[80] flex flex-col gap-2 w-[min(92vw,22rem)]" role="status" aria-live="polite">
       {alerts.map(t => (
         <div key={t.id} className="rounded-xl border border-amber-300 bg-amber-50 px-3 py-3 shadow-lg text-sm text-amber-950">
-          <p className="font-semibold">Documentos para validar</p>
+          <p className="font-semibold">{t.titulo ?? "Documentos para validar"}</p>
           <p className="text-xs mt-1 leading-snug">{t.text}</p>
           <div className="mt-2 flex gap-2">
             {t.actionLabel && (

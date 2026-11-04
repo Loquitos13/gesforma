@@ -25,8 +25,14 @@ beforeAll(async () => {
   await ctx.db.query(
     `INSERT INTO whatsapp_config (id, token_sealed, phone_id, verify_token, display_phone) VALUES ('meta', $1, '123456', 'vt', '')
      ON CONFLICT (id) DO UPDATE SET token_sealed = EXCLUDED.token_sealed, phone_id = EXCLUDED.phone_id`, [sealSecret("t".repeat(40))]);
-  vi.stubGlobal("fetch", async (_url: string, init?: { body?: string }) => {
-    pedidosMeta.push(JSON.parse(init?.body ?? "{}"));
+  vi.stubGlobal("fetch", async (url: string, init?: { body?: unknown }) => {
+    // Carregamento de ficheiros (/media): devolve o id do ficheiro na Meta.
+    if (String(url).endsWith("/media")) {
+      const f = (init?.body as FormData).get("file") as File;
+      pedidosMeta.push({ media: true, nome: f.name, tipo: (init?.body as FormData).get("type") });
+      return new Response(JSON.stringify({ id: "media-123" }), { status: 200 });
+    }
+    pedidosMeta.push(JSON.parse(String(init?.body ?? "{}")));
     return new Response(JSON.stringify({ messages: [{ id: "wamid.x" }] }), { status: 200 });
   });
 });
@@ -322,5 +328,40 @@ describe("conversas novas e por ler (menu e alerta)", () => {
     await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/fechar", { telefone: t });
     await handleWhatsappText(ctx.db, t, "olá de novo");
     expect((await linha())!.novaDesde).toBeTruthy();
+  });
+});
+
+describe("anexos", () => {
+  it("a equipa envia um PDF com legenda; tipos não aceites e conversas paradas há mais de 24 horas são recusados", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    await handleWhatsappText(ctx.db, t, "4");
+    const enviar = (nome: string, bytes: Buffer, legenda = "") => {
+      const boundary = "----wa";
+      const campo = (k: string, v: string) => Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`);
+      const body = Buffer.concat([
+        campo("telefone", t), campo("legenda", legenda),
+        Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${nome}"\r\nContent-Type: application/octet-stream\r\n\r\n`),
+        bytes, Buffer.from(`\r\n--${boundary}--\r\n`),
+      ]);
+      return ctx.app.inject({
+        method: "POST", url: "/v1/crm/whatsapp/anexo", payload: body,
+        headers: { "content-type": `multipart/form-data; boundary=${boundary}`, cookie: ctx.cookie.comercial, "x-gesforma-client": "web" },
+      });
+    };
+    const pdf = Buffer.from("%PDF-1.4\n%%EOF\n");
+    pedidosMeta.length = 0;
+    const r = await enviar("Programa CCP.pdf", pdf, "Segue o programa do curso.");
+    expect(r.statusCode, r.body).toBe(200);
+    expect(pedidosMeta[0]).toMatchObject({ media: true, nome: "Programa CCP.pdf", tipo: "application/pdf" });
+    expect(pedidosMeta[1]).toMatchObject({
+      to: t, type: "document", document: { id: "media-123", filename: "Programa CCP.pdf", caption: "Segue o programa do curso." },
+    });
+    const c = (await pedido(ctx, "comercial", "GET", `/v1/crm/whatsapp/conversa?telefone=${t}`)).json();
+    expect(c.mensagens.at(-1)).toMatchObject({ direccao: "out", corpo: "📎 Programa CCP.pdf\nSegue o programa do curso." });
+
+    expect((await enviar("virus.exe", Buffer.from("MZ\x90\x00"))).statusCode).toBe(400);
+    await ctx.db.query("UPDATE whatsapp_mensagens SET created_at = now() - interval '25 hours' WHERE telefone = $1 AND direccao = 'in'", [t]);
+    expect((await enviar("Programa CCP.pdf", pdf)).statusCode).toBe(409);
   });
 });

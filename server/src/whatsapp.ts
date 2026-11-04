@@ -183,6 +183,49 @@ export function corpoCloudApi(to: string, r: Resposta): Record<string, unknown> 
   };
 }
 
+/** Anexos que a equipa pode enviar (a Meta aceita imagens até 5 MB; o resto vai como documento, até 15 MB aqui). */
+export const ANEXO_MAX_BYTES = 15 * 1024 * 1024;
+const IMAGEM_MAX_BYTES = 5 * 1024 * 1024;
+
+/** O tipo do ficheiro pelos primeiros bytes (não pelo que o navegador diz). */
+export function tipoAnexo(bytes: Buffer, nome: string): { mime: string; imagem: boolean } | null {
+  const ext = nome.toLowerCase().split(".").pop() ?? "";
+  if (bytes.subarray(0, 4).toString("latin1") === "%PDF") return { mime: "application/pdf", imagem: false };
+  if (bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) return { mime: "image/jpeg", imagem: bytes.length <= IMAGEM_MAX_BYTES };
+  if (bytes.subarray(0, 8).equals(Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]))) return { mime: "image/png", imagem: bytes.length <= IMAGEM_MAX_BYTES };
+  if (bytes.subarray(0, 4).equals(Buffer.from([0x50, 0x4b, 0x03, 0x04]))) {
+    if (ext === "docx") return { mime: "application/vnd.openxmlformats-officedocument.wordprocessingml.document", imagem: false };
+    if (ext === "xlsx") return { mime: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", imagem: false };
+  }
+  return null;
+}
+
+/** Carrega o ficheiro na Meta e envia-o (imagem ou documento) com a legenda. */
+async function enviarAnexoCloudApi(db: Db, to: string, a: { bytes: Buffer; nome: string; mime: string; imagem: boolean; legenda: string }) {
+  const c = await whatsappCreds(db);
+  if (!c.token || !c.phoneId) return { sent: false as const };
+  const form = new FormData();
+  form.append("messaging_product", "whatsapp");
+  form.append("type", a.mime);
+  form.append("file", new Blob([new Uint8Array(a.bytes)], { type: a.mime }), a.nome);
+  const up = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(c.phoneId)}/media`, {
+    method: "POST", headers: { Authorization: `Bearer ${c.token}` }, body: form,
+  });
+  const upJson = await up.json().catch(() => ({})) as { id?: string };
+  if (!up.ok || !upJson.id) return { sent: false as const, error: `media: ${JSON.stringify(upJson).slice(0, 300)}` };
+  const legenda = a.legenda ? { caption: a.legenda.slice(0, 1024) } : {};
+  const corpo = a.imagem
+    ? { type: "image", image: { id: upJson.id, ...legenda } }
+    : { type: "document", document: { id: upJson.id, filename: a.nome, ...legenda } };
+  const res = await fetch(`https://graph.facebook.com/v21.0/${encodeURIComponent(c.phoneId)}/messages`, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${c.token}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ messaging_product: "whatsapp", recipient_type: "individual", to, ...corpo }),
+  });
+  if (!res.ok) return { sent: false as const, error: (await res.text().catch(() => "")).slice(0, 300) };
+  return { sent: true as const };
+}
+
 /** Regras de inatividade (a cada minuto, dentro da API): só com o WhatsApp ligado. */
 export async function verificarInatividadeWhatsapp(db: Db) {
   if (!(await whatsappLigado(db))) return null;
@@ -495,6 +538,47 @@ export function registerWhatsappRoutes(
     const autor = req.actor?.name || req.actor?.email || "Equipa";
     await registarMensagemWhatsapp(db, tel, "out", texto, undefined, autor);
     // Quem responde fica com a conversa: o bot continua em pausa.
+    await refrescarHumanoWhatsapp(db, tel, autor);
+    return { ok: true };
+  });
+
+  // Resposta com anexo (PDF, imagem, Word ou Excel): carrega-se na Meta (/media) e envia-se pelo id, com a legenda.
+  app.post("/v1/crm/whatsapp/anexo", {
+    config: { rateLimit: { max: 20, timeWindow: "1 minute" } },
+  }, async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    let bytes: Buffer | null = null;
+    let nome = "anexo";
+    const campos: Record<string, string> = {};
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === "file") { nome = part.filename || nome; bytes = await part.toBuffer(); }
+        else campos[part.fieldname] = String(part.value ?? "").slice(0, 1024);
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    const tel = digitsPhone(campos.telefone ?? "");
+    if (!tel) return reply.code(400).send({ error: "telefone em falta" });
+    if (!bytes?.length) return reply.code(400).send({ error: "Escolha o ficheiro." });
+    const tipo = tipoAnexo(bytes, nome);
+    if (!tipo) return reply.code(400).send({ error: "Só PDF, imagens (JPG, PNG), Word ou Excel." });
+    if (bytes.length > ANEXO_MAX_BYTES) return reply.code(400).send({ error: "O ficheiro tem mais de 15 MB." });
+    if (!(await whatsappLigado(db))) return reply.code(409).send({ error: "O WhatsApp não está ligado (Configurações › Integrações)." });
+    if (!dentroDas24h(await ultimaEntradaWhatsapp(db, tel))) {
+      return reply.code(409).send({
+        error: "Passaram mais de 24 horas desde a última mensagem desta pessoa: o WhatsApp não deixa enviar nada. Ligue-lhe ou envie um email.",
+      });
+    }
+    const legenda = sanitizeText(campos.legenda ?? "", 1024).trim();
+    const nomeLimpo = nome.replace(/[\\/\r\n]/g, "_").slice(0, 120);
+    const envio = await enviarAnexoCloudApi(db, tel, { bytes, nome: nomeLimpo, ...tipo, legenda });
+    if (!envio.sent) {
+      req.log.warn({ erro: envio.error }, "anexo WhatsApp não enviado");
+      return reply.code(502).send({ error: "O WhatsApp recusou o ficheiro. Tente outra vez daqui a pouco." });
+    }
+    const autor = req.actor?.name || req.actor?.email || "Equipa";
+    await registarMensagemWhatsapp(db, tel, "out", `📎 ${nomeLimpo}${legenda ? `\n${legenda}` : ""}`, undefined, autor);
     await refrescarHumanoWhatsapp(db, tel, autor);
     return { ok: true };
   });

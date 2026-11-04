@@ -106,6 +106,8 @@ export const apiWhatsappConversa = (telefone: string, signal?: AbortSignal) =>
 export const apiWhatsappResponder = (telefone: string, texto: string) =>
   enviar.post<{ ok: true }>("/v1/crm/whatsapp/responder", { telefone, texto });
 export const apiWhatsappDevolver = (telefone: string) => enviar.post<{ ok: true }>("/v1/crm/whatsapp/devolver", { telefone });
+export const apiWhatsappAnexo = (telefone: string, ficheiro: File, legenda: string) =>
+  enviarFicheiro<{ ok: true }>("/v1/crm/whatsapp/anexo", ficheiro, { telefone, legenda }, "file");
 export const apiWhatsappApagar = (telefone: string) =>
   enviar.delete<{ ok: true }>(`/v1/crm/whatsapp/conversa?telefone=${encodeURIComponent(telefone)}`);
 export const apiWhatsappFechar = (telefone: string) => enviar.post<{ ok: true; despedida: boolean }>("/v1/crm/whatsapp/fechar", { telefone });

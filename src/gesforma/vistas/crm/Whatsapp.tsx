@@ -2,7 +2,7 @@
 // A equipa responde daqui pelo número da ENA (texto livre só até 24 horas depois da última mensagem da pessoa).
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import {
-  apiWhatsappAssumir, apiWhatsappApagar, apiWhatsappConversa, apiWhatsappConversas, apiWhatsappDevolver, apiWhatsappFechar, apiWhatsappResponder,
+  apiWhatsappAnexo, apiWhatsappAssumir, apiWhatsappApagar, apiWhatsappConversa, apiWhatsappConversas, apiWhatsappDevolver, apiWhatsappFechar, apiWhatsappResponder,
   type ConversaWhatsapp,
 } from "../../../partilhado/api/configuracoes";
 import { usePode } from "../../../partilhado/AuthGate";
@@ -137,6 +137,8 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
   useAtualizar(conversa.recarregar);
   const [texto, setTexto] = useState("");
   const [aEnviar, setAEnviar] = useState(false);
+  const [anexo, setAnexo] = useState<File | null>(null);
+  const ficheiroRef = useRef<HTMLInputElement>(null);
   const [aMudar, setAMudar] = useState(false);
   const [confirmarFecho, setConfirmarFecho] = useState(false);
   const [confirmarApagar, setConfirmarApagar] = useState(false);
@@ -158,10 +160,14 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
   async function responder(e?: FormEvent) {
     e?.preventDefault();
     const t = texto.trim();
-    if (!t || aEnviar) return;
+    if ((!t && !anexo) || aEnviar) return;
     setAEnviar(true);
     try {
-      await apiWhatsappResponder(telefone, t);
+      // Com anexo, o texto vai como legenda do ficheiro.
+      if (anexo) await apiWhatsappAnexo(telefone, anexo, t);
+      else await apiWhatsappResponder(telefone, t);
+      setAnexo(null);
+      if (ficheiroRef.current) ficheiroRef.current.value = "";
       setTexto("");
       conversa.recarregar();
       onMudou();
@@ -279,14 +285,30 @@ function Conversa({ telefone, resumo, onVoltar, onMudou, abrirLead }: {
               value={texto}
               onChange={e => setTexto(e.target.value)}
               onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); void responder(); } }}
-              placeholder={humano ? "Escreva a resposta…" : "Escreva para responder (o assistente deixa de responder nesta conversa)…"}
+              placeholder={anexo ? "Legenda do ficheiro (opcional)…" : humano ? "Escreva a resposta…" : "Escreva para responder (o assistente deixa de responder nesta conversa)…"}
               maxLength={4000}
               className="min-h-[64px]"
               aria-label="Resposta"
             />
-            <div className="flex items-center justify-between gap-2">
-              <span className="text-xs text-tinta-suave">Enter envia · Shift+Enter muda de linha</span>
-              <Botao type="submit" variante="primario" aCarregar={aEnviar} disabled={!texto.trim()}>Enviar</Botao>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex min-w-0 items-center gap-2">
+                <input ref={ficheiroRef} type="file" className="sr-only" id={`anexo-${telefone}`}
+                  accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx,application/pdf,image/jpeg,image/png"
+                  onChange={e => {
+                    const f = e.target.files?.[0] ?? null;
+                    if (f && f.size > 15 * 1024 * 1024) { toastError(new Error("O ficheiro tem mais de 15 MB.")); e.target.value = ""; return; }
+                    setAnexo(f);
+                  }} />
+                <Botao tamanho="sm" variante="fantasma" onClick={() => ficheiroRef.current?.click()} title="PDF, imagem (JPG, PNG), Word ou Excel, até 15 MB">📎 Anexar</Botao>
+                {anexo ? (
+                  <span className="flex min-w-0 items-center gap-1 text-xs text-tinta">
+                    <span className="truncate">{anexo.name}</span>
+                    <button type="button" className="text-tinta-suave hover:text-tinta" aria-label="Tirar o anexo"
+                      onClick={() => { setAnexo(null); if (ficheiroRef.current) ficheiroRef.current.value = ""; }}>×</button>
+                  </span>
+                ) : <span className="text-xs text-tinta-suave">Enter envia · Shift+Enter muda de linha</span>}
+              </div>
+              <Botao type="submit" variante="primario" aCarregar={aEnviar} disabled={!texto.trim() && !anexo}>Enviar</Botao>
             </div>
           </>
         )}

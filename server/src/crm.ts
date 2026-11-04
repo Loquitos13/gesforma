@@ -24,6 +24,7 @@ function itemLista(r: Record<string, unknown>) {
     percursoConcluido: Boolean(r.percurso_concluido_em),
     validada: Boolean(r.validada_em),
     pagamentoPedido: Boolean(r.pagamento_pedido_em),
+    comprovativoPorValidar: Boolean(r.comprovativo_pendente),
     consentimento: Boolean(r.consentimento_em),
   };
 }

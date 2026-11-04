@@ -19,6 +19,16 @@ type Props = {
   vazio: ReactNode;
 };
 
+/** Data e hora da pré-inscrição (gravada em UTC) na hora de Lisboa: «04-09-2026 12:24». */
+function dataHora(v: string | null | undefined) {
+  const t = String(v ?? "");
+  const d = new Date(/^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(t) ? `${t.slice(0, 16).replace(" ", "T")}:00Z` : t);
+  if (!t || Number.isNaN(d.getTime())) return t || "—";
+  const p = Object.fromEntries(new Intl.DateTimeFormat("pt-PT", { timeZone: "Europe/Lisbon", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", hourCycle: "h23" })
+    .formatToParts(d).map(x => [x.type, x.value]));
+  return `${p.day}-${p.month}-${p.year} ${p.hour}:${p.minute}`;
+}
+
 const COR_TOM: Record<Tom, string> = { neutro: "text-tinta-suave", info: "text-ligacao", sucesso: "text-sucesso", aviso: "text-aviso", perigo: "text-perigo", acao: "text-acao-texto" } as Record<Tom, string>;
 const BARRA_TOM: Record<Tom, string> = { neutro: "bg-linha-forte", info: "bg-ligacao", sucesso: "bg-sucesso", aviso: "bg-acao", perigo: "bg-perigo", acao: "bg-acao" } as Record<Tom, string>;
 
@@ -47,6 +57,10 @@ export function TabelaLeads(p: Props) {
           )}
         </div>
       ),
+    },
+    {
+      id: "inscrito", titulo: "Data", ordenavel: true, esconderMovel: true,
+      celula: l => <span className="num whitespace-nowrap text-[13px]" title={l.inscrito}>{dataHora(l.inscrito)}</span>,
     },
     {
       id: "curso", titulo: "Curso", ordenavel: true,

@@ -84,7 +84,10 @@ function comEtiqueta(inner: string) {
   return `SELECT p.*, e.nome AS etiqueta_nome, e.cor AS etiqueta_cor, u.name AS comercial_nome,
                  (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id) AS docs_enviados,
                  (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.estado = 'validado') AS docs_validados,
-                 (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.estado = 'recusado') AS docs_recusados
+                 (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.estado = 'recusado') AS docs_recusados,
+                 -- O último comprovativo de pagamento enviado ainda está por validar.
+                 COALESCE((SELECT d.estado = 'pendente' FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo = 'comprovativo'
+                            ORDER BY d.created_at DESC, d.id DESC LIMIT 1), false) AS comprovativo_pendente
             FROM (${inner}) p
             LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id
             LEFT JOIN users u ON u.id = p.comercial_id`;

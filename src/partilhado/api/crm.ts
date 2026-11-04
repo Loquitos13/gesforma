@@ -54,6 +54,8 @@ export type Lead = {
   percursoConcluido?: boolean;
   validada?: boolean;
   pagamentoPedido?: boolean;
+  /** Enviou o comprovativo de pagamento e ainda ninguém o validou. */
+  comprovativoPorValidar?: boolean;
   consentimento?: boolean;
 };
 

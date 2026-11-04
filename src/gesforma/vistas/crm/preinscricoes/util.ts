@@ -75,6 +75,8 @@ export function proximoPasso(l: Lead): { texto: string; tom: Tom } {
   if (l.estado === "Desistiu") return { texto: l.motivoDesistencia ? `Desistiu · ${l.motivoDesistencia}` : "Desistiu", tom: "neutro" };
   if (l.estado === "Formando") return { texto: "Inscrito na turma", tom: "sucesso" };
   if (l.validada) return { texto: l.regime === "gold" ? "Validada · inscrever na turma" : "Validada", tom: "sucesso" };
+  // Comprovativo enviado e por validar: é o que há a fazer primeiro.
+  if (l.comprovativoPorValidar && l.estado !== "Pago") return { texto: "Pagamento pronto para validar", tom: "acao" };
   if (l.estado === "Não contactado") return { texto: "Fazer o primeiro contacto", tom: "aviso" };
   if ((l.docsRecusados ?? 0) > 0) return { texto: "Aguarda correcção de documentos", tom: "perigo" };
   // Pagamento confirmado (comprovativo validado): falta inserir na turma (on demand, comercial ou coordenação).

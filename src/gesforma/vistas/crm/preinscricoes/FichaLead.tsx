@@ -77,7 +77,9 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
   const lead = d?.lead ?? lista.find(l => l.id === id) ?? null;
   const titulo = lead ? nomeCompleto(lead) || `Pré-inscrição #${lead.id}` : "Pré-inscrição";
   const wa = lead ? telWhatsapp(lead.telf) : "";
-  const passo = lead ? proximoPasso({ ...lead, validada: Boolean(d?.validadaEm), pagamentoPedido: d?.estadoPagamento === "pedido", percursoConcluido: d?.percursoConcluido }) : null;
+  const ultimoComprovativo = (d?.documentos ?? []).filter(x => x.tipo === "comprovativo").sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+  const comprovativoPorValidar = d ? ultimoComprovativo?.estado === "pendente" : lead?.comprovativoPorValidar;
+  const passo = lead ? proximoPasso({ ...lead, validada: Boolean(d?.validadaEm), pagamentoPedido: d?.estadoPagamento === "pedido", percursoConcluido: d?.percursoConcluido, comprovativoPorValidar }) : null;
 
   return (
     <Modal
@@ -114,6 +116,15 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
                 <span className="truncate font-semibold select-all">{lead.email || "—"}</span>
                 {lead.email && (
                   <Botao variante="ligacao" tamanho="sm" onClick={() => { void navigator.clipboard?.writeText(lead.email).then(() => toastOk("Email copiado.")); }}>Copiar</Botao>
+                )}
+              </dd>
+            </div>
+            <div className="col-span-2 min-w-0 sm:col-span-4">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-tinta-suave">Telefone</dt>
+              <dd className="m-0 flex min-w-0 items-center gap-2">
+                <span className="truncate font-semibold num select-all">{lead.telf || "—"}</span>
+                {lead.telf && (
+                  <Botao variante="ligacao" tamanho="sm" onClick={() => { void navigator.clipboard?.writeText(lead.telf.replace(/\s+/g, "")).then(() => toastOk("Telefone copiado.")); }}>Copiar</Botao>
                 )}
               </dd>
             </div>

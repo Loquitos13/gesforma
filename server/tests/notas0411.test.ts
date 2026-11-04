@@ -120,3 +120,27 @@ describe("pagamento com a ação de formação e «Enviar ligação por email»"
     expect((await ctx.db.query<{ docs_token: string }>("SELECT docs_token FROM preinscricoes WHERE id = $1", [lead])).rows[0]!.docs_token).toBe(antes);
   });
 });
+
+describe("lista de pré-inscrições: comprovativo por validar e ordem por data", () => {
+  it("marca o comprovativo enviado por validar e ordena pela data de criação nos dois sentidos", async () => {
+    const ctx = await arrancar();
+    const base = 980000 + Math.floor(Math.random() * 1000);
+    const ids = [base, base + 1, base + 2];
+    for (const [i, id] of ids.entries()) {
+      await ctx.db.query(
+        `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime)
+         VALUES ($1, $2, 'Ordem', $3, $4, '912000000', 'Formação de Formadores - CCP', 125, '1º Contacto', 'gold')`,
+        [id, `2031-01-0${i + 1} 10:00`, `T${i}`, `ordem.${id}@exemplo.pt`]);
+    }
+    await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, 'comprovativo', 'c.pdf', 'pendente')", [ids[1]]);
+    const lista = async (dir: string) => (await pedido(ctx, "admin", "GET", `/v1/crm/leads?regime=gold&q=Ordem&sort=inscrito&dir=${dir}`)).json().items as { id: number; comprovativoPorValidar: boolean }[];
+    const desc = await lista("desc");
+    expect(desc.map(l => l.id)).toEqual([...ids].reverse());
+    expect(desc.find(l => l.id === ids[1])!.comprovativoPorValidar).toBe(true);
+    expect(desc.find(l => l.id === ids[0])!.comprovativoPorValidar).toBe(false);
+    expect((await lista("asc")).map(l => l.id)).toEqual(ids);
+    // Validado: deixa de estar por validar.
+    await ctx.db.query("UPDATE preinscricao_docs SET estado = 'validado' WHERE preinscricao_id = $1", [ids[1]]);
+    expect((await lista("desc")).find(l => l.id === ids[1])!.comprovativoPorValidar).toBe(false);
+  });
+});

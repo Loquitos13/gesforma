@@ -67,7 +67,8 @@ export async function montarFicha(db: Db, regime: Regime, id: number) {
     const linhas = await docsDoFormando(db, "gold", id);
     const porId = new Map(linhas.map(l => [l.doc_id, l]));
     const defs = await docsDefinidosDoFormando(db, "gold", id, row as Record<string, unknown>);
-    const ids = [...defs.map(d => d.id), ...linhas.map(l => l.doc_id).filter(d => !defs.some(b => b.id === d))];
+    // Só a lista da ficha: os documentos fora dela com ficheiro já vêm na lista (opcionais); os outros não aparecem.
+    const ids = defs.map(d => d.id);
     documentos = ids.map(docId => {
       const def = defs.find(d => d.id === docId);
       const l = porId.get(docId);

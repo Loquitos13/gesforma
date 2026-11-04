@@ -38,6 +38,20 @@ function listaGuardada(v: unknown): DefDocFormando[] | null {
   });
 }
 
+/**
+ * Fichas sem lista guardada (anteriores à Nova ficha com documentos do curso): seguem os documentos activos da ficha do
+ * curso (os desmarcados não aparecem). Só continua obrigatório o que já o era na lista do regime e no curso; o que o
+ * curso acrescentou fica opcional nestas fichas. Curso sem lista própria: a lista do regime.
+ */
+async function listaDeFichaAntiga(db: Db, regime: "gold" | "fin", curso: string): Promise<DefDocFormando[]> {
+  const fixa = listaFixa(regime);
+  if (!curso.trim()) return fixa;
+  const doCurso = await docsDoCurso(db, curso, regime).catch(() => []);
+  if (!doCurso.length) return fixa;
+  const obrigatoriosAntes = new Set(fixa.filter(d => d.required).map(d => d.id));
+  return doCurso.map(d => ({ id: d.id, label: d.label, required: obrigatoriosAntes.has(d.id) && d.required && !d.gatilho }));
+}
+
 /** Guarda na ficha a lista de documentos do curso de agora (Nova ficha). Sem documentos no curso, fica a lista fixa. */
 export async function guardarDocsDoCursoNaFicha(db: Db, regime: "gold" | "fin", formandoId: number, curso: string) {
   const lista = await docsDoCursoParaFicha(db, regime, curso);
@@ -52,9 +66,16 @@ export async function docsDefinidosDoFormando(
 ): Promise<DefDocFormando[]> {
   const f = row ?? await linhaFormando(db, regime, formandoId) as Record<string, unknown> | null;
   const guardada = listaGuardada(f?.docs_lista);
-  const base = guardada ?? listaFixa(regime);
-  const outros = await many<{ doc_id: string; rotulo: string }>(db,
-    `SELECT doc_id, COALESCE(rotulo, '') AS rotulo FROM formando_docs
-      WHERE regime = $1 AND formando_id = $2 AND doc_id LIKE 'outro-%' ORDER BY updated_at, doc_id`, [regime, formandoId]);
-  return [...base, ...outros.map(o => ({ id: o.doc_id, label: o.rotulo || "Outro documento", required: false, outro: true }))];
+  const base = guardada ?? await listaDeFichaAntiga(db, regime, String(f?.curso ?? ""));
+  const linhas = await many<{ doc_id: string; rotulo: string; com_ficheiro: boolean }>(db,
+    `SELECT doc_id, COALESCE(rotulo, '') AS rotulo, (ok OR file_name <> '' OR COALESCE(drive_file_id, '') <> '') AS com_ficheiro
+       FROM formando_docs WHERE regime = $1 AND formando_id = $2 ORDER BY updated_at, doc_id`, [regime, formandoId]);
+  const ids = new Set(base.map(d => d.id));
+  const fixos = new Map(listaFixa(regime).map(d => [d.id, d.label]));
+  // Documentos que saíram da lista (ex.: desmarcados no curso) mas já têm ficheiro ou foram entregues: ficam, opcionais.
+  const entregues = linhas.filter(l => !l.doc_id.startsWith("outro-") && !ids.has(l.doc_id) && l.com_ficheiro)
+    .map(l => ({ id: l.doc_id, label: fixos.get(l.doc_id) ?? l.doc_id, required: false }));
+  const outros = linhas.filter(l => l.doc_id.startsWith("outro-"))
+    .map(o => ({ id: o.doc_id, label: o.rotulo || "Outro documento", required: false, outro: true }));
+  return [...base, ...entregues, ...outros];
 }

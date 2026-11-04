@@ -74,3 +74,30 @@ describe("nova ficha com os documentos do curso", () => {
     expect(fa.documentos.map(d => d.id)).toEqual(lista.map(d => d.id));
   });
 });
+
+describe("fichas já existentes (sem lista guardada)", () => {
+  it("seguem os documentos activos do curso: desmarcados não aparecem e o que o curso acrescentou fica opcional", async () => {
+    const id = 990000 + Math.floor(Math.random() * 9000);
+    const nome = `Curso Pré ${id}`;
+    await ctx.db.query("INSERT INTO cursos_gold (id, nome, categoria, tipo, preco, regime, horas, estado) VALUES ($1, $2, 'CCP', 'Pré-inscrição', 100, 'b-learning', 10, 'Ativo')", [id, nome]);
+    const put = await pedido(ctx, "admin", "PUT", `/v1/cursos/gold/${id}/docs-preinscricao`, {
+      ocultos: ["contrato", "regulamento", "pip"],
+      extra: [{ label: "Currículo", required: true }],
+      condicoes: { exp: { escolaridade: ["12.º ano"] } },
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    // Ficha antiga (sem lista guardada), já com o regulamento entregue.
+    const r = await pedido(ctx, "admin", "POST", "/v1/formandos-gold", { nome: "Ficha", apelido: "Antiga", email: `fa.${randomUUID().slice(0, 8)}@exemplo.pt`, curso: nome, valor: 100, semEmails: true });
+    const fid = r.json().formando.id as number;
+    expect((await carregar("gold", fid, "regulamento")).statusCode).toBe(404);
+    await ctx.db.query("INSERT INTO formando_docs (regime, formando_id, doc_id, ok, file_name) VALUES ('gold', $1, 'regulamento', true, 'reg.pdf')", [fid]);
+    const docs = (await ficha("gold", fid)).documentos;
+    const ids = docs.map(d => d.id);
+    expect(ids).not.toContain("contrato");
+    expect(ids).not.toContain("pip");
+    expect(docs.find(d => d.id === "regulamento")).toMatchObject({ required: false, estado: "validado" });
+    expect(docs.find(d => d.id === "cc")!.required).toBe(true);
+    expect(docs.find(d => d.label === "Currículo")!.required).toBe(false);
+    expect(docs.find(d => d.id === "exp")!.required).toBe(false);
+  });
+});

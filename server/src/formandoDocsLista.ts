@@ -79,3 +79,18 @@ export async function docsDefinidosDoFormando(
     .map(o => ({ id: o.doc_id, label: o.rotulo || "Outro documento", required: false, outro: true }));
   return [...base, ...entregues, ...outros];
 }
+
+/**
+ * Para a lista de formandos: os obrigatórios das fichas sem lista guardada, por curso (a mesma regra da ficha). Chave:
+ * o nome do curso em minúsculas.
+ */
+export async function obrigatoriosDasFichasAntigas(db: Db, regime: "gold" | "fin") {
+  const tabela = regime === "fin" ? "formandos_fin" : "formandos_gold";
+  const cursos = await many<{ curso: string }>(db,
+    `SELECT DISTINCT lower(trim(curso)) AS curso FROM ${tabela} WHERE docs_lista IS NULL AND trim(COALESCE(curso, '')) <> ''`);
+  const out: Record<string, string[]> = {};
+  for (const { curso } of cursos) {
+    out[curso] = (await listaDeFichaAntiga(db, regime, curso)).filter(d => d.required).map(d => d.id);
+  }
+  return out;
+}

@@ -73,23 +73,22 @@ function base(regime: Regime) {
                  ${gold ? "f.metodo" : "'Financiada'"} AS metodo,
                  ${gold ? SITUACAO : "'isento'"} AS situacao_pagamento,
                  (f.user_id IS NOT NULL) AS tem_acesso,
-                 -- Fichas da Nova ficha guardam os documentos do curso (docs_lista): contam os obrigatórios dessa lista;
-                 -- as outras, a lista fixa do regime ($1, $2).
-                 CASE WHEN jsonb_typeof(f.docs_lista) = 'array'
-                      THEN (SELECT count(*)::int FROM jsonb_array_elements(f.docs_lista) e WHERE (e->>'required')::boolean)
-                      ELSE $2::int END AS docs_total,
+                 jsonb_array_length(ob.ids) AS docs_total,
                  (SELECT count(*)::int FROM formando_docs d
                    WHERE d.regime = '${regime}' AND d.formando_id = f.id AND d.estado = 'validado'
-                     AND CASE WHEN jsonb_typeof(f.docs_lista) = 'array'
-                              THEN EXISTS (SELECT 1 FROM jsonb_array_elements(f.docs_lista) e WHERE (e->>'required')::boolean AND e->>'id' = d.doc_id)
-                              ELSE d.doc_id IN (SELECT jsonb_array_elements_text($1::jsonb)) END) AS docs_ok,
+                     AND d.doc_id IN (SELECT jsonb_array_elements_text(ob.ids))) AS docs_ok,
                  (SELECT count(*)::int FROM formando_docs d
                    WHERE d.regime = '${regime}' AND d.formando_id = f.id AND d.estado = 'recusado') AS docs_recusados
             FROM ${formandos} f
-            LEFT JOIN ${turmas} t ON t.id = f.turma_id`;
+            LEFT JOIN ${turmas} t ON t.id = f.turma_id
+            -- Obrigatórios da ficha, como na ficha: a lista guardada (Nova ficha); senão a regra das fichas antigas
+            -- por curso ($2, calculada em formandoDocsLista); senão a lista fixa do regime ($1).
+            CROSS JOIN LATERAL (SELECT CASE WHEN jsonb_typeof(f.docs_lista) = 'array'
+              THEN (SELECT COALESCE(jsonb_agg(e->>'id'), '[]'::jsonb) FROM jsonb_array_elements(f.docs_lista) e WHERE (e->>'required')::boolean)
+              ELSE COALESCE($2::jsonb -> lower(trim(f.curso)), $1::jsonb) END AS ids) ob`;
 }
 
-/** Condição de cada separador (sobre a subconsulta `x`). `$2` é o número de documentos obrigatórios. */
+/** Condição de cada separador (sobre a subconsulta `x`). */
 function condSeparador(regime: Regime, separador: FiltrosFormandos["separador"]): string | null {
   const docsFalta = "x.docs_ok < x.docs_total";
   if (regime === "gold") {
@@ -116,8 +115,8 @@ const ORDEM: Record<string, string> = {
   id: "x.id",
 };
 
-function filtrosComuns(f: FiltrosFormandos, obrig: string[]) {
-  const w = new Filtros([JSON.stringify(obrig), obrig.length]);
+function filtrosComuns(f: FiltrosFormandos, obrig: string[], porCurso: Record<string, string[]>) {
+  const w = new Filtros([JSON.stringify(obrig), JSON.stringify(porCurso)]);
   const sep = condSeparador(f.regime, f.separador);
   if (sep) w.sempre(sep);
   const q = padraoPesquisa(f.q);
@@ -140,15 +139,18 @@ function filtrosComuns(f: FiltrosFormandos, obrig: string[]) {
 }
 
 /** Lista paginada com os totais de cada separador (para as contagens nos separadores). */
-export async function listarFormandos(c: Consulta, f: FiltrosFormandos): Promise<Pagina<LinhaFormando> & { contagens: Record<string, number> }> {
+/** `porCurso`: obrigatórios das fichas sem lista guardada, por curso (em minúsculas). */
+export async function listarFormandos(
+  c: Consulta, f: FiltrosFormandos, porCurso: Record<string, string[]> = {},
+): Promise<Pagina<LinhaFormando> & { contagens: Record<string, number> }> {
   const obrig = docsObrigatorios(f.regime);
-  const w = filtrosComuns(f, obrig);
+  const w = filtrosComuns(f, obrig, porCurso);
   const sql = `SELECT * FROM (${base(f.regime)}) x ${w.where}`;
   const pagina = await paginar<LinhaFormando>(c, sql, w.params, {
     pagina: f.pagina, porPagina: f.porPagina, ordem: ordenarPor(ORDEM, f.ordem, "x.id DESC"),
   });
   // Contagens dos separadores com os mesmos filtros, menos o separador.
-  const semSep = filtrosComuns({ ...f, separador: "todos" }, obrig);
+  const semSep = filtrosComuns({ ...f, separador: "todos" }, obrig, porCurso);
   const separadores = f.regime === "gold" ? ["turmas", "avulsos", "pendencias"] as const : ["elegiveis", "docs_em_falta"] as const;
   const partes = separadores.map(s => `count(*) FILTER (WHERE ${condSeparador(f.regime, s)})::int AS ${s}`);
   const cont = await one<Record<string, number>>(

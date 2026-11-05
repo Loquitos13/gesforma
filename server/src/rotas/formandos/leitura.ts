@@ -5,6 +5,7 @@ import { sincronizarDocsAntigosFin } from "../../formandoFinDocs.js";
 import { pode } from "../../permissoes/capacidades.js";
 import { readFormandoPii } from "../../pii.js";
 import { docsObrigatorios, listarFormandos } from "../../repos/formandos.js";
+import { obrigatoriosDasFichasAntigas } from "../../formandoDocsLista.js";
 import { idNum, paginacao, regime, regimeIdParam, textoQuery, validar } from "../../validacao.js";
 import type { Deps } from "../tipos.js";
 import { montarFicha } from "./ficha.js";
@@ -36,7 +37,7 @@ export function registarLeitura(app: FastifyInstance, deps: Deps) {
     if (q.regime === "fin") {
       await sincronizarDocsAntigosFin(db).catch(err => req.log.warn({ err }, "documentos antigos da Financiada por sincronizar"));
     }
-    const r = await listarFormandos(db, q);
+    const r = await listarFormandos(db, q, await obrigatoriosDasFichasAntigas(db, q.regime));
     return {
       ...r,
       docsObrigatorios: docsObrigatorios(q.regime).length,

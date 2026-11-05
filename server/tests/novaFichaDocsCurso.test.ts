@@ -99,6 +99,12 @@ describe("fichas já existentes (sem lista guardada)", () => {
     expect(docs.find(d => d.id === "cc")!.required).toBe(true);
     expect(docs.find(d => d.label === "Currículo")!.required).toBe(false);
     expect(docs.find(d => d.id === "exp")!.required).toBe(false);
+    // A lista de formandos conta como a ficha (as duas dizem o mesmo total).
+    const obrig = docs.filter(d => d.required).length;
+    const l = ((await pedido(ctx, "admin", "GET", `/v1/formandos?regime=gold&q=${encodeURIComponent(nome)}`)).json().linhas as { id: number; docs: { total: number; validados: number } }[])
+      .find(x => x.id === fid)!;
+    expect(l.docs.total).toBe(obrig);
+    expect(l.docs.validados).toBe(docs.filter(d => d.required && d.estado === "validado").length);
   });
 
   it("fotografia com a extensão errada entra pelo conteúdo; a lista conta os obrigatórios da ficha", async () => {

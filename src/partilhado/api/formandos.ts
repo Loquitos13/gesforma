@@ -169,6 +169,11 @@ export function apiRecusarDocFormando(regime: Regime, id: number, docId: string,
   return enviar.post<unknown>(`/v1/formandos/${regime}/${id}/documentos/${encodeURIComponent(docId)}/recusar`, { observacao });
 }
 
+/** Remove o ficheiro de um documento (volta a ficar em falta; sai da Drive). */
+export function apiRemoverDocFormando(regime: Regime, id: number, docId: string) {
+  return enviar.delete<{ ok: boolean }>(`/v1/formandos/${regime}/${id}/documentos/${encodeURIComponent(docId)}/ficheiro`);
+}
+
 /** Marca um documento como entregue (sem ficheiro no GesForma, ex.: em papel) ou retira a marca. */
 export function apiMarcarDocFormando(regime: Regime, id: number, docId: string, ok: boolean) {
   return enviar.put<{ ok: boolean }>(`/v1/formandos/${regime}/${id}/docs`, {

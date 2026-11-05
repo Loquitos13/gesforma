@@ -1,12 +1,12 @@
 import { useRef, useState } from "react";
 import {
-  apiAnexarOutroDocFormando, apiCarregarDocFormando, apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiSemEmailsFormando, apiValidarDocFormando,
+  apiAnexarOutroDocFormando, apiCarregarDocFormando, apiLembreteDocsFin, apiMarcarDocFormando, apiNotaFormando, apiRemoverDocFormando, apiSemEmailsFormando, apiValidarDocFormando,
   type DocFicha, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { toastOk } from "../../../partilhado/toastBus";
 import {
-  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, Cartao, Estado, Interruptor, Kpi, KpiFaixa, Vazio, data, dataHora, num,
+  AreaTexto, Aviso, Botao, BotaoLigacao, Campo, Cartao, ConfirmarPerigo, Estado, Interruptor, Kpi, KpiFaixa, Vazio, data, dataHora, num,
 } from "../../../partilhado/ui";
 import { ContratosFormando } from "../assinaturas/ContratosFormando";
 import { RecusarDoc } from "./fichaDialogos";
@@ -16,6 +16,8 @@ const INVALIDAR = ["formandos:"];
 
 export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormando; podeEditar: boolean }) {
   const [recusar, setRecusar] = useState<{ id: string; label: string } | null>(null);
+  const [remover, setRemover] = useState<{ id: string; label: string } | null>(null);
+  const removerDoc = useAccao((docId: string) => apiRemoverDocFormando(ficha.regime, ficha.id, docId), { invalidar: INVALIDAR, ok: "Ficheiro removido." });
   const validar = useAccao((docId: string) => apiValidarDocFormando(ficha.regime, ficha.id, docId), { invalidar: INVALIDAR, ok: "Documento validado." });
   const marcar = useAccao((docId: string, ok: boolean) => apiMarcarDocFormando(ficha.regime, ficha.id, docId, ok), {
     invalidar: INVALIDAR, ok: "Documento actualizado.",
@@ -49,6 +51,7 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
           onClick={() => { setAlvo(d.id); escolha.current?.click(); }}>
           {d.fileName ? "Substituir ficheiro" : "Carregar ficheiro"}
         </Botao>
+        {d.fileName && <Botao tamanho="sm" variante="fantasma" onClick={() => setRemover({ id: d.id, label: d.label })}>Remover</Botao>}
         {d.estado === "pendente" && <Botao tamanho="sm" variante="primario" aCarregar={validar.aCorrer} onClick={() => validar.correr(d.id)}>Validar</Botao>}
         {(d.estado === "pendente" || (d.estado === "validado" && !manual)) && (
           <Botao tamanho="sm" variante="fantasma" onClick={() => setRecusar({ id: d.id, label: d.label })}>Recusar</Botao>
@@ -133,6 +136,10 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
       )}
       <p className="m-0 px-5 py-3 border-t border-linha text-xs text-tinta-suave">Os documentos validados ficam no Drive: {pasta}.</p>
       <RecusarDoc alvo={recusar} onFechar={() => setRecusar(null)} ficha={ficha} />
+      <ConfirmarPerigo aberto={Boolean(remover)} onFechar={() => setRemover(null)} acao="Remover"
+        titulo={`Remover o ficheiro de «${remover?.label ?? ""}»?`}
+        descricao="O documento volta a ficar em falta e o ficheiro sai da Drive (se veio da pré-inscrição, fica lá)."
+        onConfirmar={async () => { if (remover) await removerDoc.correr(remover.id); setRemover(null); }} />
     </Cartao>
   );
 }

@@ -141,5 +141,13 @@ describe("fichas já existentes (sem lista guardada)", () => {
     expect(depois).not.toBe(antes);
     expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [antes])).rows).toHaveLength(0);
     expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [depois])).rows).toHaveLength(1);
+
+    // «Remover»: volta a ficar em falta e o ficheiro sai da Drive.
+    const rem = await pedido(ctx, "admin", "DELETE", `/v1/formandos/fin/${id}/documentos/cc/ficheiro`);
+    expect(rem.statusCode, rem.body).toBe(200);
+    expect((await ficha("fin", id)).documentos.find(d => d.id === "cc")!.estado).toBe("em_falta");
+    expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [depois])).rows).toHaveLength(0);
+    expect((await linha()).docs).toMatchObject({ validados: 1, total: 2 });
+    expect((await pedido(ctx, "admin", "DELETE", `/v1/formandos/fin/${id}/documentos/cc/ficheiro`)).statusCode).toBe(404);
   });
 });

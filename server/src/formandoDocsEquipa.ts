@@ -68,3 +68,24 @@ async function substituirFicheiroAnterior(db: Db, anterior: string, novo: { id: 
   const doWhatsapp = (await db.query("SELECT 1 FROM whatsapp_anexos WHERE drive_file_id = $1 LIMIT 1", [anterior])).rows.length > 0;
   if (!doWhatsapp) await apagarFicheiroSubstituido(db, anterior).catch(err => console.error("[drive] ficheiro substituído por apagar:", err));
 }
+
+/**
+ * «Remover»: o documento volta a ficar em falta (um «outro documento» sai da lista) e o ficheiro sai da Drive, se nada
+ * mais o usar (a pré-inscrição de onde veio ou um anexo do WhatsApp continuam com ele).
+ */
+export async function removerDocPelaEquipa(db: Db, regime: Regime, formandoId: number, docId: string, actor: { id: string; name: string }) {
+  const linha = (await db.query<{ drive_file_id: string | null; rotulo: string | null }>(
+    "DELETE FROM formando_docs WHERE regime = $1 AND formando_id = $2 AND doc_id = $3 RETURNING drive_file_id, rotulo", [regime, formandoId, docId])).rows[0];
+  if (!linha) return false;
+  if (regime === "fin" && !RE_DOC_OUTRO.test(docId)) await mergeDocsJson(db, formandoId, { [docId]: { ok: false, data: "" } });
+  const ficheiro = linha.drive_file_id ?? "";
+  if (ficheiro) {
+    const usado = (await db.query(
+      `SELECT 1 FROM formando_docs WHERE drive_file_id = $1
+       UNION ALL SELECT 1 FROM preinscricao_docs WHERE drive_file_id = $1
+       UNION ALL SELECT 1 FROM whatsapp_anexos WHERE drive_file_id = $1 LIMIT 1`, [ficheiro])).rows.length > 0;
+    if (!usado) await apagarFicheiroSubstituido(db, ficheiro).catch(err => console.error("[drive] ficheiro removido por apagar:", err));
+  }
+  await inserirNota(db, regime, formandoId, actor.name, actor.id, `Documento removido pela equipa · ${linha.rotulo || docId}`);
+  return true;
+}

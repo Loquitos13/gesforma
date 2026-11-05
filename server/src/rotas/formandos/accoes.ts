@@ -4,7 +4,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
 import { avisarRecusasFin } from "../../avisosDocumentos.js";
 import { config } from "../../config.js";
-import { carregarDocPelaEquipa } from "../../formandoDocsEquipa.js";
+import { carregarDocPelaEquipa, removerDocPelaEquipa } from "../../formandoDocsEquipa.js";
 import { docsDoCursoParaFicha } from "../../formandoDocsLista.js";
 import { recusarDocFormandoFin, validarDocFormandoFin, vistaDocumentosFormandoFin } from "../../formandoFinDocs.js";
 import { nextOpsId } from "../../ops.js";
@@ -136,6 +136,16 @@ export function registarAccoes(app: FastifyInstance, deps: Deps) {
     if (!r.ok) return reply.code(r.status).send({ error: r.error });
     await audit(db, req.actor!.id, "formando.doc_carregado", `formandos_${regime}`, String(id), req.ip, { docId });
     return { ok: true, nome: r.nome };
+  });
+
+  // Remover o ficheiro de um documento (carregado por engano): volta a ficar em falta e sai da Drive.
+  app.delete("/v1/formandos/:regime/:id/documentos/:docId/ficheiro", async (req, reply) => {
+    const v = validar(reply, { params: docParam }, req);
+    if (!v || !equipa(req, reply, v.params.regime)) return;
+    const { regime, id, docId } = v.params;
+    if (!await removerDocPelaEquipa(db, regime, id, docId, { id: req.actor!.id, name: req.actor!.name })) return reply.code(404).send({ error: "documento inexistente" });
+    await audit(db, req.actor!.id, "formando.doc_removido", `formandos_${regime}`, String(id), req.ip, { docId });
+    return { ok: true };
   });
 
   // Validar / recusar um documento enviado (Gold e Financiada).

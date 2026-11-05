@@ -306,6 +306,10 @@ describe("Gold ou Financiada", () => {
 
     const fin = (await listCursosOferta(ctx.db)).find(c => c.regime === "fin");
     if (!fin) return; // sem cursos financiados na base de testes, a lista acima chega
+    // Escolher um curso da lista dá a página dele no site (sem preços).
+    const pagina = (await handleWhatsappText(ctx.db, t, "1")).replies.join("\n");
+    expect(pagina).toMatch(/\/formacao\//);
+    expect(pagina).not.toMatch(/€/);
     const email = `wa.fin.${t}@exemplo.pt`;
     await handleWhatsappText(ctx.db, t, "1");
     for (const passo of ["fin", "Ana", "Reis", email, "Porto"]) await handleWhatsappText(ctx.db, t, passo);

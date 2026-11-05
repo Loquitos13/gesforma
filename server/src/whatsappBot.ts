@@ -4,6 +4,7 @@ import type { Db } from "./db/pool.js";
 import { mapPreinscricao } from "./ops.js";
 import { criarPreinscricaoPublica, politicaPrivacidade } from "./preinscricaoPublica.js";
 import { listarCatalogoPublico } from "./catalogoPublico.js";
+import { config } from "./config.js";
 import {
   filtrarOferta, fmtDataPt, listCursosGoldActivos, listCursosOferta, listOfertaFin, listOfertaGold, uniqueOferta, type OfertaTurma,
 } from "./ofertaGold.js";
@@ -16,12 +17,14 @@ import {
 } from "./repos/whatsapp.js";
 
 type Passo =
-  | "menu" | "regime" | "regimeLista" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "localFin" | "horario" | "data"
+  | "menu" | "regime" | "regimeLista" | "cursoSite" | "nome" | "apelido" | "email" | "concelho" | "curso" | "local" | "localFin" | "horario" | "data"
   | "consentimento";
 
 type Dados = {
   /** Gold (pago, com turma) ou Financiada (a turma é atribuída pela coordenação). */
   regime?: "gold" | "fin";
+  /** Lista de cursos mostrada (opção 3): o regime, para a escolha do curso dar a página certa. */
+  listaRegime?: "gold" | "fin";
   nome?: string;
   apelido?: string;
   email?: string;
@@ -85,6 +88,18 @@ function parseDados(raw: unknown): Dados {
     try { return JSON.parse(raw) as Dados; } catch { return {}; }
   }
   return {};
+}
+
+/** Página do curso no site (onde estão os locais, horários e preços), ou "" se o curso não está no catálogo. */
+async function paginaDoCurso(db: Db, regime: "gold" | "fin", curso: string) {
+  const chave = curso.trim().toLowerCase();
+  const c = (await listarCatalogoPublico(db)).cursos.find(x => x.regime === regime && x.titulo.trim().toLowerCase() === chave);
+  return c ? `${config.appOrigin.replace(/\/$/, "")}/formacao/${c.id}` : "";
+}
+
+/** Nomes da lista de cursos da opção 3 (sem preços: o preço depende do local e do horário). */
+async function nomesDaLista(db: Db, regime: "gold" | "fin") {
+  return regime === "gold" ? (await cursosActivos(db)).map(c => c.nome) : cursosFin(db);
 }
 
 async function cursosActivos(db: Db) {
@@ -345,15 +360,26 @@ export async function handleWhatsappText(
   } else if (passo === "regimeLista") {
     const regime = lerRegime(text);
     if (!regime) say(ESCOLHA_REGIME("Não percebi. Que cursos quer ver?"));
-    else if (regime === "gold") {
-      const cursos = await cursosActivos(db);
-      say(listaTexto("Cursos Gold:", cursos.map(c => `${c.nome} · € ${c.preco}`)).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
-      say("Esse valor é o do curso. O local ou o horário podem ter outro preço, e a inscrição fica com o que escolher.");
-      passo = "menu";
-    } else {
-      const cursos = await cursosFin(db);
-      say(listaTexto("Cursos de Formação Financiada:", cursos).replace("\n\nResponda com o número.", "\n\nPara se pré-inscrever, escreva *1*."));
-      passo = "menu";
+    else {
+      // Sem preços: depende do local e do horário. Escolher um curso dá a página dele no site.
+      const nomes = await nomesDaLista(db, regime);
+      say(listaNumerada(`${regime === "gold" ? "Cursos Gold" : "Cursos de Formação Financiada"}:\nEscolha um curso para ver a página dele no site (locais, horários e preços).`, nomes));
+      dados.listaRegime = regime;
+      passo = nomes.length ? "cursoSite" : "menu";
+    }
+  } else if (passo === "cursoSite") {
+    const regime = dados.listaRegime ?? "gold";
+    const nomes = await nomesDaLista(db, regime);
+    const n = Number(text);
+    const curso = Number.isInteger(n) && n >= 1 && n <= nomes.length ? nomes[n - 1]! : "";
+    dados = {};
+    passo = "menu";
+    if (!curso) say(MENU);
+    else {
+      const url = await paginaDoCurso(db, regime, curso);
+      say([curso, url,
+        regime === "gold" ? "O preço depende do local e do horário: na página vê os valores de cada um." : "",
+        "Para se pré-inscrever aqui, escreva *1*; para voltar ao início, *menu*."].filter(Boolean).join("\n\n"));
     }
   } else if (passo === "nome") {
     dados.nome = sanitizeHeader(text).slice(0, 80);
@@ -541,7 +567,8 @@ export async function handleWhatsappText(
         leadId = created.preinscricao.id;
         await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
         // A mesma resposta com email novo ou já conhecido (como o formulário do site): não confirma quem já está inscrito.
-        say(`${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}\nPreço: € ${turma.preco ?? "-"}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
+        const url = await paginaDoCurso(db, "gold", turma.curso);
+        say(`${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}${url ? `\n${url}` : ""}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
         passo = "menu";
         dados = {};
       }

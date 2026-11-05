@@ -208,8 +208,10 @@ function leadParaPre(l: Lead): Preinscricao {
 
 /** Pré-inscrições do curso da turma (candidatas a inscrever). Só carrega com o painel aberto. */
 export function useLeadsDoCurso(regime: Regime, curso: string | undefined, ativo: boolean) {
+  // Conta sem CRM: não vê as pré-inscrições (só inscreve à mão).
+  const { user } = useAuth();
   const { dados, aCarregar } = useRecurso(
-    ativo && curso ? `crm:leads:${regime}:curso:${curso}` : null,
+    ativo && curso && !user.semCrm ? `crm:leads:${regime}:curso:${curso}` : null,
     signal => apiLeads({ regime, curso, perPage: 100, sort: "inscrito", dir: "desc" }, signal),
   );
   return { leads: useMemo(() => (dados?.items ?? []).map(leadParaPre), [dados]), aCarregar };

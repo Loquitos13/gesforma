@@ -31,6 +31,8 @@ const criarSchema = z.object({
   role: z.enum(PERFIS).default("secretaria"),
   /** Perfil personalizado: os perfis que soma (pelo menos um). */
   perfis: z.array(z.enum(PERFIS_COMBINAVEIS)).max(4).optional(),
+  /** Sem acesso ao CRM nem aos avisos das pré-inscrições. */
+  semCrm: z.boolean().optional().default(false),
   active: z.boolean().optional().default(true),
   mustChangePassword: z.boolean().optional().default(true),
 }).refine(v => v.role !== "personalizado" || (v.perfis?.length ?? 0) > 0, { message: "Escolha pelo menos um perfil para o perfil personalizado.", path: ["perfis"] });
@@ -39,6 +41,7 @@ const alterarSchema = z.object({
   email: z.string().max(254).optional(),
   role: z.enum(PERFIS).optional(),
   perfis: z.array(z.enum(PERFIS_COMBINAVEIS)).max(4).optional(),
+  semCrm: z.boolean().optional(),
   active: z.boolean().optional(),
 }).refine(v => Object.keys(v).length > 0, { message: "sem alterações" });
 const passwordSchema = z.object({
@@ -61,6 +64,7 @@ function mapear(u: LinhaUtilizador) {
     perfis: u.role === "personalizado" ? perfisValidos(u.perfis) : [],
     active: u.active,
     mustChangePassword: Boolean(u.must_change_password),
+    semCrm: Boolean(u.sem_crm),
     created_at: u.created_at,
     last_login_at: u.last_login_at,
     sessions_open: Number(u.sessions_open) || 0,
@@ -115,7 +119,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = randomUUID();
     try {
       await criarUtilizador(db, {
-        id, name: v.body.name, email, passwordHash: await hashPassword(v.body.password), role: v.body.role, perfis: perfisValidos(v.body.perfis ?? []),
+        id, name: v.body.name, email, passwordHash: await hashPassword(v.body.password), role: v.body.role, perfis: perfisValidos(v.body.perfis ?? []), semCrm: v.body.semCrm,
         active: v.body.active, mustChangePassword: v.body.mustChangePassword,
       });
     } catch (err) {

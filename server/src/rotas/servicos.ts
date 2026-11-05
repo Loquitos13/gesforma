@@ -178,7 +178,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`, [p.nome, p.empresa, p.email, p.telefone, p.servico, p.mensagem, clienteId ?? null]);
     });
     // Aviso à equipa Gold (comerciais e coordenação pedagógica), não à administração.
-    for (const pessoa of await emailsDaEquipa(db, ["gold"])) {
+    for (const pessoa of await emailsDaEquipa(db, ["gold"], { crm: true })) {
       await enviarModelo(db, {
         tipo: "pedido_proposta", para: pessoa.email, nome: pessoa.nome, aviso: true,
         vars: {

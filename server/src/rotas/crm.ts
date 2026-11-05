@@ -137,6 +137,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const q = v.query.q ?? "";
     if (!q) return { q: "", kind: "nome", kindLabel: "nome", groups: [], total: 0 };
     const res = await globalSearch(db, q, 8, req.actor!);
+    // Sem CRM: a pesquisa não mostra pré-inscrições.
+    if (req.actor!.semCrm) {
+      res.groups = res.groups.filter(g => g.grupo !== "crm");
+      res.total = res.groups.reduce((n, g) => n + g.items.length, 0);
+    }
     const role = req.actor!.role;
     // O comercial só vende: encontra pré-inscrições, nunca formandos, formadores, cursos ou turmas.
     if (role === "comercial") {

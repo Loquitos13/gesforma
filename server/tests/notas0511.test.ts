@@ -74,3 +74,32 @@ describe("conta de formando com o email de alguém da equipa", () => {
     expect(r.json().error).toMatch(/Cátia Teste · conta de formando/);
   });
 });
+
+describe("conta sem acesso ao CRM", () => {
+  it("a coordenação sem CRM não entra nas pré-inscrições nem no WhatsApp, mas trata das turmas; e não recebe os avisos", async () => {
+    const ctx = await arrancar();
+    const { emailsDaEquipa } = await import("../src/equipaDestinatarios.js");
+    const id = ctx.userId.financiada;
+    const email = (await ctx.db.query<{ email: string }>("SELECT email FROM users WHERE id = $1", [id])).rows[0]!.email;
+    // Só o administrador muda a opção.
+    expect((await pedido(ctx, "financiada", "PATCH", `/v1/utilizadores/${id}`, { semCrm: true })).statusCode).toBe(403);
+    expect((await pedido(ctx, "admin", "PATCH", `/v1/utilizadores/${id}`, { semCrm: true })).statusCode).toBe(200);
+    try {
+      expect((await pedido(ctx, "financiada", "GET", "/v1/crm/leads?regime=fin")).statusCode).toBe(403);
+      expect((await pedido(ctx, "financiada", "GET", "/v1/crm/whatsapp/conversas")).statusCode).toBe(403);
+      expect((await pedido(ctx, "financiada", "GET", "/v1/alertas/documentos")).statusCode).toBe(403);
+      expect((await pedido(ctx, "financiada", "GET", "/v1/turmas?regime=fin")).statusCode).toBe(200);
+      expect((await pedido(ctx, "financiada", "GET", "/v1/formandos?regime=fin")).statusCode).toBe(200);
+      const me = (await pedido(ctx, "financiada", "GET", "/v1/me")).json() as { user: { semCrm: boolean }; pode: string[] };
+      expect(me.user.semCrm).toBe(true);
+      expect(me.pode.some(c => /^(crm|whatsapp)\./.test(c))).toBe(false);
+      expect(me.pode).toContain("fin.ver");
+      // Os avisos do CRM não lhe chegam; os outros sim.
+      expect((await emailsDaEquipa(ctx.db, ["fin"], { crm: true })).some(p => p.email === email)).toBe(false);
+      expect((await emailsDaEquipa(ctx.db, ["fin"])).some(p => p.email === email)).toBe(true);
+    } finally {
+      await pedido(ctx, "admin", "PATCH", `/v1/utilizadores/${id}`, { semCrm: false });
+    }
+    expect((await pedido(ctx, "financiada", "GET", "/v1/crm/leads?regime=fin")).statusCode).toBe(200);
+  });
+});

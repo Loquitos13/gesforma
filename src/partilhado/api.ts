@@ -7,7 +7,7 @@ export * from "./api/publico";
 
 export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando" | "personalizado";
 /** `perfis`: no perfil personalizado, os perfis que a pessoa soma. */
-export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; perfis?: string[]; mustChangePassword?: boolean };
+export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; perfis?: string[]; mustChangePassword?: boolean; /** Sem acesso ao CRM. */ semCrm?: boolean };
 
 export type DriveStatus = {
   configured: boolean;

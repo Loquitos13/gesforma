@@ -7,7 +7,7 @@ import { cx } from "../../partilhado/ui";
 import type { Destino, Vista } from "../rotasGesforma";
 import { TAREFAS, destinoTarefa } from "../vistas/painel/painelDados";
 import { Icone } from "./Icones";
-import { chaveDoPerfil, perfisDaChave, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
+import { chaveDoPerfil, perfisDaChave, semMarcaCrm, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
 
 type Linha = { tipo: string; nome: string; sub: string; grupo?: string } & Destino;
 
@@ -34,7 +34,7 @@ function regimesDoPerfil(role: string): RegimePainel[] {
 /** Atalhos do dia: as filas de "a tratar hoje" dos painéis, só as que têm trabalho. */
 function useAtalhosDoDia(aberta: boolean): Linha[] {
   const { user } = useAuth();
-  const regimes = regimesDoPerfil(chaveDoPerfil(user));
+  const regimes = regimesDoPerfil(semMarcaCrm(chaveDoPerfil(user)));
   const { dados } = useRecurso(
     aberta && regimes.length ? `pesquisa:atalhos:${regimes.join(",")}` : null,
     signal => Promise.all(regimes.map(r => apiPainel(r, {}, signal).then(p => ({ regime: r, tarefas: p.aTratar })).catch(() => ({ regime: r, tarefas: [] })))),

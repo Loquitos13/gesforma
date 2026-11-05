@@ -55,23 +55,35 @@ function EscolherPerfil({ valor, onMudar, desativado, perfis, onPerfis }: {
   );
 }
 
+/** «Sem acesso ao CRM»: só para os perfis da equipa que têm CRM (não a administração, os formadores nem os formandos). */
+const COM_CRM = new Set(["secretaria", "financiada", "comercial", "personalizado"]);
+
+function CaixaSemCrm({ role, valor, onMudar }: { role: string; valor: boolean; onMudar: (v: boolean) => void }) {
+  if (!COM_CRM.has(role)) return null;
+  return (
+    <Caixa rotulo="Sem acesso ao CRM" checked={valor} onChange={e => onMudar(e.target.checked)}
+      ajuda="Não vê as pré-inscrições, o WhatsApp, os clientes, os parceiros nem os contratos, e não recebe os avisos das pré-inscrições. Turmas e formandos ficam como no perfil." />
+  );
+}
+
 const iguais = (a: readonly string[], b: readonly string[]) => [...a].sort().join(",") === [...b].sort().join(",");
 
 export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar: () => void; perfilInicial?: PerfilUtilizador | "" }) {
   const { user: eu } = useAuth();
   const { dados, erro, recarregar } = useRecurso(id ? `utilizadores:ficha:${id}` : null, signal => apiUtilizador(id!, signal));
   const u = dados?.user;
-  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[] });
+  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[], semCrm: false });
   const [palavraPasse, setPalavraPasse] = useState(false);
   const [apagar, setApagar] = useState(false);
   const [desactivar, setDesactivar] = useState(false);
-  useEffect(() => { if (u) setF({ name: u.name, email: u.email, role: u.role, perfis: u.perfis ?? [] }); }, [u]);
+  useEffect(() => { if (u) setF({ name: u.name, email: u.email, role: u.role, perfis: u.perfis ?? [], semCrm: Boolean(u.semCrm) }); }, [u]);
 
   const gravar = useAccao(apiAlterarUtilizador, { ok: "Dados do utilizador actualizados.", invalidar: INVALIDAR });
   const terminar = useAccao(apiTerminarSessoes, { ok: r => `${num(r.terminadas)} sessão(ões) terminada(s).`, invalidar: INVALIDAR });
   const remover = useAccao(apiApagarUtilizador, { ok: "Utilizador eliminado.", invalidar: INVALIDAR });
   const propria = u?.id === eu.id;
-  const mudou = u && (f.name !== u.name || f.email !== u.email || f.role !== u.role || (f.role === "personalizado" && !iguais(f.perfis, u.perfis ?? [])));
+  const semCrm = COM_CRM.has(f.role) && f.semCrm;
+  const mudou = u && (f.name !== u.name || f.email !== u.email || f.role !== u.role || semCrm !== Boolean(u.semCrm) || (f.role === "personalizado" && !iguais(f.perfis, u.perfis ?? [])));
   const perfisOk = f.role !== "personalizado" || f.perfis.length > 0;
 
   return (
@@ -88,7 +100,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
             {u.active ? "Desactivar" : "Activar"}
           </Botao>
           <Botao variante="primario" disabled={!mudou || !perfisOk || f.name.trim().length < 2} aCarregar={gravar.aCorrer}
-            onClick={() => void gravar.correr(u.id, { name: f.name.trim(), email: f.email.trim(), role: f.role, ...(f.role === "personalizado" ? { perfis: f.perfis } : {}) }).then(() => recarregar())}>
+            onClick={() => void gravar.correr(u.id, { name: f.name.trim(), email: f.email.trim(), role: f.role, semCrm, ...(f.role === "personalizado" ? { perfis: f.perfis } : {}) }).then(() => recarregar())}>
             Guardar
           </Botao>
         </>
@@ -102,6 +114,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
             {a => <Entrada {...a} type="email" value={f.email} maxLength={254} onChange={e => setF({ ...f, email: e.target.value })} />}
           </Campo>
           <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} desativado={propria} perfis={f.perfis} onPerfis={perfis => setF({ ...f, perfis })} />
+          <CaixaSemCrm role={f.role} valor={f.semCrm} onMudar={v => setF({ ...f, semCrm: v })} />
           {u.role === "formando" && f.role !== "formando" && (
             <Aviso tom="aviso">Esta é uma conta de formando. Com um perfil da equipa passa a entrar no GesForma e deixa de entrar na área do formando.</Aviso>
           )}
@@ -160,12 +173,12 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
 }
 
 export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: boolean; onFechar: (id?: string) => void; perfilInicial: PerfilUtilizador | "" }) {
-  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[], password: "", mudar: true });
+  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[], password: "", mudar: true, semCrm: false });
   const [criada, setCriada] = useState<{ id: string; email: string; password: string } | null>(null);
   const criar = useAccao(apiCriarUtilizador, { ok: "Utilizador criado.", invalidar: INVALIDAR });
   useEffect(() => {
     if (aberto) {
-      setF({ name: "", email: "", role: perfilInicial || "secretaria", perfis: [], password: gerarPalavraPasse(), mudar: true });
+      setF({ name: "", email: "", role: perfilInicial || "secretaria", perfis: [], password: gerarPalavraPasse(), mudar: true, semCrm: false });
       setCriada(null);
     }
   }, [aberto, perfilInicial]);
@@ -174,7 +187,7 @@ export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: bo
 
   async function gravar() {
     const r = await criar.correr({
-      name: f.name.trim(), email: f.email.trim(), role: f.role, password: f.password, mustChangePassword: f.mudar,
+      name: f.name.trim(), email: f.email.trim(), role: f.role, password: f.password, mustChangePassword: f.mudar, semCrm: COM_CRM.has(f.role) && f.semCrm,
       ...(f.role === "personalizado" ? { perfis: f.perfis } : {}),
     });
     if (r) setCriada({ id: r.user.id, email: r.user.email, password: f.password });
@@ -206,6 +219,7 @@ export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: bo
             </Campo>
           </div>
           <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} perfis={f.perfis} onPerfis={perfis => setF({ ...f, perfis })} />
+          <CaixaSemCrm role={f.role} valor={f.semCrm} onMudar={v => setF({ ...f, semCrm: v })} />
           <Campo rotulo="Palavra-passe temporária" obrigatorio erro={erroPass}>
             {a => (
               <div className="flex gap-2">

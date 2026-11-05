@@ -89,12 +89,25 @@ export const VISTAS_FORMADOR = new Set<Vista>(["formador-turmas", "formador-cale
  * Perfil personalizado: a «chave» do perfil leva os perfis somados («personalizado:secretaria,contabilidade»). As funções
  * deste ficheiro recebem a chave e somam os menus e as vistas de cada perfil.
  */
-export function chaveDoPerfil(u: { role: string; perfis?: readonly string[] | null }) {
-  return u.role === "personalizado" ? `personalizado:${(u.perfis ?? []).join(",")}` : u.role;
+export function chaveDoPerfil(u: { role: string; perfis?: readonly string[] | null; semCrm?: boolean }) {
+  const base = u.role === "personalizado" ? `personalizado:${(u.perfis ?? []).join(",")}` : u.role;
+  // Conta sem CRM (ex.: coordenação que só trata das turmas e dos formandos): a chave leva a marca.
+  return u.semCrm && u.role !== "formador" && u.role !== "formando" ? `${base}${SEM_CRM}` : base;
 }
+
+const SEM_CRM = "|sem-crm";
+const temSemCrm = (role: string) => role.endsWith(SEM_CRM);
+/** A chave sem a marca «sem CRM». */
+export function semMarcaCrm(role: string) {
+  return temSemCrm(role) ? role.slice(0, -SEM_CRM.length) : role;
+}
+
+/** Vistas do CRM (pré-inscrições, clientes, parceiros, contratos, WhatsApp): as do submenu «CRM». */
+const VISTAS_CRM = new Set<Vista>(MENU.flatMap(g => g.items.filter(i => i.label === "CRM").flatMap(i => i.children?.map(c => c.view) ?? [])));
 
 /** Os perfis por trás da chave (um só, fora do perfil personalizado). */
 export function perfisDaChave(role: string): string[] {
+  role = semMarcaCrm(role);
   return role.startsWith("personalizado:") ? role.slice("personalizado:".length).split(",").filter(Boolean) : [role];
 }
 
@@ -120,6 +133,10 @@ function somarMenus(menus: GrupoMenu[][]): GrupoMenu[] {
 }
 
 export function painelDoPerfil(role: string): Vista {
+  if (temSemCrm(role)) {
+    const p = painelDoPerfil(semMarcaCrm(role));
+    return VISTAS_CRM.has(p) ? (p.startsWith("fin-") ? "fin-turmas" : "gold-turmas") : p;
+  }
   if (ePersonalizado(role)) {
     const perfis = perfisDaChave(role);
     // Começa no ecrã do primeiro perfil da Gold/Financiada que tiver; só contabilidade, nos pagamentos.
@@ -165,6 +182,11 @@ function soVendas(g: GrupoMenu): GrupoMenu {
 }
 
 export function menuDoPerfil(role: string): GrupoMenu[] {
+  if (temSemCrm(role)) {
+    return menuDoPerfil(semMarcaCrm(role))
+      .map(g => ({ ...g, items: g.items.filter(i => i.label !== "CRM" && !(i.view && VISTAS_CRM.has(i.view))) }))
+      .filter(g => g.items.length);
+  }
   if (ePersonalizado(role)) return somarMenus(perfisDaChave(role).map(p => menuDoPerfil(p)));
   if (role === "formador") return [MENU_FORMADOR];
   if (role === "comercial") return MENU.map(soVendas).filter(g => g.items.length);
@@ -189,6 +211,7 @@ const VISTAS_LIVRES = new Set<Vista>(["notificacoes"]);
  */
 export function vistaNoMenuDoPerfil(role: string, v: Vista): boolean {
   if (VISTAS_LIVRES.has(v)) return true;
+  if (temSemCrm(role)) return !VISTAS_CRM.has(vistaDoMenu(v)) && vistaNoMenuDoPerfil(semMarcaCrm(role), v);
   if (ePersonalizado(role)) return perfisDaChave(role).some(p => vistaNoMenuDoPerfil(p, v));
   if (role === "comercial") return comercialAbre(v);
   // Os cronogramas (só leitura) abrem-se pelo endereço a quem vê as turmas Gold.

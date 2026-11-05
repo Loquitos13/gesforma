@@ -14,13 +14,15 @@ export type LinhaUtilizador = {
   perfis: string[];
   active: boolean;
   must_change_password: boolean;
+  /** Sem acesso ao CRM nem aos avisos das pré-inscrições. */
+  sem_crm: boolean;
   created_at: string;
   last_login_at: string | null;
   sessions_open: number;
 };
 
 const SELECT = `
-  SELECT u.id, u.name, u.email, u.role, COALESCE(u.perfis, '{}') AS perfis, u.active, COALESCE(u.must_change_password, false) AS must_change_password,
+  SELECT u.id, u.name, u.email, u.role, COALESCE(u.perfis, '{}') AS perfis, u.active, COALESCE(u.must_change_password, false) AS must_change_password, COALESCE(u.sem_crm, false) AS sem_crm,
          u.created_at::text AS created_at,
          (SELECT max(s.created_at)::text FROM sessions s WHERE s.user_id = u.id) AS last_login_at,
          (SELECT count(*)::int FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS sessions_open
@@ -66,23 +68,24 @@ export function utilizadorPorEmail(c: Consulta, email: string) {
 }
 
 export async function criarUtilizador(c: Consulta, u: {
-  id: string; name: string; email: string; passwordHash: string; role: PerfilUtilizador; active: boolean; mustChangePassword: boolean;
+  id: string; name: string; email: string; passwordHash: string; role: PerfilUtilizador; active: boolean; mustChangePassword: boolean; semCrm?: boolean;
   perfis?: string[];
 }) {
   await one(
     c,
-    "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password, perfis) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[])",
-    [u.id, u.name, u.email, u.passwordHash, u.role, u.active, u.mustChangePassword, `{${(u.role === "personalizado" ? u.perfis ?? [] : []).join(",")}}`],
+    "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password, perfis, sem_crm) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[], $9)",
+    [u.id, u.name, u.email, u.passwordHash, u.role, u.active, u.mustChangePassword, `{${(u.role === "personalizado" ? u.perfis ?? [] : []).join(",")}}`, Boolean(u.semCrm)],
   );
 }
 
-export async function actualizarUtilizador(c: Consulta, id: string, p: { name?: string; email?: string; role?: string; active?: boolean; perfis?: string[] }) {
+export async function actualizarUtilizador(c: Consulta, id: string, p: { name?: string; email?: string; role?: string; active?: boolean; perfis?: string[]; semCrm?: boolean }) {
   await one(
     c,
     `UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email), role = COALESCE($4, role), active = COALESCE($5, active),
-            perfis = CASE WHEN COALESCE($4, role) <> 'personalizado' THEN '{}'::text[] ELSE COALESCE($6::text[], perfis) END
+            perfis = CASE WHEN COALESCE($4, role) <> 'personalizado' THEN '{}'::text[] ELSE COALESCE($6::text[], perfis) END,
+            sem_crm = COALESCE($7, sem_crm)
       WHERE id = $1`,
-    [id, p.name ?? null, p.email ?? null, p.role ?? null, p.active ?? null, p.perfis ? `{${p.perfis.join(",")}}` : null],
+    [id, p.name ?? null, p.email ?? null, p.role ?? null, p.active ?? null, p.perfis ? `{${p.perfis.join(",")}}` : null, p.semCrm ?? null],
   );
 }
 

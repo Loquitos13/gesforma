@@ -31,7 +31,7 @@ declare module "fastify" {
      * `role`: o perfil com que este pedido corre. No perfil personalizado é um dos `perfis` marcados, escolhido para a
      * operação (ver permissoes/personalizado.ts); `perfil` fica com o perfil da conta («personalizado»).
      */
-    actor?: { id: string; email: string; name: string; role: string; perfil: string; perfis: string[]; mustChangePassword?: boolean };
+    actor?: { id: string; email: string; name: string; role: string; perfil: string; perfis: string[]; mustChangePassword?: boolean; semCrm?: boolean };
   }
 }
 
@@ -39,6 +39,11 @@ function clientOk(req: FastifyRequest) {
   const origin = req.headers.origin;
   if (origin) return allowedOrigins().has(origin);
   return req.headers["x-gesforma-client"] === "web";
+}
+
+/** Rotas do CRM: pré-inscrições, WhatsApp, clientes, parceiros, propostas, contratos e os alertas de documentos. */
+export function rotaDoCrm(path: string) {
+  return /^\/v1\/(crm|preinscricoes|alertas\/documentos)(\/|$)/.test(path);
 }
 
 export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
@@ -118,6 +123,7 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
           perfil: found.role,
           perfis,
           mustChangePassword: Boolean(found.must_change_password),
+          semCrm: Boolean(found.sem_crm),
         };
         enterActor({ id: found.id, role: req.actor.role });
       }
@@ -141,6 +147,10 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
     if (kind === "staff" && req.actor.role === "formando") {
       return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    }
+    // Conta sem CRM (ex.: coordenação que só trata das turmas e dos formandos): fora das pré-inscrições e do resto do CRM.
+    if (kind === "staff" && req.actor.semCrm && rotaDoCrm(path)) {
+      return reply.code(403).send({ error: "Esta conta não tem acesso ao CRM." });
     }
     if (kind === "staff" && req.actor.perfil === "personalizado") {
       // Soma de perfis: corre com o primeiro perfil marcado que pode fazer esta operação (do regime pedido, se houver)

@@ -37,7 +37,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
     </button>
   );
   const modalPasse = <AlterarPalavraPasse aberto={mudarPasse} onFechar={() => setMudarPasse(false)} />;
-  const menu = useMemo(() => menuDoPerfil(chaveDoPerfil(user)), [user.role, user.perfis]);
+  const menu = useMemo(() => menuDoPerfil(chaveDoPerfil(user)), [user.role, user.perfis, user.semCrm]);
   // Conversas de WhatsApp com mensagens por ler: contador no «WhatsApp» (e no «CRM» fechado).
   const pendentes = useWhatsappPendentes();
   const contadorDe = (v?: Vista) => (v === "gold-whatsapp" ? pendentes.gold : v === "fin-whatsapp" ? pendentes.fin : 0);

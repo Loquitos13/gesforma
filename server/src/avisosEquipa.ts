@@ -45,7 +45,7 @@ export async function avisarDocumentoRecebido(
   };
   for (const regra of await regrasActivasPara(db, [evento], area)) {
     const grupos = regra.destinatarios?.length ? regra.destinatarios : gruposPorOmissao(evento, area);
-    for (const pessoa of await emailsDaEquipa(db, grupos)) {
+    for (const pessoa of await emailsDaEquipa(db, grupos, { crm: true })) {
       await ingestEvent(db, evento,
         { email: pessoa.email, nome: pessoa.nome, curso: String(lead.curso ?? ""), regime },
         `${opts.comprovativo ? "comprovativo" : "docrecebido"}:${id}:${documento}:${ficheiroId}:${regra.id}:${pessoa.email}`.slice(0, 200),
@@ -96,7 +96,7 @@ export async function avisarWhatsappHumano(db: Db, p: { telefone: string; nome: 
   const telefone = p.telefone.startsWith("351") ? `+351 ${p.telefone.slice(3)}` : `+${p.telefone}`;
   const nome = p.nome || telefone;
   const grupos = p.regime ? [p.regime] : ["gold", "fin"];
-  for (const pessoa of await emailsDaEquipa(db, grupos)) {
+  for (const pessoa of await emailsDaEquipa(db, grupos, { crm: true })) {
     await enviarModelo(db, {
       tipo: "aviso_whatsapp_humano", area: p.regime ?? "gold", para: pessoa.email, nome: pessoa.nome, aviso: true,
       vars: { nome_contacto: nome, telefone, mensagem: p.mensagem, assunto: p.mensagem },

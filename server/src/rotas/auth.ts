@@ -109,7 +109,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!requireAuth(req, reply, { formando: true })) return;
     // Personalizado: o perfil da conta, os perfis marcados e a soma das capacidades (o menu mostra tudo).
     const a = req.actor!;
-    return { user: { ...a, role: a.perfil, perfis: a.perfis }, pode: capacidadesDe(a.perfis) };
+    // Sem CRM: sem as capacidades do CRM nem do WhatsApp (o menu esconde-o).
+    const pode = capacidadesDe(a.perfis).filter(c => !(a.semCrm && /^(crm|whatsapp)\./.test(c)));
+    return { user: { ...a, role: a.perfil, perfis: a.perfis }, pode };
   });
 
   // ─── OAuth: entrar com Google ou Microsoft (só contas que já existem) ─────────

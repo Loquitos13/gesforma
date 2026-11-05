@@ -139,6 +139,11 @@ describe("perfil personalizado", () => {
     expect((await cc("GET", `/v1/drive/files/${fGold}`)).statusCode).toBe(200);
     expect((await pedido(ctx, "secretaria", "GET", `/v1/drive/files/${fFin}`)).statusCode).toBe(404);
 
+    // Formadores: cada regime com o seu perfil.
+    expect((await sf("GET", "/v1/formadores?regime=gold")).statusCode).toBe(200);
+    expect((await sf("GET", "/v1/formadores?regime=fin")).statusCode).toBe(200);
+    expect((await cf("GET", "/v1/formadores?regime=fin")).statusCode).toBe(200);
+
     // 4. Emails automáticos: as áreas dos dois perfis.
     const areas = (await fc("GET", "/v1/email/templates")).json();
     const areasVistas = new Set(((areas.templates ?? areas.modelos ?? []) as { area: string }[]).map(t => t.area));

@@ -323,6 +323,21 @@ describe("Gold ou Financiada", () => {
   });
 });
 
+describe("caixa de conversas", () => {
+  it("as conversas com mensagens mais recentes ficam em cima, mesmo as que estão com a equipa", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const antiga = tel();
+    const nova = tel();
+    await handleWhatsappText(ctx.db, antiga, "4"); // com a equipa
+    await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/responder", { telefone: antiga, texto: "Olá!" });
+    await ctx.db.query("UPDATE whatsapp_mensagens SET created_at = created_at - interval '1 hour' WHERE telefone = $1", [antiga]);
+    await handleWhatsappText(ctx.db, nova, "olá");
+    const ordem = (await pedido(ctx, "comercial", "GET", "/v1/crm/whatsapp/conversas")).json().conversas
+      .map((c: { telefone: string }) => c.telefone).filter((x: string) => x === antiga || x === nova);
+    expect(ordem).toEqual([nova, antiga]);
+  });
+});
+
 describe("pedidos à espera (contador e alerta)", () => {
   it("o pedido aparece até a equipa responder; volta se a pessoa escrever outra vez; sai ao fechar", async () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");

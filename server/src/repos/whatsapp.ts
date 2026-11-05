@@ -119,10 +119,10 @@ export function conversasWhatsapp(c: Consulta, limite = 200) {
             (SELECT count(*)::int FROM whatsapp_mensagens m WHERE m.telefone = u.telefone AND m.direccao = 'in'
                AND m.created_at > COALESCE(s.lida_em, '-infinity'::timestamptz)) AS por_ler
        FROM ult u LEFT JOIN whatsapp_sessoes s ON s.telefone = u.telefone
-      ORDER BY (s.fechada_em IS NULL) DESC,
-               (s.humano_desde IS NOT NULL AND s.humano_desde > now() - make_interval(hours => $2)) DESC, u.created_at DESC
+      -- As mais recentes em cima (abertas e fechadas ficam em separadores; os pedidos à espera têm o seu sinal).
+      ORDER BY (s.fechada_em IS NULL) DESC, u.created_at DESC
       LIMIT $1`,
-    [limite, HUMANO_EXPIRA_HORAS],
+    [limite],
   );
 }
 

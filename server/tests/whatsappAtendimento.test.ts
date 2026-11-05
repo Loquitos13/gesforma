@@ -323,6 +323,19 @@ describe("Gold ou Financiada", () => {
   });
 });
 
+describe("estado do pedido", () => {
+  it("quem já tem pedido recebe a confirmação, sem os dados do pedido", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    await ctx.db.query(`INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, estado, regime)
+      VALUES ($1, '2031-01-01 10:00', 'Rui', 'Q', $2, $3, 'Formação de Formadores - CCP', '1º Contacto', 'gold')`,
+      [930000 + Math.floor(Math.random() * 9000), `e.${t}@exemplo.pt`, t.slice(-9)]);
+    const r = (await handleWhatsappText(ctx.db, t, "2")).replies;
+    expect(r).toEqual([expect.stringMatching(/^A sua pré-inscrição já se encontra registada com sucesso\./)]);
+    expect(r.join("")).not.toMatch(/Pedido nº|Estado:|Curso:/);
+  });
+});
+
 describe("caixa de conversas", () => {
   it("as conversas com mensagens mais recentes ficam em cima, mesmo as que estão com a equipa", async () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");

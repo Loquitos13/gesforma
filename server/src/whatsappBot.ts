@@ -170,28 +170,8 @@ async function leadsPorTelefone(db: Db, telefone: string) {
   return rows.map(r => mapPreinscricao(r));
 }
 
-function textoEstado(lead: ReturnType<typeof mapPreinscricao>) {
-  const nome = `${lead.nome} ${lead.apelido}`.trim();
-  const linhas = [
-    `Pedido nº ${lead.id} · ${nome}`,
-    `Curso: ${lead.curso || "-"}`,
-    lead.local ? `Local: ${lead.local}` : "",
-    lead.horario ? `Horário: ${lead.horario}` : "",
-    lead.inicioCurso && lead.inicioCurso !== "-" ? `Início: ${fmtDataPt(lead.inicioCurso)}` : "",
-    `Estado: ${lead.estado}`,
-  ].filter(Boolean);
-  if (lead.estado === "Pago" || lead.estado === "Formando" || lead.estado === "Pré-inscrição") {
-    linhas.push(lead.estado === "Pré-inscrição"
-      ? "O pedido está na pré-inscrição. A secretaria trata da inscrição na turma."
-      : "A inscrição está confirmada do lado da secretaria. Qualquer dúvida, ligue para a ENA.");
-  } else if (lead.estado === "Não contactado") {
-    linhas.push("Ainda está na fila. A secretaria contacta-o em breve - não precisa de se pré-inscrever outra vez.");
-  } else {
-    linhas.push("Já houve contacto comercial. Se quiser actualizar dados, a secretaria trata disso.");
-  }
-  linhas.push("O pagamento não se confirma por aqui: a secretaria confirma-o quando recebe a transferência e o comprovativo.");
-  return linhas.join("\n");
-}
+/** Resposta a quem já tem pedido neste número (sem os dados do pedido: pareciam uma nota interna). */
+const PEDIDO_REGISTADO = "A sua pré-inscrição já se encontra registada com sucesso. Caso tenha alguma dúvida ou necessite de ajuda durante o processo de formalização da inscrição, não hesite em contactar-nos. Teremos todo o gosto em ajudar!";
 
 async function getSessao(db: Db, telefone: string) {
   const r = await sessaoWhatsapp(db, telefone);
@@ -336,8 +316,7 @@ export async function handleWhatsappText(
       const leads = await leadsPorTelefone(db, telefone);
       if (leads[0]) {
         leadId = leads[0].id;
-        say(textoEstado(leads[0]));
-        if (leads.length > 1) say(`Há mais ${leads.length - 1} pedido(s) neste número. A secretaria vê o histórico completo no CRM.`);
+        say(PEDIDO_REGISTADO);
         passo = "menu";
       } else {
         passo = "menu";

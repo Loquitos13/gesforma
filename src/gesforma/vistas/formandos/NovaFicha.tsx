@@ -12,7 +12,7 @@ import { Aviso, Botao, Caixa, Campo, Entrada, Modal, Selecao, Separadores } from
 type Pagamento = "por_pagar" | "pago" | "oferta";
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const ACEITA = "application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png";
+const ACEITA = "application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp";
 const semExtensao = (n: string) => n.replace(/\.[a-z0-9]{2,5}$/i, "");
 
 /**
@@ -127,10 +127,10 @@ export function NovaFicha({ aberto, onFechar, regime, onCriada }: {
       const falhas: string[] = [];
       for (const d of docsCurso) {
         const f = ficheiros[d.id];
-        if (f) await apiCarregarDocFormando(regime, id, d.id, f).catch(() => { falhas.push(d.label); });
+        if (f) await apiCarregarDocFormando(regime, id, d.id, f).catch((e: unknown) => { falhas.push(`${d.label} (${e instanceof Error ? e.message : "erro"})`); });
       }
       for (const o of outros) {
-        await apiAnexarOutroDocFormando(regime, id, o.ficheiro, o.nome.trim()).catch(() => { falhas.push(o.nome.trim()); });
+        await apiAnexarOutroDocFormando(regime, id, o.ficheiro, o.nome.trim()).catch((e: unknown) => { falhas.push(`${o.nome.trim()} (${e instanceof Error ? e.message : "erro"})`); });
       }
       if (falhas.length) toastError(new Error(`Não foi possível carregar: ${falhas.join(", ")}. Carregue-os na ficha.`), "Documentos por carregar.");
       if (!gold && turma) {

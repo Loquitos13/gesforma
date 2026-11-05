@@ -47,6 +47,7 @@ export type LinhaFormando = {
   situacao_pagamento: string;
   tem_acesso: boolean;
   docs_ok: number;
+  docs_total: number;
   docs_recusados: number;
 };
 
@@ -72,9 +73,16 @@ function base(regime: Regime) {
                  ${gold ? "f.metodo" : "'Financiada'"} AS metodo,
                  ${gold ? SITUACAO : "'isento'"} AS situacao_pagamento,
                  (f.user_id IS NOT NULL) AS tem_acesso,
-                 $2::int AS docs_total,
+                 -- Fichas da Nova ficha guardam os documentos do curso (docs_lista): contam os obrigatórios dessa lista;
+                 -- as outras, a lista fixa do regime ($1, $2).
+                 CASE WHEN jsonb_typeof(f.docs_lista) = 'array'
+                      THEN (SELECT count(*)::int FROM jsonb_array_elements(f.docs_lista) e WHERE (e->>'required')::boolean)
+                      ELSE $2::int END AS docs_total,
                  (SELECT count(*)::int FROM formando_docs d
-                   WHERE d.regime = '${regime}' AND d.formando_id = f.id AND d.estado = 'validado' AND d.doc_id IN (SELECT jsonb_array_elements_text($1::jsonb))) AS docs_ok,
+                   WHERE d.regime = '${regime}' AND d.formando_id = f.id AND d.estado = 'validado'
+                     AND CASE WHEN jsonb_typeof(f.docs_lista) = 'array'
+                              THEN EXISTS (SELECT 1 FROM jsonb_array_elements(f.docs_lista) e WHERE (e->>'required')::boolean AND e->>'id' = d.doc_id)
+                              ELSE d.doc_id IN (SELECT jsonb_array_elements_text($1::jsonb)) END) AS docs_ok,
                  (SELECT count(*)::int FROM formando_docs d
                    WHERE d.regime = '${regime}' AND d.formando_id = f.id AND d.estado = 'recusado') AS docs_recusados
             FROM ${formandos} f
@@ -83,7 +91,7 @@ function base(regime: Regime) {
 
 /** Condição de cada separador (sobre a subconsulta `x`). `$2` é o número de documentos obrigatórios. */
 function condSeparador(regime: Regime, separador: FiltrosFormandos["separador"]): string | null {
-  const docsFalta = "x.docs_ok < $2::int";
+  const docsFalta = "x.docs_ok < x.docs_total";
   if (regime === "gold") {
     if (separador === "turmas") return "x.turma_id IS NOT NULL";
     if (separador === "avulsos") return "x.turma_id IS NULL";
@@ -92,7 +100,7 @@ function condSeparador(regime: Regime, separador: FiltrosFormandos["separador"])
     }
     return null;
   }
-  if (separador === "elegiveis") return `${ATIVO} AND x.docs_ok >= $2::int`;
+  if (separador === "elegiveis") return `${ATIVO} AND x.docs_ok >= x.docs_total`;
   if (separador === "docs_em_falta") return `${ATIVO} AND ${docsFalta}`;
   return null;
 }
@@ -124,8 +132,8 @@ function filtrosComuns(f: FiltrosFormandos, obrig: string[]) {
   w.add("lower(trim(x.local)) = lower(trim(?))", f.local);
   w.add("x.estado = ?", f.estado);
   w.add("x.situacao_pagamento = ?", f.regime === "gold" ? f.pagamento : undefined);
-  if (f.docs === "completos") w.sempre("x.docs_ok >= $2::int");
-  if (f.docs === "em_falta") w.sempre("x.docs_ok < $2::int");
+  if (f.docs === "completos") w.sempre("x.docs_ok >= x.docs_total");
+  if (f.docs === "em_falta") w.sempre("x.docs_ok < x.docs_total");
   if (f.acesso === "com") w.sempre("x.tem_acesso");
   if (f.acesso === "sem") w.sempre("NOT x.tem_acesso");
   return w;

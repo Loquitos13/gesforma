@@ -7,7 +7,7 @@ import { hojeLisboa } from "./datas.js";
 import type { Db } from "./db/pool.js";
 import { pastaDoFormando } from "./driveArvore.js";
 import { storeDriveFile } from "./driveFicheiros.js";
-import { erroFicheiroPublico, nomeIdentificado } from "./ficheirosValidacao.js";
+import { ficheiroDeDocumentoDaEquipa, nomeIdentificado } from "./ficheirosValidacao.js";
 import { docsDefinidosDoFormando, RE_DOC_OUTRO } from "./formandoDocsLista.js";
 import { mergeDocsJson } from "./formandoFinDocs.js";
 import { linhaFormando } from "./repos/formandos.js";
@@ -31,8 +31,9 @@ export async function carregarDocPelaEquipa(
   const def = outro && nomeOutro ? { id: docId, label: nomeOutro } : (await docsDefinidosDoFormando(db, regime, formandoId)).find(d => d.id === docId);
   // Fora da lista da ficha, só um documento que já lá esteja (documentos antigos da Gold).
   if (!def && !(await docDoFormando(db, regime, formandoId, docId))) return { ok: false, status: 404, error: "Este documento não faz parte da ficha." };
-  const erro = erroFicheiroPublico(file.name, file.bytes);
-  if (erro) return { ok: false, status: 400, error: erro };
+  const tipo = ficheiroDeDocumentoDaEquipa(file.name, file.bytes);
+  if ("erro" in tipo) return { ok: false, status: 400, error: tipo.erro };
+  file = { ...file, name: tipo.nome, mime: tipo.mime };
   const f = await linhaFormando(db, regime, formandoId) as Record<string, unknown> | null;
   if (!f) return { ok: false, status: 404, error: "Formando inexistente." };
   const pessoa = `${f.nome ?? ""} ${f.apelido ?? ""}`.replace(/\s+/g, " ").trim();

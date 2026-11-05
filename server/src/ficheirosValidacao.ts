@@ -71,6 +71,23 @@ export function erroFicheiroPublico(name: string, bytes: Buffer): string | null 
 }
 
 /**
+ * Documento carregado pela equipa na ficha: vale o conteúdo, não a extensão (fotos do telemóvel gravadas como «.jpg»
+ * que são PNG ou WebP, «.jfif», sem extensão…). Devolve o nome com a extensão certa, ou o erro.
+ */
+export function ficheiroDeDocumentoDaEquipa(name: string, bytes: Buffer): { nome: string; mime: string } | { erro: string } {
+  if (!bytes.length) return { erro: "ficheiro vazio" };
+  if (bytes.length > config.driveMaxBytes) return { erro: "O ficheiro tem mais de 10 MB. Reduza-o (ou tire outra fotografia) e tente outra vez." };
+  const ext = (["pdf", "jpg", "png", "webp"] as const).find(e => ASSINATURAS[e]!(bytes));
+  if (!ext) {
+    const heic = ASSINATURAS.heic!(bytes);
+    return { erro: heic ? "Fotografia em HEIC (iPhone): exporte-a como JPG ou PDF e tente outra vez." : "Envie um PDF ou uma imagem (JPG, PNG ou WebP)." };
+  }
+  const base = name.replace(/\.[a-z0-9]{1,8}$/i, "") || "documento";
+  const mime = { pdf: "application/pdf", jpg: "image/jpeg", png: "image/png", webp: "image/webp" }[ext];
+  return { nome: `${base}.${ext}`, mime };
+}
+
+/**
  * Uploads: extensão aceite e conteúdo verificado. Ficheiros gerados pelo próprio
  * GesForma (`gerado`, ex.: o cronograma em HTML) só verificam o tamanho.
  */

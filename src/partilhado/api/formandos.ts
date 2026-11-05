@@ -38,7 +38,8 @@ export type LinhaFormando = {
   inscrito: string;
   pagamento: { situacao: SituacaoPagamento; valor: number; metodo: string; pago: boolean };
   acesso: boolean;
-  docs: { validados: number; recusados: number };
+  /** `total`: obrigatórios desta ficha (a lista do curso guardada na ficha, ou a do regime). */
+  docs: { validados: number; recusados: number; total?: number };
 };
 
 export type ListaFormandos = Pagina<LinhaFormando> & { contagens: Record<string, number>; docsObrigatorios: number };

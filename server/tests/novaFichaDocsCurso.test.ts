@@ -9,11 +9,11 @@ const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 let ctx: Ctx;
 beforeAll(async () => { ctx = await arrancar(); });
 
-function carregar(regime: "gold" | "fin", id: number, docId: string, rotulo = "") {
+function carregar(regime: "gold" | "fin", id: number, docId: string, rotulo = "", ficheiro = { nome: "doc.pdf", bytes: PDF }) {
   const boundary = "----doc";
   const body = Buffer.concat([
-    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="doc.pdf"\r\nContent-Type: application/pdf\r\n\r\n`),
-    PDF, Buffer.from(`\r\n--${boundary}--\r\n`),
+    Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${ficheiro.nome}"\r\nContent-Type: image/jpeg\r\n\r\n`),
+    ficheiro.bytes, Buffer.from(`\r\n--${boundary}--\r\n`),
   ]);
   return ctx.app.inject({
     method: "POST", url: `/v1/formandos/${regime}/${id}/documentos/${docId}/ficheiro${rotulo ? `?rotulo=${encodeURIComponent(rotulo)}` : ""}`, payload: body,
@@ -99,5 +99,37 @@ describe("fichas já existentes (sem lista guardada)", () => {
     expect(docs.find(d => d.id === "cc")!.required).toBe(true);
     expect(docs.find(d => d.label === "Currículo")!.required).toBe(false);
     expect(docs.find(d => d.id === "exp")!.required).toBe(false);
+  });
+
+  it("fotografia com a extensão errada entra pelo conteúdo; a lista conta os obrigatórios da ficha", async () => {
+    const curso = (await ctx.db.query<{ id: number; nome_comercial: string; ufcd: string }>("SELECT id, nome_comercial, ufcd FROM cursos_fin ORDER BY id DESC LIMIT 1")).rows[0]!;
+    const nomeCurso = curso.nome_comercial || curso.ufcd;
+    // Só o CC e um documento próprio do curso (que não existe na lista fixa) ficam obrigatórios.
+    const base = (await pedido(ctx, "admin", "GET", `/v1/formandos/fin/docs-do-curso?curso=${encodeURIComponent(nomeCurso)}`)).json().documentos as { id: string }[];
+    const put = await pedido(ctx, "admin", "PUT", `/v1/cursos/fin/${curso.id}/docs-preinscricao`, {
+      ocultos: base.map(d => d.id).filter(id => id !== "cc"), extra: [{ label: "Declaração do centro de emprego", required: true }], condicoes: {},
+    });
+    expect(put.statusCode, put.body).toBe(200);
+    const apelido = `Foto${randomUUID().slice(0, 6)}`;
+    const r = await pedido(ctx, "admin", "POST", "/v1/formandos-fin", { nome: "Diana", apelido, email: `${apelido.toLowerCase()}@exemplo.pt`, curso: nomeCurso, semEmails: true, docsCurso: true });
+    expect(r.statusCode, r.body).toBe(200);
+    const id = r.json().formando.id as number;
+    const docs = (await ficha("fin", id)).documentos.filter(d => d.required);
+    expect(docs).toHaveLength(2);
+
+    // PNG gravado como «.jpg» (comum nas fotografias do telemóvel): aceite, com a extensão certa.
+    const png = Buffer.concat([Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]), Buffer.alloc(32)]);
+    const up = await carregar("fin", id, "cc", "", { nome: "cartao.jpg", bytes: png });
+    expect(up.statusCode, up.body).toBe(200);
+    expect(up.json().nome).toMatch(/\.png$/);
+    // Texto disfarçado de imagem: recusado.
+    expect((await carregar("fin", id, "cc", "", { nome: "x.jpg", bytes: Buffer.from("olá") })).statusCode).toBe(400);
+
+    const linha = async () => ((await pedido(ctx, "admin", "GET", `/v1/formandos?regime=fin&q=${apelido}`)).json().linhas as { id: number; docs: { validados: number; total: number } }[])
+      .find(l => l.id === id)!;
+    expect((await linha()).docs).toMatchObject({ validados: 1, total: 2 });
+    const outro = docs.find(d => d.id !== "cc")!;
+    expect((await carregar("fin", id, outro.id)).statusCode).toBe(200);
+    expect((await linha()).docs).toMatchObject({ validados: 2, total: 2 });
   });
 });

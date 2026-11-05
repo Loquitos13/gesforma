@@ -54,7 +54,7 @@ export function registarLeitura(app: FastifyInstance, deps: Deps) {
         inscrito: l.inscrito,
         pagamento: { situacao: l.situacao_pagamento, valor: Number(l.valor ?? 0), metodo: l.metodo, pago: Boolean(l.pago) },
         acesso: Boolean(l.tem_acesso),
-        docs: { validados: Number(l.docs_ok), recusados: Number(l.docs_recusados) },
+        docs: { validados: Number(l.docs_ok), recusados: Number(l.docs_recusados), total: Number(l.docs_total) },
       })),
     };
   });

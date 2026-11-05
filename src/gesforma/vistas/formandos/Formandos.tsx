@@ -82,7 +82,7 @@ export default function Formandos({ view, navigate }: VistaProps) {
         </div>
       ),
     },
-    { id: "docs", titulo: "Documentos", ordenavel: true, celula: l => <BarraDocs validados={l.docs.validados} total={totalDocs} recusados={l.docs.recusados} /> },
+    { id: "docs", titulo: "Documentos", ordenavel: true, celula: l => <BarraDocs validados={l.docs.validados} total={l.docs.total ?? totalDocs} recusados={l.docs.recusados} /> },
     gold
       ? {
         id: "valor", titulo: "Pagamento", ordenavel: true,

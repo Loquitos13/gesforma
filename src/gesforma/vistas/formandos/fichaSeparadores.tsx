@@ -75,7 +75,7 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
         </>
       )}
     >
-      <input ref={escolha} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" className="sr-only" tabIndex={-1} aria-hidden="true"
+      <input ref={escolha} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
         onChange={e => {
           const f = e.target.files?.[0];
           e.target.value = "";
@@ -121,7 +121,7 @@ export function SeparadorDocumentos({ ficha, podeEditar }: { ficha: FichaFormand
       )}
       {podeEditar && (
         <div className="px-5 py-3 border-t border-linha flex items-center gap-3 flex-wrap">
-          <input ref={escolhaOutro} type="file" accept="application/pdf,image/jpeg,image/png,.pdf,.jpg,.jpeg,.png" className="sr-only" tabIndex={-1} aria-hidden="true"
+          <input ref={escolhaOutro} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
             onChange={e => {
               const f = e.target.files?.[0];
               e.target.value = "";

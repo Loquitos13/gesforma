@@ -131,3 +131,12 @@ export type LogoEntidade = { nome: string; mime: string; versao: string; actuali
 export const apiLogo = (signal?: AbortSignal) => api<{ logo: LogoEntidade | null }>("/v1/configuracoes/logo", { signal });
 export const apiCarregarLogo = (ficheiro: File) => enviarFicheiro<{ logo: LogoEntidade }>("/v1/configuracoes/logo", ficheiro);
 export const apiApagarLogo = () => enviar.delete<{ ok: true }>("/v1/configuracoes/logo");
+
+/** Mensagens e menu do assistente de WhatsApp (CRM › WhatsApp; administração e coordenações). */
+export type AcaoMenuAssistente = "preinscricao" | "estado" | "cursos" | "equipa" | "faq";
+export type ItemMenuAssistente = { acao: AcaoMenuAssistente; titulo: string; descricao?: string; ativo: boolean; resposta?: string };
+export type AssistenteWhatsapp = { textos: Record<string, string>; menu: ItemMenuAssistente[] };
+export const apiWhatsappAssistente = (signal?: AbortSignal) =>
+  api<{ assistente: AssistenteWhatsapp }>("/v1/crm/whatsapp/assistente", { signal });
+export const apiGravarWhatsappAssistente = (a: AssistenteWhatsapp) =>
+  enviar.put<{ assistente: AssistenteWhatsapp }>("/v1/crm/whatsapp/assistente", a);

@@ -20,6 +20,7 @@ import { readDriveContent } from "./driveFicheiros.js";
 import { linhaVisivel } from "./repos/crmVisivel.js";
 import { fecharConversaWhatsapp, verificarInatividade } from "./whatsappInatividade.js";
 import { digitsPhone, handleWhatsappText, type Resposta } from "./whatsappBot.js";
+import { gravarAssistente, lerAssistente } from "./whatsappAssistente.js";
 
 export { digitsPhone, handleWhatsappText } from "./whatsappBot.js";
 
@@ -442,6 +443,19 @@ export function registerWhatsappRoutes(
     const n = await contarSessoesWhatsapp(db);
     const c = await whatsappCreds(db);
     return whatsappStatusPayload(c, n);
+  });
+
+  // Mensagens e menu do assistente: a administração e as coordenações (permissoes/sistema.ts).
+  app.get("/v1/crm/whatsapp/assistente", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    return { assistente: await lerAssistente(db) };
+  });
+
+  app.put("/v1/crm/whatsapp/assistente", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const r = await gravarAssistente(db, req.body);
+    if (!r.ok) return reply.code(400).send({ error: r.erro });
+    return { assistente: r.assistente };
   });
 
   app.put("/v1/crm/whatsapp/config", async (req, reply) => {

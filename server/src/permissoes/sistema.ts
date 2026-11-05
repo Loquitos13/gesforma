@@ -9,6 +9,8 @@ export const regras: Regra[] = [
   ["*", "/v1/crm/whatsapp/config", ADMIN],
   ["*", "/v1/crm/whatsapp/desligar", ADMIN],
   ["*", "/v1/crm/whatsapp/simular", ADMIN],
+  // Mensagens e menu do assistente: a administração e as coordenações.
+  ["*", "/v1/crm/whatsapp/assistente", COORDENACAO],
   // Caixa de conversas do WhatsApp: a equipa (comercial e coordenações) lê e responde.
   ["GET", "/v1/crm/whatsapp/conversa", EQUIPA],
   // Eliminar de vez: só a administração e as coordenações.

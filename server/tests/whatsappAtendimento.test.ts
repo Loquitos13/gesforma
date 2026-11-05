@@ -48,7 +48,7 @@ describe("botões e listas", () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");
     const t = tel();
     const out = await handleWhatsappText(ctx.db, t, "menu");
-    expect(out.replies[0]).toContain("4 · Falar com uma pessoa da equipa");
+    expect(out.replies[0]).toContain("4 · Falar com a equipa");
     const menu = corpoCloudApi(t, out.mensagens[0]!) as { type: string; interactive: { type: string; action: { sections: { rows: { id: string; title: string }[] }[] } } };
     expect(menu.type).toBe("interactive");
     expect(menu.interactive.type).toBe("list");

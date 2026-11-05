@@ -11,6 +11,7 @@ import {
 import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./security.js";
 import { avisarPedidoWhatsapp } from "./avisosEquipa.js";
 import { reabrirConversaWhatsapp } from "./whatsappInatividade.js";
+import { lerAssistente, TEXTOS_PADRAO, type Assistente, type AcaoMenu, type ItemMenu } from "./whatsappAssistente.js";
 import {
   emAtendimento, gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
   entradasWhatsapp, marcarConversaIniciadaWhatsapp, pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
@@ -48,26 +49,45 @@ export function textoDaResposta(r: Resposta) {
   return typeof r === "string" ? r : r.simples;
 }
 
-const MENU: Resposta = {
-  texto: "Olá, sou o assistente da ENA Formação.\nComo posso ajudar?",
-  opcoes: [
-    { id: "1", titulo: "Pré-inscrição", descricao: "Dados pessoais + curso, local, horário e data" },
-    { id: "2", titulo: "Estado do meu pedido" },
-    { id: "3", titulo: "Lista de cursos" },
-    { id: "4", titulo: "Falar com a equipa", descricao: "Uma pessoa da ENA responde-lhe aqui" },
-  ],
-  botao: "Ver opções",
-  rodape: "Escreva *menu* para voltar aqui.",
-  simples: [
-    "Olá, sou o assistente da ENA Formação.",
-    "Como posso ajudar?",
-    "1 · Pré-inscrição num curso (dados pessoais + curso, local, horário e data)",
-    "2 · Ver o estado do meu pedido",
-    "3 · Lista de cursos",
-    "4 · Falar com uma pessoa da equipa",
-    "Escreva o número ou *menu* para voltar aqui.",
-  ].join("\n"),
-};
+/** Opções visíveis do menu, pela ordem configurada: o número (e o id do botão) é a posição. */
+function opcoesVisiveis(a: Assistente) {
+  return a.menu.filter(i => i.ativo);
+}
+
+/** Número com que a pessoa escolhe uma acção no menu, ou 0 se está escondida. */
+function numeroDe(a: Assistente, acao: AcaoMenu) {
+  return opcoesVisiveis(a).findIndex(i => i.acao === acao) + 1;
+}
+
+function menuDe(a: Assistente): Resposta {
+  const itens = opcoesVisiveis(a);
+  return {
+    texto: a.textos.boasVindas,
+    opcoes: itens.map((i, n) => ({ id: String(n + 1), titulo: i.titulo, ...(i.descricao ? { descricao: i.descricao } : {}) })),
+    botao: "Ver opções",
+    rodape: "Escreva *menu* para voltar aqui.",
+    simples: [
+      a.textos.boasVindas,
+      ...itens.map((i, n) => `${n + 1} · ${i.titulo}${i.descricao ? ` (${i.descricao})` : ""}`),
+      "Escreva o número ou *menu* para voltar aqui.",
+    ].join("\n"),
+  };
+}
+
+/** A opção do menu escolhida: pelo número, pelo nome tocado ou por palavras (só as visíveis). */
+function escolhaDoMenu(a: Assistente, text: string): ItemMenu | null {
+  const itens = opcoesVisiveis(a);
+  const n = Number(text);
+  if (Number.isInteger(n) && n >= 1 && n <= itens.length) return itens[n - 1]!;
+  const q = text.trim().toLowerCase();
+  const porNome = itens.find(i => i.titulo.toLowerCase() === q);
+  if (porNome) return porNome;
+  const tem = (acao: AcaoMenu) => itens.find(i => i.acao === acao) ?? null;
+  if (/pr[eé]-?inscri/i.test(text) || /^inscrever/i.test(text)) return tem("preinscricao");
+  if (/estado|pedido|inscri/i.test(text)) return tem("estado");
+  if (/curso/i.test(text)) return tem("cursos");
+  return null;
+}
 
 export function digitsPhone(raw: string) {
   const d = raw.replace(/\D/g, "");
@@ -170,9 +190,6 @@ async function leadsPorTelefone(db: Db, telefone: string) {
   return rows.map(r => mapPreinscricao(r));
 }
 
-/** Resposta a quem já tem pedido neste número (sem os dados do pedido: pareciam uma nota interna). */
-const PEDIDO_REGISTADO = "A sua pré-inscrição já se encontra registada com sucesso. Caso tenha alguma dúvida ou necessite de ajuda durante o processo de formalização da inscrição, não hesite em contactar-nos. Teremos todo o gosto em ajudar!";
-
 async function getSessao(db: Db, telefone: string) {
   const r = await sessaoWhatsapp(db, telefone);
   return {
@@ -189,17 +206,15 @@ function querPessoa(t: string) {
   return /\b(operador|operadora|humano|atendente|assistente humano|pessoa real)\b|falar com (algu[eé]m|uma pessoa|a equipa|um colaborador)/i.test(t);
 }
 
-export const RESPOSTA_HUMANO = [
-  "Combinado. Uma pessoa da equipa da ENA vai responder-lhe aqui, nesta conversa (dias úteis, das 9h às 18h).",
-  "Para ajudarmos mais depressa, escreva numa mensagem o assunto (por exemplo, o curso ou a dúvida).",
-  "Para voltar ao assistente automático, escreva *menu*.",
-].join("\n");
+export const RESPOSTA_HUMANO = `${TEXTOS_PADRAO.falarEquipa}\nPara voltar ao assistente automático, escreva *menu*.`;
 
-const RESPOSTA_HUMANO_BOTAO: Resposta = {
-  texto: RESPOSTA_HUMANO.split("\n").slice(0, 2).join("\n"),
-  opcoes: [{ id: "menu", titulo: "Voltar ao assistente" }],
-  simples: RESPOSTA_HUMANO,
-};
+function respostaHumano(a: Assistente): Resposta {
+  return {
+    texto: a.textos.falarEquipa,
+    opcoes: [{ id: "menu", titulo: "Voltar ao assistente" }],
+    simples: `${a.textos.falarEquipa}\nPara voltar ao assistente automático, escreva *menu*.`,
+  };
+}
 
 async function saveSessao(db: Db, telefone: string, passo: Passo, dados: Dados, leadId: number | null) {
   await gravarSessaoWhatsapp(db, telefone, passo, dados, leadId);
@@ -258,6 +273,10 @@ export async function handleWhatsappText(
   const perfil = sanitizeHeader(nomePerfil).slice(0, 120);
   if (perfil) await gravarNomePerfilWhatsapp(db, telefone, perfil).catch(() => undefined);
   const sess = await getSessao(db, telefone);
+  const ass = await lerAssistente(db);
+  const MENU = menuDe(ass);
+  const nEquipa = numeroDe(ass, "equipa");
+  const nPre = numeroDe(ass, "preinscricao");
   let passo = sess.passo;
   let dados = { ...sess.dados };
   let leadId = sess.leadId;
@@ -279,19 +298,21 @@ export async function handleWhatsappText(
 
   // Ficheiro enviado pela pessoa: fica na caixa de conversas para a equipa ver (e, se for o caso, guardar na ficha).
   if (anexoId) {
-    say("Recebemos o seu ficheiro. A equipa da ENA vai vê-lo. Se quiser falar com uma pessoa, escreva *4*; para voltar ao início, escreva *menu*.");
+    say(`${ass.textos.ficheiro} ${nEquipa ? `Se quiser falar com uma pessoa, escreva *${nEquipa}*; para voltar ao início, escreva *menu*.` : "Para voltar ao início, escreva *menu*."}`);
     for (const r of replies) await logMsg(db, telefone, "out", r);
     return { replies, mensagens, telefone, passo, leadId };
   }
 
-  if ((passo === "menu" && text === "4") || querPessoa(text)) {
+  const escolha = passo === "menu" || (passo as string) === "consulta" ? escolhaDoMenu(ass, text) : null;
+  const pelaOpcao = escolha?.acao === "equipa";
+  if (pelaOpcao || (nEquipa && querPessoa(text))) {
     await pedirHumanoWhatsapp(db, telefone);
-    say(RESPOSTA_HUMANO_BOTAO);
+    say(respostaHumano(ass));
     for (const r of replies) await logMsg(db, telefone, "out", r);
     const lead = (await leadsPorTelefone(db, telefone))[0];
     // Pedido escrito com o assunto (ex.: a frase do site, «… falar com um operador sobre o curso X»): o aviso sai já.
     // Pela opção 4, o assistente pede o assunto e o aviso espera por ele (ou sai sem ele, passados uns minutos).
-    if (text !== "4" && text.length > 25) {
+    if (!pelaOpcao && text.length > 25) {
       await avisarPedidoWhatsapp(db, telefone, corpoEntrada, perfil).catch(err => console.error("[whatsapp] aviso à equipa:", err));
     }
     if (lead) await logLeadEvent(db, lead.id, undefined, "whatsapp", "Pediu para falar com a equipa no WhatsApp", corpoEntrada).catch(() => undefined);
@@ -308,23 +329,25 @@ export async function handleWhatsappText(
   }
 
   if (passo === "menu" || (passo as string) === "consulta") {
-    if (text === "1" || /pr[eé]-?inscri/i.test(text) || /^inscrever/i.test(text)) {
+    if (escolha?.acao === "preinscricao") {
       passo = "regime";
       dados = {};
       say(ESCOLHA_REGIME("Vamos à pré-inscrição. Que formação procura?"));
-    } else if (text === "2" || /estado|pedido|inscri/i.test(text)) {
+    } else if (escolha?.acao === "estado") {
       const leads = await leadsPorTelefone(db, telefone);
       if (leads[0]) {
         leadId = leads[0].id;
-        say(PEDIDO_REGISTADO);
+        say(ass.textos.pedidoRegistado);
         passo = "menu";
       } else {
         passo = "menu";
-        say("Não encontro um pedido neste número. Escreva *1* para se pré-inscrever ou contacte a secretaria.");
+        say(`${ass.textos.semPedido} ${nPre ? `Escreva *${nPre}* para se pré-inscrever ou contacte a secretaria.` : "Contacte a secretaria."}`);
       }
-    } else if (text === "3" || /curso/i.test(text)) {
+    } else if (escolha?.acao === "cursos") {
       passo = "regimeLista";
       say(ESCOLHA_REGIME("Que cursos quer ver?"));
+    } else if (escolha?.acao === "faq") {
+      say(`${escolha.resposta ?? ""}\n\nEscreva *menu* para voltar às opções.`.trim());
     } else {
       say(MENU);
     }
@@ -357,8 +380,8 @@ export async function handleWhatsappText(
     else {
       const url = await paginaDoCurso(db, regime, curso);
       say([curso, url,
-        regime === "gold" ? "O preço depende do local e do horário: na página vê os valores de cada um." : "",
-        "Para se pré-inscrever aqui, escreva *1*; para voltar ao início, *menu*."].filter(Boolean).join("\n\n"));
+        regime === "gold" ? ass.textos.notaPreco : "",
+        nPre ? `Para se pré-inscrever aqui, escreva *${nPre}*; para voltar ao início, *menu*.` : "Para voltar ao início, escreva *menu*."].filter(Boolean).join("\n\n"));
     }
   } else if (passo === "nome") {
     dados.nome = sanitizeHeader(text).slice(0, 80);
@@ -436,7 +459,7 @@ export async function handleWhatsappText(
       } else {
         leadId = created.preinscricao.id;
         await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
-        say(`${dados.curso}${dados.local ? `\nLocal preferido: ${dados.local}` : ""}\n${created.aviso}\n\nA coordenação da Formação Financiada contacta-o para confirmar a turma.`);
+        say(`${dados.curso}${dados.local ? `\nLocal preferido: ${dados.local}` : ""}\n${created.aviso}\n\n${ass.textos.fimFin}`);
       }
       passo = "menu";
       dados = {};
@@ -547,7 +570,7 @@ export async function handleWhatsappText(
         await logLeadEvent(db, leadId, undefined, "whatsapp", created.duplicado ? "Consulta WhatsApp" : "Pré-inscrição via WhatsApp", telefone);
         // A mesma resposta com email novo ou já conhecido (como o formulário do site): não confirma quem já está inscrito.
         const url = await paginaDoCurso(db, "gold", turma.curso);
-        say(`${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}${url ? `\n${url}` : ""}\n${created.aviso}\n\nO pagamento *não* se faz neste chat.`);
+        say(`${turma.curso}\n${turma.local} · ${turma.horario} · ${fmtDataPt(turma.dataInicio)}${url ? `\n${url}` : ""}\n${created.aviso}\n\n${ass.textos.fimGold}`);
         passo = "menu";
         dados = {};
       }

@@ -33,6 +33,8 @@ export const CAPACIDADES = {
   "pagamentos.pedir": PEDAGOGIA,
   // Eliminar de vez uma conversa do WhatsApp (CRM › WhatsApp).
   "whatsapp.eliminar": PEDAGOGIA,
+  // Editar as mensagens e o menu do assistente (CRM › WhatsApp).
+  "whatsapp.assistente": COORDENACAO,
   "emails.gerir": [...EQUIPA, "contabilidade"] as Perfil[],
   // Histórico dos envios: as coordenações e a contabilidade, cada uma só da sua área.
   "emails.historico": [...COORDENACAO, "contabilidade"] as Perfil[],

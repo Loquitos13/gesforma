@@ -12,6 +12,7 @@ import { atualizarPendentesWhatsapp } from "../../WhatsappPendentes";
 import { toastError, toastOk } from "../../../partilhado/toastBus";
 import { AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, Modal, Selecao, ErroCarregar, Esqueleto, Estado, PageHeader, Vazio, cx, useFiltrosUrl } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
+import { BotaoAssistenteWhatsapp } from "./AssistenteWhatsapp";
 
 const ATUALIZAR_MS = 5_000;
 
@@ -54,12 +55,14 @@ export default function Whatsapp({ navigate }: VistaProps) {
     return !q || c.nome.toLowerCase().includes(q) || c.telefone.includes(q.replace(/\D/g, "") || "§");
   });
   const pedemPessoa = (lista.dados?.conversas ?? []).filter(c => c.humano).length;
+  const pode = usePode();
 
   return (
     <div className="space-y-4">
       <PageHeader
         titulo="WhatsApp"
         subtitulo={pedemPessoa ? `${pedemPessoa} ${pedemPessoa === 1 ? "conversa espera" : "conversas esperam"} por uma pessoa da equipa` : "Conversas com o assistente do número da ENA"}
+        acoes={pode("whatsapp.assistente") ? <BotaoAssistenteWhatsapp /> : undefined}
       />
       {lista.dados && !lista.dados.ligado && (
         <Aviso tom="aviso">O WhatsApp não está ligado (Configurações › Integrações). As conversas antigas continuam visíveis, mas não é possível responder.</Aviso>

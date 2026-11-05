@@ -85,7 +85,47 @@ export const VISTAS_FORMADOR = new Set<Vista>(["formador-turmas", "formador-cale
  * Onde cada perfil começa. As coordenações não têm painel (pedido do cliente): começam nas pré-inscrições da sua
  * linha; a contabilidade começa nos pagamentos.
  */
+/**
+ * Perfil personalizado: a «chave» do perfil leva os perfis somados («personalizado:secretaria,contabilidade»). As funções
+ * deste ficheiro recebem a chave e somam os menus e as vistas de cada perfil.
+ */
+export function chaveDoPerfil(u: { role: string; perfis?: readonly string[] | null }) {
+  return u.role === "personalizado" ? `personalizado:${(u.perfis ?? []).join(",")}` : u.role;
+}
+
+/** Os perfis por trás da chave (um só, fora do perfil personalizado). */
+export function perfisDaChave(role: string): string[] {
+  return role.startsWith("personalizado:") ? role.slice("personalizado:".length).split(",").filter(Boolean) : [role];
+}
+
+const ePersonalizado = (role: string) => role.startsWith("personalizado:");
+
+/** Junta os menus de vários perfis pela ordem do menu geral (itens e submenus sem repetir). */
+function somarMenus(menus: GrupoMenu[][]): GrupoMenu[] {
+  const out: GrupoMenu[] = [];
+  for (const g of MENU) {
+    const destes = menus.flatMap(m => m.filter(x => x.group === g.group));
+    if (!destes.length) continue;
+    const items: ItemMenu[] = [];
+    for (const item of g.items) {
+      const iguais = destes.flatMap(d => d.items.filter(i => i.label === item.label && i.view === item.view));
+      if (!iguais.length) continue;
+      if (!item.children) { items.push(iguais[0]!); continue; }
+      const children = item.children.filter(c => iguais.some(i => i.children?.some(x => x.view === c.view)));
+      if (children.length) items.push({ ...item, children });
+    }
+    if (items.length) out.push({ ...g, items });
+  }
+  return out;
+}
+
 export function painelDoPerfil(role: string): Vista {
+  if (ePersonalizado(role)) {
+    const perfis = perfisDaChave(role);
+    // Começa no ecrã do primeiro perfil da Gold/Financiada que tiver; só contabilidade, nos pagamentos.
+    const p = ["secretaria", "financiada", "comercial", "contabilidade"].find(x => perfis.includes(x));
+    return p ? painelDoPerfil(p) : "notificacoes";
+  }
   if (role === "formador") return "formador-turmas";
   if (role === "contabilidade") return "pagamentos";
   if (role === "secretaria") return "gold-preinscricoes";
@@ -125,6 +165,7 @@ function soVendas(g: GrupoMenu): GrupoMenu {
 }
 
 export function menuDoPerfil(role: string): GrupoMenu[] {
+  if (ePersonalizado(role)) return somarMenus(perfisDaChave(role).map(p => menuDoPerfil(p)));
   if (role === "formador") return [MENU_FORMADOR];
   if (role === "comercial") return MENU.map(soVendas).filter(g => g.items.length);
   const permitidos = gruposDoPerfil(role);
@@ -148,6 +189,7 @@ const VISTAS_LIVRES = new Set<Vista>(["notificacoes"]);
  */
 export function vistaNoMenuDoPerfil(role: string, v: Vista): boolean {
   if (VISTAS_LIVRES.has(v)) return true;
+  if (ePersonalizado(role)) return perfisDaChave(role).some(p => vistaNoMenuDoPerfil(p, v));
   if (role === "comercial") return comercialAbre(v);
   // Os cronogramas (só leitura) abrem-se pelo endereço a quem vê as turmas Gold.
   if (v === "gold-cronogramas") return vistaNoMenuDoPerfil(role, "gold-turmas");

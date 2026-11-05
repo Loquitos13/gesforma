@@ -38,6 +38,7 @@ import { ProcessarApoios } from "../../formandos/apoios/ProcessarApoios";
 import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
 import { rotuloCodigoCurso } from "../../../../partilhado/codigoCurso";
+import { perfilNoRegime } from "../../../../partilhado/perfisUtilizador";
 
 type VistaCronograma = "dias" | "grelha" | "lista";
 
@@ -97,7 +98,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
         const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
         const podeDoc = (s: SessaoMeta, doc: "plano" | "sumario" | "presencas") => {
           const validado = doc === "plano" ? Boolean(ped.planos[s.n]?.assinado) : doc === "sumario" ? Boolean(sumarios[s.n]?.assinado) : Boolean(sumarios[s.n]?.presencasValidadas);
-          return podeMexerDocumento({ role: user.role, nomes: nomesEu, sessao: s, validado });
+          return podeMexerDocumento({ role: perfilNoRegime(user, "fin"), nomes: nomesEu, sessao: s, validado });
         };
         const docsFalta = membros.length - prontos;
         const semPlano = sessoes.filter(s => !ped.planos[s.n]).length;
@@ -178,7 +179,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                           .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
                       }}>Enviar pós-formação</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => setEditar(true)}>Editar turma</Botao>
-                      {!t.fechadaEm && staffPodeDossie(user.role) && (
+                      {!t.fechadaEm && staffPodeDossie(perfilNoRegime(user, "fin")) && (
                         <Botao tamanho="sm" variante="secundario" disabled={!resultados || faltaFecho.length > 0}
                           title={faltaFecho.length ? `Falta: ${faltaFecho.slice(0, 5).join(" ")}${faltaFecho.length > 5 ? "…" : ""}` : "Gera o relatório de execução e marca a turma como concluída"}
                           onClick={() => setFechar(true)}>Fecho formal</Botao>
@@ -219,7 +220,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                   ))}
                 </div>
               )}
-              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} despesas={!souFormador}
+              <TurmaTabBar tab={tab} onChange={setTab} accent="fin" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(perfilNoRegime(user, "fin"))} despesas={!souFormador}
                 ordem={ORDEM_FIN} rotulos={ROTULOS_FIN} so={souFormador ? TABS_FORMADOR : undefined} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
@@ -263,7 +264,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
                   onChange={c => setCronograma(c, recarregarPlanos)} publicar={publicarCronograma}
                   onCopiado={user.role === "formador" ? undefined : () => { recarregarTurma("fin", t.id); recarregarPlanos(); }} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local} />
               )}
-              {tab === "dtp" && staffPodeDossie(user.role) && (
+              {tab === "dtp" && staffPodeDossie(perfilNoRegime(user, "fin")) && (
                 <DtpPanel regime="fin" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${rotuloCodigoCurso(t.ufcdCod)} · ${t.horas} h` }} dtp={ped.dtp} estado={ped.estado}
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)}
                   onActualizar={() => void ped.recarregar()} />
@@ -304,7 +305,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
               plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
-              coordenacao={staffPodeDossie(user.role)}
+              coordenacao={staffPodeDossie(perfilNoRegime(user, "fin"))}
               qualificada={{ turmaId: t.id }}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n).catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
@@ -315,7 +316,7 @@ export function CockpitFin({ turmaId, initialTab = "sessoes", navigate }: { turm
               soLeitura={presencasSessao && !podeDoc(presencasSessao, "presencas")
                 ? (sumarios[presencasSessao.n]?.presencasValidadas ? "Folha validada pela coordenação pedagógica: só a coordenação a altera." : "Só consulta: não está atribuído a esta sessão.")
                 : undefined}
-              podeValidar={staffPodeDossie(user.role)}
+              podeValidar={staffPodeDossie(perfilNoRegime(user, "fin"))}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
               qualificada={presencasSessao ? { turmaId: t.id, sessaoId: presencasSessao.id } : undefined}
               onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}

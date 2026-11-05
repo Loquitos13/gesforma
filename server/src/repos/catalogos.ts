@@ -109,7 +109,9 @@ export async function listarOpcoes(
     case "comerciais": {
       const linhas = await many<{ id: string; name: string }>(
         c,
-        "SELECT id::text AS id, name FROM users WHERE active = true AND role IN ('comercial', 'secretaria', 'admin') ORDER BY name",
+        `SELECT id::text AS id, name FROM users WHERE active = true
+            AND (role IN ('comercial', 'secretaria', 'admin') OR (role = 'personalizado' AND perfis && ARRAY['comercial', 'secretaria']::text[]))
+          ORDER BY name`,
       );
       return linhas.map(l => ({ valor: l.id, rotulo: l.name }));
     }

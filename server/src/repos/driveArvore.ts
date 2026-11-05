@@ -12,7 +12,7 @@ export async function gravarPastasTurma(c: Consulta, regime: Regime, turmaId: nu
 }
 
 export async function emailsSecretaria(c: Consulta) {
-  return emails(await many<{ email: string }>(c, "SELECT email FROM users WHERE role IN ('admin', 'secretaria') AND active = true AND email <> ''"));
+  return emails(await many<{ email: string }>(c, "SELECT email FROM users WHERE (role IN ('admin', 'secretaria') OR (role = 'personalizado' AND 'secretaria' = ANY(perfis))) AND active = true AND email <> ''"));
 }
 
 /**
@@ -21,7 +21,7 @@ export async function emailsSecretaria(c: Consulta) {
  */
 export async function emailsEquipaActiva(c: Consulta) {
   return emails(await many<{ email: string }>(c,
-    "SELECT email FROM users WHERE role NOT IN ('formando', 'formador', 'comercial') AND active = true AND email <> ''"));
+    "SELECT email FROM users WHERE role NOT IN ('formando', 'formador', 'comercial') AND NOT (role = 'personalizado' AND perfis <@ ARRAY['comercial']::text[]) AND active = true AND email <> ''"));
 }
 
 /** Formadores cujo nome está na lista (comparação sem maiúsculas nem espaços nas pontas). */

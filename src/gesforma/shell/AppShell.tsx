@@ -8,7 +8,7 @@ import { tabDoFormador } from "../vistas/turmas/cockpit/base";
 import { caminhoDaVista, vistaDoCaminho, type Destino, type Vista } from "../rotasGesforma";
 import { FileDialogPaint } from "../ViewLoading";
 import { Cabecalho } from "./Cabecalho";
-import { painelDoPerfil, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
+import { chaveDoPerfil, painelDoPerfil, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
 import { Pesquisa } from "./Pesquisa";
 import { ROTAS } from "./rotas";
 import { Sidebar } from "./Sidebar";
@@ -89,7 +89,7 @@ class LimiteErro extends Component<{ chave: string; children: ReactNode }, { err
 
 export function AppShell() {
   const { user } = useAuth();
-  const [estado, setEstado] = useState(() => arranque(user.role));
+  const [estado, setEstado] = useState(() => arranque(chaveDoPerfil(user)));
   const { view, params } = estado;
   const [menuAberto, setMenuAberto] = useState(false);
   const [recolhida, setRecolhida] = useState(() => { try { return localStorage.getItem("gf-nav-recolhida") === "1"; } catch { return false; } });
@@ -118,15 +118,15 @@ export function AppShell() {
     function voltar() {
       const lido = vistaDoCaminho(window.location.pathname, window.location.search);
       if (!lido) return;
-      const d = destinoPermitido(lido, user.role);
+      const d = destinoPermitido(lido, chaveDoPerfil(user));
       setEstado({ view: d.view, params: paramsDe(d) });
     }
     window.addEventListener("popstate", voltar);
     return () => window.removeEventListener("popstate", voltar);
-  }, [user.role]);
+  }, [user.role, user.perfis]);
 
   const navigate = useCallback((alvo: Vista | Destino) => {
-    const d = destinoPermitido(typeof alvo === "string" ? { view: alvo } : alvo, user.role);
+    const d = destinoPermitido(typeof alvo === "string" ? { view: alvo } : alvo, chaveDoPerfil(user));
     const novo = paramsDe(d);
     // Com filtros, o URL escreve-se já, para a vista de destino os ler ao montar.
     if (d.filtros && Object.keys(d.filtros).length) {
@@ -141,7 +141,7 @@ export function AppShell() {
     setEstado(e => (e.view === d.view && JSON.stringify(e.params) === JSON.stringify(novo) ? e : { view: d.view, params: novo }));
     setMenuAberto(false);
     window.scrollTo({ top: 0 });
-  }, [user.role]);
+  }, [user.role, user.perfis]);
 
   const limpar = useCallback((chave: "formandoId" | "formadorId" | "leadId") => {
     setEstado(e => ({ ...e, params: { ...e.params, [chave]: undefined } }));
@@ -156,7 +156,7 @@ export function AppShell() {
     return () => document.removeEventListener("keydown", h);
   }, []);
 
-  const Ecra = ROTAS[view] ?? ROTAS[painelDoPerfil(user.role)];
+  const Ecra = ROTAS[view] ?? ROTAS[painelDoPerfil(chaveDoPerfil(user))];
   const props: VistaProps = { view, params, navigate, limpar };
 
   return (
@@ -192,7 +192,7 @@ export function AppShell() {
       </div>
 
       {user.role !== "admin" && <DocAlertas onOpen={(id, regime) => navigate({ view: regime === "fin" ? "fin-preinscricoes" : "gold-preinscricoes", leadId: id })} />}
-      <WhatsappAlertas role={user.role} onOpen={(telefone, regime) => navigate({ view: regime === "fin" ? "fin-whatsapp" : "gold-whatsapp", filtros: { telefone } })} />
+      <WhatsappAlertas role={chaveDoPerfil(user)} onOpen={(telefone, regime) => navigate({ view: regime === "fin" ? "fin-whatsapp" : "gold-whatsapp", filtros: { telefone } })} />
       <Pesquisa aberta={pesquisaAberta} onFechar={() => setPesquisaAberta(false)} onNavigate={navigate} />
     </>
   );

@@ -16,6 +16,7 @@ import type { Navegar } from "../../shell/tipos";
 import { AvisoAcesso } from "./AvisoAcesso";
 import { FormadorFormulario } from "./FormadorFormulario";
 import { Iniciais, estadoCcp } from "./formadoresUi";
+import { temPerfil } from "../../../partilhado/perfisUtilizador";
 
 type Aba = "turmas" | "agenda" | "disponibilidade" | "documentos";
 
@@ -38,7 +39,7 @@ export function FichaFormador({ id, navigate, area = false }: { id: number; navi
   const ccp = estadoCcp(f);
   const regimeLista = f.regimes.includes("gold") ? "gold-formadores" : "fin-formadores";
   // O comercial ajusta a disponibilidade dos formadores da Gold (o servidor só lhe deixa esse campo).
-  const alteraDisponibilidade = gerir || proprio || (!area && user.role === "comercial" && f.regimes.includes("gold"));
+  const alteraDisponibilidade = gerir || proprio || (!area && temPerfil(user, "comercial") && f.regimes.includes("gold"));
 
   return (
     <div className="space-y-4">

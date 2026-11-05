@@ -13,7 +13,8 @@ export async function emailsDaEquipa(db: Db, grupos: readonly string[]) {
   const perfis = [...new Set(grupos.filter(eGrupoEquipa).flatMap(g => PERFIS_DO_GRUPO[g]))];
   if (!perfis.length) return [];
   const rows = (await db.query<{ name: string; email: string }>(
-    "SELECT name, email FROM users WHERE active = true AND role = ANY($1::text[]) ORDER BY name",
+    // Também quem tem o perfil personalizado com algum destes perfis.
+    "SELECT name, email FROM users WHERE active = true AND (role = ANY($1::text[]) OR (role = 'personalizado' AND perfis && $1::text[])) ORDER BY name",
     [pgTextArray(perfis)],
   )).rows;
   const vistos = new Set<string>();

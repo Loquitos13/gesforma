@@ -12,7 +12,8 @@ import { allowedOrigins, config, onVercel } from "./config.js";
 import { enterActor, medirPedido, type Db, type Medicao } from "./db/pool.js";
 import { sha256 } from "./security.js";
 import { classifyRoute } from "./routeAuth.js";
-import { podeAceder } from "./permissoes.js";
+import { podeAceder, regimeDoCaminho, type Perfil } from "./permissoes.js";
+import { candidatosParaPedido, perfisDoActor } from "./permissoes/personalizado.js";
 import { linhaCrmDoCaminho } from "./permissoes/crm.js";
 import { linhaVisivel } from "./repos/crmVisivel.js";
 import { invalidarDtp } from "./pedagogia/dtpCache.js";
@@ -26,7 +27,11 @@ declare module "fastify" {
   interface FastifyInstance { db: Db }
   interface FastifyRequest { consultas?: Medicao }
   interface FastifyRequest {
-    actor?: { id: string; email: string; name: string; role: string; mustChangePassword?: boolean };
+    /**
+     * `role`: o perfil com que este pedido corre. No perfil personalizado é um dos `perfis` marcados, escolhido para a
+     * operação (ver permissoes/personalizado.ts); `perfil` fica com o perfil da conta («personalizado»).
+     */
+    actor?: { id: string; email: string; name: string; role: string; perfil: string; perfis: string[]; mustChangePassword?: boolean };
   }
 }
 
@@ -103,14 +108,18 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       const hash = sha256(raw);
       const found = await actorDaSessao(db, hash);
       if (found) {
+        const perfis = perfisDoActor(found);
         req.actor = {
           id: found.id,
           email: found.email,
           name: found.name,
-          role: found.role,
+          // Personalizado: até escolher o perfil desta operação, o primeiro dos marcados.
+          role: found.role === "personalizado" ? (perfis[0] ?? "personalizado") : found.role,
+          perfil: found.role,
+          perfis,
           mustChangePassword: Boolean(found.must_change_password),
         };
-        enterActor({ id: found.id, role: found.role });
+        enterActor({ id: found.id, role: req.actor.role });
       }
     }
 
@@ -132,6 +141,27 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
     }
     if (kind === "staff" && req.actor.role === "formando") {
       return reply.code(403).send({ error: "a área do formando não abre o GesForma" });
+    }
+    if (kind === "staff" && req.actor.perfil === "personalizado") {
+      // Soma de perfis: corre com o primeiro perfil marcado que pode fazer esta operação (do regime pedido, se houver)
+      // e, num registo do CRM, que o pode ver.
+      const q = (req.query ?? {}) as Record<string, unknown>;
+      const regimeQuery = q.regime === "gold" || q.regime === "fin" ? q.regime : null;
+      const candidatos = candidatosParaPedido(req.actor.perfis as Perfil[], regimeDoCaminho(path) ?? regimeQuery)
+        .filter(p => podeAceder(p, req.method, path));
+      if (!candidatos.length) return reply.code(403).send({ error: "Sem permissão para esta operação." });
+      let escolhido: Perfil | null = candidatos[0]!;
+      const linha = linhaCrmDoCaminho(path);
+      if (linha) {
+        escolhido = null;
+        for (const p of candidatos) {
+          if (await linhaVisivel(db, linha.tabela, linha.id, { ...req.actor, role: p })) { escolhido = p; break; }
+        }
+        if (!escolhido) return reply.code(404).send({ error: "registo não encontrado" });
+      }
+      req.actor.role = escolhido;
+      enterActor({ id: req.actor.id, role: escolhido });
+      return;
     }
     if (kind === "staff" && !podeAceder(req.actor.role, req.method, path)) {
       return reply.code(403).send({ error: "Sem permissão para esta operação." });

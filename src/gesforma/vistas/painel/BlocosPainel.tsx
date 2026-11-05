@@ -7,7 +7,7 @@ import {
   BarrasHorizontais, Cartao, Filtros, Kpi, KpiFaixa, Separadores, cx, evolucao, num, TOM_CLASSES, type FiltroSelecao,
 } from "../../../partilhado/ui";
 import type { Navegar } from "../../shell/tipos";
-import { vistaNoMenuDoPerfil } from "../../shell/navegacao";
+import { chaveDoPerfil, vistaNoMenuDoPerfil } from "../../shell/navegacao";
 import type { Destino } from "../../rotasGesforma";
 import { PRESETS, TAREFAS, capacidadeDaVista, destinoIndicador, destinoTarefa, type PresetPeriodo } from "./painelDados";
 
@@ -17,7 +17,7 @@ function useAbre(pode: (c: string) => boolean) {
   return (destino: Destino | null): destino is Destino => {
     if (!destino) return false;
     const cap = capacidadeDaVista(destino.view);
-    return (!cap || pode(cap)) && vistaNoMenuDoPerfil(user.role, destino.view);
+    return (!cap || pode(cap)) && vistaNoMenuDoPerfil(chaveDoPerfil(user), destino.view);
   };
 }
 

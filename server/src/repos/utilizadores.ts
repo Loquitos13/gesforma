@@ -2,7 +2,7 @@ import { Filtros, many, one, padraoPesquisa, valor, type Consulta } from "./sql.
 
 /** Contas de acesso (equipa, formadores e formandos). */
 
-export const PERFIS = ["admin", "secretaria", "comercial", "financiada", "contabilidade", "formador", "formando"] as const;
+export const PERFIS = ["admin", "secretaria", "comercial", "financiada", "contabilidade", "formador", "formando", "personalizado"] as const;
 export type PerfilUtilizador = (typeof PERFIS)[number];
 
 export type LinhaUtilizador = {
@@ -10,6 +10,8 @@ export type LinhaUtilizador = {
   name: string;
   email: string;
   role: PerfilUtilizador;
+  /** Perfil personalizado: os perfis que a pessoa soma. */
+  perfis: string[];
   active: boolean;
   must_change_password: boolean;
   created_at: string;
@@ -18,7 +20,7 @@ export type LinhaUtilizador = {
 };
 
 const SELECT = `
-  SELECT u.id, u.name, u.email, u.role, u.active, COALESCE(u.must_change_password, false) AS must_change_password,
+  SELECT u.id, u.name, u.email, u.role, COALESCE(u.perfis, '{}') AS perfis, u.active, COALESCE(u.must_change_password, false) AS must_change_password,
          u.created_at::text AS created_at,
          (SELECT max(s.created_at)::text FROM sessions s WHERE s.user_id = u.id) AS last_login_at,
          (SELECT count(*)::int FROM sessions s WHERE s.user_id = u.id AND s.expires_at > now()) AS sessions_open
@@ -64,20 +66,22 @@ export function utilizadorPorEmail(c: Consulta, email: string) {
 
 export async function criarUtilizador(c: Consulta, u: {
   id: string; name: string; email: string; passwordHash: string; role: PerfilUtilizador; active: boolean; mustChangePassword: boolean;
+  perfis?: string[];
 }) {
   await one(
     c,
-    "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password) VALUES ($1, $2, $3, $4, $5, $6, $7)",
-    [u.id, u.name, u.email, u.passwordHash, u.role, u.active, u.mustChangePassword],
+    "INSERT INTO users (id, name, email, password_hash, role, active, must_change_password, perfis) VALUES ($1, $2, $3, $4, $5, $6, $7, $8::text[])",
+    [u.id, u.name, u.email, u.passwordHash, u.role, u.active, u.mustChangePassword, `{${(u.role === "personalizado" ? u.perfis ?? [] : []).join(",")}}`],
   );
 }
 
-export async function actualizarUtilizador(c: Consulta, id: string, p: { name?: string; email?: string; role?: string; active?: boolean }) {
+export async function actualizarUtilizador(c: Consulta, id: string, p: { name?: string; email?: string; role?: string; active?: boolean; perfis?: string[] }) {
   await one(
     c,
-    `UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email), role = COALESCE($4, role), active = COALESCE($5, active)
+    `UPDATE users SET name = COALESCE($2, name), email = COALESCE($3, email), role = COALESCE($4, role), active = COALESCE($5, active),
+            perfis = CASE WHEN COALESCE($4, role) <> 'personalizado' THEN '{}'::text[] ELSE COALESCE($6::text[], perfis) END
       WHERE id = $1`,
-    [id, p.name ?? null, p.email ?? null, p.role ?? null, p.active ?? null],
+    [id, p.name ?? null, p.email ?? null, p.role ?? null, p.active ?? null, p.perfis ? `{${p.perfis.join(",")}}` : null],
   );
 }
 

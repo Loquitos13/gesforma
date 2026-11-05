@@ -62,9 +62,11 @@ export const CAPACIDADES = {
 
 export type Capacidade = keyof typeof CAPACIDADES;
 
-export function capacidadesDe(role: string): Capacidade[] {
+/** Capacidades de um perfil, ou a soma das de vários (perfil personalizado). */
+export function capacidadesDe(role: string | readonly string[]): Capacidade[] {
+  const roles = (typeof role === "string" ? [role] : role) as Perfil[];
   return (Object.entries(CAPACIDADES) as [Capacidade, Perfil[]][])
-    .filter(([, perfis]) => perfis.includes(role as Perfil))
+    .filter(([, perfis]) => perfis.some(p => roles.includes(p)))
     .map(([k]) => k);
 }
 

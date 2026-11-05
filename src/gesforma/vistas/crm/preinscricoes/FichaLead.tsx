@@ -11,6 +11,7 @@ import { FichaDocumentos } from "./FichaDocumentos";
 import { EmailLead } from "./EmailLead";
 import { FichaSecretaria } from "./FichaSecretaria";
 import { nomeCompleto, proximoPasso, rotuloEtapa, telWhatsapp, tomEtapa } from "./util";
+import { perfilNoRegime } from "../../../../partilhado/perfisUtilizador";
 
 type Aba = "actividade" | "documentos" | "dados" | "secretaria";
 
@@ -155,7 +156,7 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
               : <span className="inline-flex h-9 items-center rounded-controlo bg-linha-suave px-3 text-tinta-fraca">Sem telemóvel</span>}
             {wa && <a className="inline-flex h-9 items-center rounded-controlo bg-sucesso px-3 font-semibold text-white" href={`https://wa.me/${wa}`} target="_blank" rel="noreferrer" onClick={() => void registarContacto("WhatsApp")}>WhatsApp</a>}
             {lead.email && <button type="button" className="inline-flex h-9 items-center rounded-controlo border border-linha-forte px-3 font-semibold text-tinta hover:bg-fundo" onClick={() => setEmail(true)}>Email</button>}
-            {lead.regime === "gold" && (user.role === "admin" || user.role === "secretaria") && <FichaContabilidade leadId={lead.id} />}
+            {lead.regime === "gold" && ["admin", "secretaria"].includes(perfilNoRegime(user, "gold")) && <FichaContabilidade leadId={lead.id} />}
           </div>
 
           {d.outrosPedidos.length > 0 && (
@@ -180,9 +181,9 @@ export function FichaLead({ id, lista, onFechar, onMudar }: {
             ]}
           />
           {aba === "actividade" && <FichaActividade d={d} onMudou={actualizado} />}
-          {aba === "documentos" && <FichaDocumentos d={d} role={user.role} onMudou={actualizado} />}
+          {aba === "documentos" && <FichaDocumentos d={d} role={perfilNoRegime(user, lead.regime)} onMudou={actualizado} />}
           {aba === "dados" && <FichaDados d={d} onMudou={actualizado} />}
-          {aba === "secretaria" && <FichaSecretaria d={d} role={user.role} onMudou={actualizado} />}
+          {aba === "secretaria" && <FichaSecretaria d={d} role={perfilNoRegime(user, lead.regime)} onMudou={actualizado} />}
           <EmailLead d={d} aberto={email} onFechar={() => setEmail(false)} onEnviado={actualizado} />
         </div>
       )}

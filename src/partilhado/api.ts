@@ -5,8 +5,9 @@ export { ApiError };
 export * from "./api/pedagogia";
 export * from "./api/publico";
 
-export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando";
-export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; mustChangePassword?: boolean };
+export type StaffRole = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando" | "personalizado";
+/** `perfis`: no perfil personalizado, os perfis que a pessoa soma. */
+export type SessionUser = { id: string; email: string; name: string; role: StaffRole | string; perfis?: string[]; mustChangePassword?: boolean };
 
 export type DriveStatus = {
   configured: boolean;

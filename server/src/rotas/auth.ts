@@ -94,7 +94,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     await terminarOutrasSessoes(db, req.actor!.id, sha256(String(req.cookies[config.cookieName] ?? "")));
     await audit(db, req.actor!.id, "auth.password_self", "user", req.actor!.id, req.ip);
     req.actor!.mustChangePassword = false;
-    return { ok: true, user: { ...req.actor, mustChangePassword: false } };
+    return { ok: true, user: { ...req.actor, role: req.actor!.perfil, mustChangePassword: false } };
   });
 
   app.post("/v1/auth/logout", async (req, reply) => {
@@ -107,7 +107,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/me", async (req, reply) => {
     if (!requireAuth(req, reply, { formando: true })) return;
-    return { user: req.actor, pode: capacidadesDe(req.actor!.role) };
+    // Personalizado: o perfil da conta, os perfis marcados e a soma das capacidades (o menu mostra tudo).
+    const a = req.actor!;
+    return { user: { ...a, role: a.perfil, perfis: a.perfis }, pode: capacidadesDe(a.perfis) };
   });
 
   // ─── OAuth: entrar com Google ou Microsoft (só contas que já existem) ─────────

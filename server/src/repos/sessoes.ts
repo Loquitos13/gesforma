@@ -3,13 +3,13 @@ import { many, one, valor, type Consulta } from "./sql.js";
 
 /** Sessões da equipa e dos formandos (cookie `gf_session`, guardado só como hash). */
 
-export type ActorSessao = { id: string; email: string; name: string; role: string; must_change_password?: boolean };
+export type ActorSessao = { id: string; email: string; name: string; role: string; perfis?: string[]; must_change_password?: boolean };
 
 /** Utilizador activo dono de uma sessão válida. */
 export function actorDaSessao(c: Consulta, tokenHash: string) {
   return one<ActorSessao>(
     c,
-    `SELECT u.id, u.email, u.name, u.role, u.must_change_password
+    `SELECT u.id, u.email, u.name, u.role, u.perfis, u.must_change_password
        FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = $1 AND s.expires_at > now() AND u.active = true`,

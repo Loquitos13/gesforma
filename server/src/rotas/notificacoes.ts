@@ -12,7 +12,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/notificacoes", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const items = await construirNotificacoes(db, req.actor!.id, req.actor!.role, req.actor!);
+    const a = req.actor!;
+    // Perfil personalizado: a soma dos avisos de cada perfil marcado (sem repetidos).
+    const perfis = a.perfil === "personalizado" ? a.perfis : [a.role];
+    const porChave = new Map<string, Awaited<ReturnType<typeof construirNotificacoes>>[number]>();
+    for (const p of perfis) for (const n of await construirNotificacoes(db, a.id, p, a)) if (!porChave.has(n.chave)) porChave.set(n.chave, n);
+    const items = [...porChave.values()];
     return { notificacoes: items, naoLidas: items.filter(n => !n.lida).length };
   });
 

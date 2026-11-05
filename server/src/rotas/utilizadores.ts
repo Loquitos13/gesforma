@@ -7,6 +7,7 @@ import {
   PERFIS, actualizarUtilizador, apagarUtilizador, criarUtilizador, definirPalavraPasse, eUltimoAdmin,
   eViolacaoUnica, listarUtilizadores, obterUtilizador, type LinhaUtilizador,
 } from "../repos/utilizadores.js";
+import { PERFIS_COMBINAVEIS, perfisValidos } from "../permissoes/personalizado.js";
 import { hashPassword, isEmail, normalizeEmail } from "../security.js";
 import { textoQuery, validar } from "../validacao.js";
 import { mensagemPalavraPasse, palavraPasseValida } from "../../../src/partilhado/passwordPolicy.js";
@@ -23,13 +24,16 @@ const criarSchema = z.object({
   email: z.string().max(254),
   password: z.string().min(1).max(200),
   role: z.enum(PERFIS).default("secretaria"),
+  /** Perfil personalizado: os perfis que soma (pelo menos um). */
+  perfis: z.array(z.enum(PERFIS_COMBINAVEIS)).max(4).optional(),
   active: z.boolean().optional().default(true),
   mustChangePassword: z.boolean().optional().default(true),
-});
+}).refine(v => v.role !== "personalizado" || (v.perfis?.length ?? 0) > 0, { message: "Escolha pelo menos um perfil para o perfil personalizado.", path: ["perfis"] });
 const alterarSchema = z.object({
   name: z.string().trim().min(2).max(120).optional(),
   email: z.string().max(254).optional(),
   role: z.enum(PERFIS).optional(),
+  perfis: z.array(z.enum(PERFIS_COMBINAVEIS)).max(4).optional(),
   active: z.boolean().optional(),
 }).refine(v => Object.keys(v).length > 0, { message: "sem alterações" });
 const passwordSchema = z.object({
@@ -49,6 +53,7 @@ function mapear(u: LinhaUtilizador) {
     name: u.name,
     email: u.email,
     role: u.role,
+    perfis: u.role === "personalizado" ? perfisValidos(u.perfis) : [],
     active: u.active,
     mustChangePassword: Boolean(u.must_change_password),
     created_at: u.created_at,
@@ -97,7 +102,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const id = randomUUID();
     try {
       await criarUtilizador(db, {
-        id, name: v.body.name, email, passwordHash: await hashPassword(v.body.password), role: v.body.role,
+        id, name: v.body.name, email, passwordHash: await hashPassword(v.body.password), role: v.body.role, perfis: perfisValidos(v.body.perfis ?? []),
         active: v.body.active, mustChangePassword: v.body.mustChangePassword,
       });
     } catch (err) {
@@ -118,6 +123,10 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!atual) return reply.code(404).send({ error: "utilizador não encontrado" });
     const role = v.body.role ?? atual.role;
     const active = v.body.active ?? atual.active;
+    const perfisNovos = v.body.perfis ? perfisValidos(v.body.perfis) : undefined;
+    if (role === "personalizado" && !(perfisNovos ?? perfisValidos(atual.perfis)).length) {
+      return reply.code(400).send({ error: "Escolha pelo menos um perfil para o perfil personalizado." });
+    }
     if (id === req.actor!.id && active === false) return reply.code(400).send({ error: "não pode desactivar a sua própria conta" });
     let email: string | undefined;
     if (v.body.email !== undefined) {
@@ -128,7 +137,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       // Verificação do último admin e escrita na mesma transacção (ver adminsAtivosBloqueados).
       const feito = await db.tx(async q => {
         if ((role !== "admin" || !active) && (await eUltimoAdmin(q, id))) return false;
-        await actualizarUtilizador(q, id, { ...v.body, email });
+        await actualizarUtilizador(q, id, { ...v.body, email, perfis: perfisNovos });
         return true;
       });
       if (!feito) return reply.code(409).send({ error: "tem de ficar pelo menos um administrador activo" });
@@ -136,10 +145,12 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       if (eViolacaoUnica(err)) return reply.code(409).send({ error: "já existe um utilizador com este email" });
       throw err;
     }
-    if (active === false) await terminarSessoesDe(db, id);
     // Conta da equipa desactivada, com outro perfil ou outro email: as turmas voltam a ficar por sincronizar na Drive
     // e o cron diário tira as partilhas das pastas a quem já não é da secretaria.
-    if (equipaDaDrive(atual) && (!active || role !== atual.role || (email !== undefined && email !== atual.email))) {
+    const perfisMudaram = perfisNovos !== undefined && perfisNovos.join(",") !== perfisValidos(atual.perfis).join(",");
+    // A sessão relê o perfil em cada pedido: só a conta desactivada perde as sessões.
+    if (active === false) await terminarSessoesDe(db, id);
+    if (equipaDaDrive(atual) && (!active || role !== atual.role || perfisMudaram || (email !== undefined && email !== atual.email))) {
       await ressincronizarPartilhas(db);
     }
     await audit(db, req.actor!.id, "user.update", "user", id, req.ip, { role, active, antes: { role: atual.role, active: atual.active } });

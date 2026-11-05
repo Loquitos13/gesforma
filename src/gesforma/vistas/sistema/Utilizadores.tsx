@@ -6,7 +6,7 @@ import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
   Aviso, Botao, Cartao, ErroCarregar, Estado, Filtros, PageHeader, Separadores, Tabela, Vazio, dataHora, num, useFiltrosUrl, type Coluna, type Tom,
 } from "../../../partilhado/ui";
-import { STAFF_ROLES, roleLabel } from "../../UsersView";
+import { STAFF_ROLES, rotuloDoUtilizador } from "../../UsersView";
 import type { VistaProps } from "../../shell/tipos";
 import { FichaUtilizador, NovoUtilizador } from "./utilizadores/FichaUtilizador";
 
@@ -59,7 +59,7 @@ export default function Utilizadores({ navigate }: VistaProps) {
         </span>
       ),
     },
-    { id: "perfil", titulo: "Perfil", celula: u => <Estado tom={TOM_PERFIL[u.role] ?? "neutro"}>{roleLabel(u.role)}</Estado> },
+    { id: "perfil", titulo: "Perfil", celula: u => <Estado tom={TOM_PERFIL[u.role] ?? "neutro"}>{rotuloDoUtilizador(u)}</Estado> },
     {
       id: "estado", titulo: "Estado",
       celula: u => (

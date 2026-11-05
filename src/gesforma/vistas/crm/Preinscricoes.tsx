@@ -21,6 +21,7 @@ import { NovaPreinscricao } from "./preinscricoes/NovaPreinscricao";
 import { Pipeline } from "./preinscricoes/Pipeline";
 import { TabelaLeads } from "./preinscricoes/TabelaLeads";
 import { ETAPAS, hojeLisboa, nomeCompleto, podeMudarEtapa, rotuloEtapa } from "./preinscricoes/util";
+import { perfilNoRegime } from "../../../partilhado/perfisUtilizador";
 
 const PADRAO = {
   q: "", fila: "", estado: "", curso: "", local: "", origem: "", comercial: "", entrada: "",
@@ -106,7 +107,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
 
   const mover = useAccao(apiEditarLead, { ok: "Etapa actualizada.", invalidar: ["crm:"] });
   function moverNoPipeline(l: Lead, estado: string) {
-    const erroRegra = podeMudarEtapa(l.estado, estado, user.role, regime);
+    const erroRegra = podeMudarEtapa(l.estado, estado, perfilNoRegime(user, regime), regime);
     if (erroRegra) { toastError(new Error(erroRegra)); return; }
     if (estado === l.estado) return;
     if (estado === "Formando" || estado === "Desistiu") {

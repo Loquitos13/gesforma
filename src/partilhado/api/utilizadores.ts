@@ -1,13 +1,17 @@
 // API do domínio "utilizadores": contas, perfis, palavras-passe e sessões (só administração).
 import { api, enviar, qs } from "./cliente";
 
-export type PerfilUtilizador = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando";
+export type PerfilUtilizador = "admin" | "secretaria" | "comercial" | "financiada" | "contabilidade" | "formador" | "formando" | "personalizado";
+/** Perfis que se podem juntar num perfil personalizado. */
+export type PerfilCombinavel = "secretaria" | "financiada" | "contabilidade" | "comercial";
 
 export type Utilizador = {
   id: string;
   name: string;
   email: string;
   role: PerfilUtilizador;
+  /** Perfil personalizado: os perfis que soma. */
+  perfis: PerfilCombinavel[];
   active: boolean;
   mustChangePassword: boolean;
   created_at: string;
@@ -29,11 +33,11 @@ export function apiUtilizador(id: string, signal?: AbortSignal) {
   return api<{ user: Utilizador; sessoes: SessaoUtilizador[] }>(`/v1/utilizadores/${id}`, { signal });
 }
 
-export function apiCriarUtilizador(corpo: { name: string; email: string; password: string; role: PerfilUtilizador; mustChangePassword: boolean }) {
+export function apiCriarUtilizador(corpo: { name: string; email: string; password: string; role: PerfilUtilizador; perfis?: PerfilCombinavel[]; mustChangePassword: boolean }) {
   return enviar.post<{ user: Utilizador }>("/v1/utilizadores", corpo);
 }
 
-export function apiAlterarUtilizador(id: string, corpo: { name?: string; email?: string; role?: PerfilUtilizador; active?: boolean }) {
+export function apiAlterarUtilizador(id: string, corpo: { name?: string; email?: string; role?: PerfilUtilizador; perfis?: PerfilCombinavel[]; active?: boolean }) {
   return enviar.patch<{ user: Utilizador }>(`/v1/utilizadores/${id}`, corpo);
 }
 

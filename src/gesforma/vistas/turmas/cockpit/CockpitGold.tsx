@@ -30,6 +30,7 @@ import { recarregarTurma, useMembrosGold, useResultadosTurma, useTurmaCockpit } 
 import { EditarTurmaGold, InscreverGold, TransferirEEliminarGold } from "./GoldDialogos";
 import { GoldVisaoGeral } from "./GoldVisaoGeral";
 import { FormadorProfileSlideOver } from "./PerfilFormador";
+import { perfilNoRegime } from "../../../../partilhado/perfisUtilizador";
 
 export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { turmaId?: number; initialTab?: Separador; navigate: Navegar }) {
   const { turma, erro, aCarregar, patch, setCronograma, publicarCronograma, toggle } = useTurmaCockpit("gold", turmaId);
@@ -72,7 +73,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
         const nomesCockpit = membros.map(f => ({ id: f.id, nome: `${f.nome} ${f.apelido}` }));
         const podeDoc = (s: SessaoMeta, doc: "plano" | "sumario" | "presencas") => {
           const validado = doc === "plano" ? Boolean(ped.planos[s.n]?.assinado) : doc === "sumario" ? Boolean(sumarios[s.n]?.assinado) : Boolean(sumarios[s.n]?.presencasValidadas);
-          return podeMexerDocumento({ role: user.role, nomes: nomesEu, sessao: s, validado });
+          return podeMexerDocumento({ role: perfilNoRegime(user, "gold"), nomes: nomesEu, sessao: s, validado });
         };
         const porPagar = membros.filter(f => !f.pago).length;
         const semSumario = sessoes.filter(s => !sumarioPreenchido(sumarios[s.n])).length;
@@ -126,7 +127,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                           .catch(err => setEnvioInq(err instanceof Error ? err.message : "Não foi possível enviar."));
                       }}>Enviar pós-formação</Botao>
                       <Botao tamanho="sm" variante="primario" onClick={() => setEditar(true)}>Editar turma</Botao>
-                      {resultados && !fechada && staffPodeDossie(user.role) && (
+                      {resultados && !fechada && staffPodeDossie(perfilNoRegime(user, "gold")) && (
                         <Botao tamanho="sm" variante="secundario" disabled={faltaFecho.length > 0}
                           title={faltaFecho.length ? `Falta: ${faltaFecho.slice(0, 5).join(" ")}${faltaFecho.length > 5 ? "…" : ""}` : "Fecha a turma: deixa de aceitar alterações pedagógicas e inscrições"}
                           onClick={() => setFechar(true)}>Fecho formal</Botao>
@@ -158,7 +159,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               </section>
 
               <NextActions accent="gold" actions={proximos.slice(0, 3)} />
-              <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(user.role)} so={souFormador ? TABS_FORMADOR : undefined} />
+              <TurmaTabBar tab={tab} onChange={setTab} accent="gold" dtpPct={ped.dtp.pct} dossie={staffPodeDossie(perfilNoRegime(user, "gold"))} so={souFormador ? TABS_FORMADOR : undefined} />
               {!activa && <TurmaInactivaBanner nome={t.nome} onActivate={() => toggle(true)} />}
 
               {tab === "cronograma" && !souFormador && (
@@ -167,7 +168,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   onCopiado={user.role === "formador" ? undefined : () => { recarregarTurma("gold", t.id); recarregarPlanos(); }} inicio={t.dataInicio} horario={t.horario} horas={t.horas} formador={t.formador} curso={t.curso} local={t.local}
                   onLocal={local => patch({ local })} />
               )}
-              {tab === "dtp" && staffPodeDossie(user.role) && (
+              {tab === "dtp" && staffPodeDossie(perfilNoRegime(user, "gold")) && (
                 <DtpPanel regime="gold" turma={{ codigo: t.nome, id: t.id, titulo: t.curso, sub: `${t.local} · ${t.horario}` }} dtp={ped.dtp} estado={ped.estado}
                   onToggle={(item, proximo) => void ped.guardarDtp(item.id, proximo)} onAnexo={(item, file) => void ped.guardarDtpAnexo(item.id, file)} />
               )}
@@ -202,7 +203,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
                   onTransferir={setTransferir} onEliminar={setEliminar} onAdicionar={() => setInscrever(true)}
                   onFormadores={nomes => patch({ formadores: nomes })}
                   onFormador={setFormadorAberto} onSala={valor => patch({ custoHoraSala: valor })}
-                  verCustos={!souFormador && user.role !== "comercial"} onValoresHora={valores => patch({ valoresHoraFormador: valores })} />
+                  verCustos={!souFormador && perfilNoRegime(user, "gold") !== "comercial"} onValoresHora={valores => patch({ valoresHoraFormador: valores })} />
               )}
             </div>
 
@@ -210,7 +211,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               plano={planoSessao ? ped.plano(planoSessao.n) : emptyPlano()}
               soLeitura={souFormador && planoSessao && ped.planosDoCurso.includes(planoSessao.n) ? "Plano definido na ficha do curso"
                 : planoSessao && !podeDoc(planoSessao, "plano") ? (ped.planos[planoSessao.n]?.assinado ? "Aprovado: só a coordenação o altera" : "Só consulta") : undefined}
-              coordenacao={staffPodeDossie(user.role)}
+              coordenacao={staffPodeDossie(perfilNoRegime(user, "gold"))}
               onSave={data => { if (planoSessao) void ped.guardarPlano(planoSessao.n, data, planoSessao.id); }}
               onPdf={planoSessao ? () => { apiPlanosSessaoFin(t.id, planoSessao.n, "gold").catch(err => toastError(err, "Não foi possível gerar o plano de sessão.")); } : undefined} />
             <SumarioSessaoModal open={!!sumarioSessao} onClose={() => setSumarioSessao(null)} sessao={sumarioSessao ?? undefined}
@@ -230,7 +231,7 @@ export function CockpitGold({ turmaId, initialTab = "overview", navigate }: { tu
               soLeitura={presencasSessao && !podeDoc(presencasSessao, "presencas")
                 ? (sumarios[presencasSessao.n]?.presencasValidadas ? "Folha validada pela coordenação pedagógica: só a coordenação a altera." : "Só consulta: não está atribuído a esta sessão.")
                 : undefined}
-              podeValidar={staffPodeDossie(user.role)}
+              podeValidar={staffPodeDossie(perfilNoRegime(user, "gold"))}
               onSave={(rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha); }}
               onAssinar={souFormador ? (rows, folha) => { if (presencasSessao) void ped.guardarPresencas(presencasSessao.n, rows, presencasSessao.id, folha, true); } : undefined}
               onValidar={(validar, rows, folha) => { if (presencasSessao) void ped.validarPresencas(presencasSessao.n, validar, rows, folha, presencasSessao.id); }}

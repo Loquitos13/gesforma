@@ -7,6 +7,7 @@ import { useRef, useSyncExternalStore } from "react";
 import { apiWhatsappPendentes, type ConversaPorLerWhatsapp, type PedidoPendenteWhatsapp } from "../partilhado/api/configuracoes";
 import { useSondagem } from "../partilhado/dados/sondagem";
 import { pruneAlertKeys, pushAlertToast } from "../partilhado/toastBus";
+import { perfisDaChave } from "./shell/navegacao";
 
 const INTERVALO_MS = 15_000;
 const PERFIS_EQUIPA = new Set(["admin", "secretaria", "comercial", "financiada"]);
@@ -35,7 +36,8 @@ export function atualizarPendentesWhatsapp() {
   pedirAgora?.();
 }
 
-function daEquipa(role: string, p: { regime: "gold" | "fin" | null }) {
+function daEquipa(role: string, p: { regime: "gold" | "fin" | null }): boolean {
+  if (role.startsWith("personalizado:")) return perfisDaChave(role).some(r => daEquipa(r, p));
   if (role === "admin") return true;
   if (role === "financiada") return p.regime !== "gold";
   return p.regime !== "fin"; // comercial e coordenação Gold
@@ -47,7 +49,7 @@ const chaveNova = (c: ConversaPorLerWhatsapp) => `wanova:${c.telefone}:${c.novaD
 export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telefone: string, regime: "gold" | "fin") => void }) {
   const onOpenRef = useRef(onOpen);
   onOpenRef.current = onOpen;
-  const ativo = PERFIS_EQUIPA.has(role);
+  const ativo = perfisDaChave(role).some(r => PERFIS_EQUIPA.has(r));
 
   async function verificar() {
     const { pendentes, porLer } = await apiWhatsappPendentes();
@@ -65,7 +67,7 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
     const chavesNovas = new Set(novas.map(chaveNova));
     for (const c of novas) {
       const k = chaveNova(c);
-      const regime = c.regime ?? (role === "financiada" ? "fin" : "gold");
+      const regime = c.regime ?? (perfisDaChave(role).every(r => r === "financiada") ? "fin" : "gold");
       pushAlertToast({
         key: k,
         titulo: "Nova conversa no WhatsApp",
@@ -79,7 +81,7 @@ export function WhatsappAlertas({ role, onOpen }: { role: string; onOpen: (telef
     for (const p of meus) {
       const k = chave(p);
       // A área da conversa: a da pré-inscrição; sem ela, a da equipa de quem vê (a Financiada abre na Financiada).
-      const regime = p.regime ?? (role === "financiada" ? "fin" : "gold");
+      const regime = p.regime ?? (perfisDaChave(role).every(r => r === "financiada") ? "fin" : "gold");
       pushAlertToast({
         key: k,
         titulo: "WhatsApp: pedido para falar com a equipa",

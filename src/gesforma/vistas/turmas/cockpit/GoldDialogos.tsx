@@ -18,12 +18,13 @@ import { TurmaInactivaBanner } from "../../../TurmaCronograma";
 import { ValoresHoraFormador } from "../../../ValoresHoraFormador";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import { inscreverNaTurma, recarregarTurma, retirarDaTurma, useLeadsDoCurso, useOutrasTurmas } from "./dados";
+import { perfilNoRegime } from "../../../../partilhado/perfisUtilizador";
 
 export function EditarTurmaGold({ aberto, onFechar, turma, onGravar }: {
   aberto: boolean; onFechar: () => void; turma: TurmaGold; onGravar: (p: Partial<DadosTurma>) => void;
 }) {
   const [f, setF] = useState({ nome: "", local: "", horario: "", formador: "", inicio: "", vagas: 16, tolerancia: 0, anunciadas: "", valores: {} as Record<string, number> });
-  const verCustos = useAuth().user.role !== "comercial";
+  const verCustos = perfilNoRegime(useAuth().user, "gold") !== "comercial";
   useEffect(() => {
     if (!aberto) return;
     setF({

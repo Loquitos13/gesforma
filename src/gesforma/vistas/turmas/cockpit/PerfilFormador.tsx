@@ -14,6 +14,7 @@ import { persist } from "../../../../partilhado/toastBus";
 import { FileUploadModal } from "../../../../partilhado/TurmaExtras";
 import { I } from "../../../../partilhado/turmaIcones";
 import type { SessaoCronograma } from "../../../../partilhado/turmaModel";
+import { temPerfil } from "../../../../partilhado/perfisUtilizador";
 
 type DocField = { id: string; label: string; required: boolean; uploaded: boolean; fileName?: string; driveUrl?: string; driveFileId?: string };
 
@@ -96,7 +97,7 @@ export function FormadorProfileSlideOver({ open, onClose, nome, telf, accent = "
     if (url) window.open(url, "_blank", "noreferrer");
   }
 
-  const verCalendario = user.role === "admin" || user.role === "secretaria" || user.role === "financiada" || user.role === "formador";
+  const verCalendario = temPerfil(user, "admin", "secretaria", "financiada", "formador");
   const eventos = useMemo(() => {
     const porTurma = new Map<string, { nome: string; cronograma: SessaoCronograma[] }>();
     (ficha?.sessoes ?? []).forEach((s, i) => {

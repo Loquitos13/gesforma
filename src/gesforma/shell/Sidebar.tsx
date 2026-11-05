@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState } from "react";
 import { useAuth } from "../../partilhado/AuthGate";
 import { cx } from "../../partilhado/ui";
 import type { Vista } from "../rotasGesforma";
-import { roleLabel } from "../UsersView";
+import { rotuloDoUtilizador } from "../UsersView";
 import { AlterarPalavraPasse } from "./AlterarPalavraPasse";
 import { Icone } from "./Icones";
-import { menuDoPerfil, painelDoPerfil, vistaDoMenu, type GrupoMenu, type ItemMenu } from "./navegacao";
+import { chaveDoPerfil, menuDoPerfil, painelDoPerfil, type GrupoMenu, type ItemMenu, vistaDoMenu } from "./navegacao";
 import { preCarregarVista } from "./rotas";
 import { useWhatsappPendentes } from "../WhatsappPendentes";
 import type { Navegar } from "./tipos";
@@ -37,7 +37,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
     </button>
   );
   const modalPasse = <AlterarPalavraPasse aberto={mudarPasse} onFechar={() => setMudarPasse(false)} />;
-  const menu = useMemo(() => menuDoPerfil(user.role), [user.role]);
+  const menu = useMemo(() => menuDoPerfil(chaveDoPerfil(user)), [user.role, user.perfis]);
   // Conversas de WhatsApp com mensagens por ler: contador no «WhatsApp» (e no «CRM» fechado).
   const pendentes = useWhatsappPendentes();
   const contadorDe = (v?: Vista) => (v === "gold-whatsapp" ? pendentes.gold : v === "fin-whatsapp" ? pendentes.fin : 0);
@@ -110,7 +110,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
       <div className="h-14 flex items-center justify-between px-4 border-b border-white/10 shrink-0">
         <button
           type="button"
-          onClick={() => ir(painelDoPerfil(user.role))}
+          onClick={() => ir(painelDoPerfil(chaveDoPerfil(user)))}
           className="bg-nav-ativo text-white font-extrabold text-[13px] tracking-[0.18em] px-3.5 py-1.5 rounded-controlo hover:brightness-110"
         >
           GESFORMA
@@ -216,7 +216,7 @@ export function Sidebar({ view, onNavigate, onFechar, compacta = false, onAltern
           <span className="h-8 w-8 rounded-full bg-nav-ativo text-white font-bold text-sm inline-flex items-center justify-center" aria-hidden="true">{user.name.slice(0, 1)}</span>
           <span className="flex-1 min-w-0">
             <span className="block text-sm font-semibold text-white truncate">{user.name}</span>
-            <span className="block text-nav-fraco truncate">{roleLabel(user.role)}</span>
+            <span className="block text-nav-fraco truncate">{rotuloDoUtilizador(user)}</span>
           </span>
           {botaoPasse}
           {modalPasse}

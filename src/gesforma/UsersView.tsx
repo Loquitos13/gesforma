@@ -10,7 +10,18 @@ export const STAFF_ROLES: { value: StaffRole; label: string; hint: string }[] = 
   { value: "contabilidade", label: "Contabilidade", hint: "Pagamentos: comprovativos, dados de faturação, recibos e faturas; e os seus emails." },
   { value: "formador", label: "Formador", hint: "Vê as turmas em que está atribuído, o calendário, os documentos e o perfil." },
   { value: "formando", label: "Formando", hint: "Entra na área do formando, não no GesForma." },
+  { value: "personalizado", label: "Personalizado", hint: "Junta perfis da equipa (ex.: Coordenação Gold + Contabilidade) e tem tudo o que cada um tem." },
 ];
+
+/** Perfis que se podem juntar num perfil personalizado, pela ordem do ecrã. */
+export const PERFIS_COMBINAVEIS = ["comercial", "secretaria", "financiada", "contabilidade"] as const;
+
+/** «Personalizado (Comercial Gold + Contabilidade)». */
+export function rotuloDoUtilizador(u: { role: string; perfis?: readonly string[] | null }) {
+  if (u.role !== "personalizado") return roleLabel(u.role);
+  const nomes = PERFIS_COMBINAVEIS.filter(p => u.perfis?.includes(p)).map(p => roleLabel(p));
+  return nomes.length ? `Personalizado (${nomes.join(" + ")})` : "Personalizado";
+}
 
 export function roleLabel(role: string) {
   return STAFF_ROLES.find(r => r.value === role)?.label ?? role;

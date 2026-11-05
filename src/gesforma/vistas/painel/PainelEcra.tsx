@@ -8,6 +8,7 @@ import type { Navegar } from "../../shell/tipos";
 import { BarraFiltros, CartaoATratar, CartaoConheceu, CartaoFunil, FaixaIndicadores, type ValoresFiltro } from "./BlocosPainel";
 import { CartaoDesagregacao, CartaoMetodos, CartaoProximas, TabelaTurmasEmCurso } from "./BlocosTurmas";
 import { datasDoPeriodo, hojePorExtenso, paraGrafico, rotuloComparacao, type PresetPeriodo } from "./painelDados";
+import { perfilNoRegime } from "../../../partilhado/perfisUtilizador";
 
 const PADRAO: ValoresFiltro = { periodo: "mes", de: "", ate: "", curso: "", local: "", horario: "", financiador: "", eixo: "curso" };
 
@@ -89,7 +90,7 @@ export function PainelEcra({ regime, navigate }: { regime: RegimePainel; navigat
           <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
             <CartaoFunil regime={regime} funil={p.funil} />
             <CartaoConheceu regime={regime} conheceu={p.conheceu} />
-            <CartaoProximas regime={regime} turmas={p.proximasTurmas} navigate={navigate} cronogramas={user.role === "comercial"} />
+            <CartaoProximas regime={regime} turmas={p.proximasTurmas} navigate={navigate} cronogramas={perfilNoRegime(user, regime) === "comercial"} />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

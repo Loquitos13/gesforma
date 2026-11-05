@@ -7,7 +7,7 @@ import { cx } from "../../partilhado/ui";
 import type { Destino, Vista } from "../rotasGesforma";
 import { TAREFAS, destinoTarefa } from "../vistas/painel/painelDados";
 import { Icone } from "./Icones";
-import { VISTAS_FORMADOR, vistaNoMenuDoPerfil } from "./navegacao";
+import { chaveDoPerfil, perfisDaChave, vistaNoMenuDoPerfil, VISTAS_FORMADOR } from "./navegacao";
 
 type Linha = { tipo: string; nome: string; sub: string; grupo?: string } & Destino;
 
@@ -21,6 +21,10 @@ function deResultado(h: GlobalSearchHit): Linha {
 
 /** Regimes cujo trabalho o perfil vê. */
 function regimesDoPerfil(role: string): RegimePainel[] {
+  if (role.startsWith("personalizado:")) {
+    const r = new Set(perfisDaChave(role).flatMap(p => regimesDoPerfil(p)));
+    return (["gold", "fin"] as RegimePainel[]).filter(x => r.has(x));
+  }
   if (role === "comercial" || role === "secretaria") return ["gold"];
   if (role === "financiada") return ["fin"];
   if (role === "admin") return ["gold", "fin"];
@@ -30,7 +34,7 @@ function regimesDoPerfil(role: string): RegimePainel[] {
 /** Atalhos do dia: as filas de "a tratar hoje" dos painéis, só as que têm trabalho. */
 function useAtalhosDoDia(aberta: boolean): Linha[] {
   const { user } = useAuth();
-  const regimes = regimesDoPerfil(user.role);
+  const regimes = regimesDoPerfil(chaveDoPerfil(user));
   const { dados } = useRecurso(
     aberta && regimes.length ? `pesquisa:atalhos:${regimes.join(",")}` : null,
     signal => Promise.all(regimes.map(r => apiPainel(r, {}, signal).then(p => ({ regime: r, tarefas: p.aTratar })).catch(() => ({ regime: r, tarefas: [] })))),
@@ -49,9 +53,9 @@ function useAtalhosDoDia(aberta: boolean): Linha[] {
         out.push({ tipo: "Atalho", nome: `${t.n} · ${info.titulo}`, sub: `${regime === "gold" ? "Gold" : "Financiada"} · ${t.detalhe}`, ...destino });
       }
     }
-    if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: user.role === "financiada" ? "fin-painel" : "gold-painel" });
+    if (!out.length) out.push({ tipo: "Atalho", nome: "Painel", sub: "Sem pendências sinalizadas", view: perfisDaChave(chaveDoPerfil(user)).every(p => p === "financiada") ? "fin-painel" : "gold-painel" });
     return out;
-  }, [dados, user.role]);
+  }, [dados, user.role, user.perfis]);
 }
 
 /** Pesquisa global (Ctrl+K): pessoas, turmas, cursos e atalhos do dia (o comercial: pré-inscrições). */
@@ -85,12 +89,12 @@ export function Pesquisa({ aberta, onFechar, onNavigate }: { aberta: boolean; on
           // Só o que o perfil abre (o servidor já filtra; o comercial, por exemplo, só encontra pré-inscrições).
           items: g.items.map(deResultado).filter(i => user.role === "formador"
             ? VISTAS_FORMADOR.has(i.view) && i.tab !== "dtp"
-            : vistaNoMenuDoPerfil(user.role, i.view)),
+            : vistaNoMenuDoPerfil(chaveDoPerfil(user), i.view)),
         })).filter(g => g.items.length));
       }).catch(() => { setTipoProcura(null); setGrupos([]); }).finally(() => setAProcurar(false));
     }, 180);
     return () => window.clearTimeout(t);
-  }, [q, aberta, user.role]);
+  }, [q, aberta, user.role, user.perfis]);
 
   function abrir(l: Linha) {
     onNavigate({

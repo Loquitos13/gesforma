@@ -24,7 +24,7 @@ export async function listarMembros(c: Consulta, regime: Regime, id?: string) {
             (SELECT max(s.created_at) FROM sessions s WHERE s.user_id = u.id) AS ultimo_acesso,
             o.meta_pct, o.meta_leads, o.meta_propostas, o.telefone, o.nota
        FROM users u LEFT JOIN comercial_objetivos o ON o.comercial_id = u.id
-      WHERE u.role = $1 AND ($2::uuid IS NULL OR u.id = $2::uuid)
+      WHERE (u.role = $1 OR (u.role = 'personalizado' AND $1 = ANY(u.perfis))) AND ($2::uuid IS NULL OR u.id = $2::uuid)
       ORDER BY u.active DESC, u.name ASC`,
     [perfilDaEquipa(regime), id ?? null],
   );
@@ -180,7 +180,7 @@ export async function notasDoMembro(c: Consulta, regime: Regime, id: string) {
 }
 
 export async function membroExiste(c: Consulta, regime: Regime, id: string) {
-  return Boolean(await one(c, "SELECT id FROM users WHERE id = $1::uuid AND role = $2", [id, perfilDaEquipa(regime)]));
+  return Boolean(await one(c, "SELECT id FROM users WHERE id = $1::uuid AND (role = $2 OR (role = 'personalizado' AND $2 = ANY(perfis)))", [id, perfilDaEquipa(regime)]));
 }
 
 export async function regimeDaProposta(c: Consulta, id: number) {

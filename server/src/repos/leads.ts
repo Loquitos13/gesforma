@@ -114,7 +114,8 @@ export async function atribuirComercial(c: Consulta, id: number, comercialId: st
 
 /** Este utilizador é um comercial (só vende Gold). */
 export async function eComercial(c: Consulta, id: string) {
-  return Boolean(await valor(c, "SELECT 1 FROM users WHERE id::text = $1 AND role = 'comercial'", [id]));
+  return Boolean(await valor(c,
+    "SELECT 1 FROM users WHERE id::text = $1 AND (role = 'comercial' OR (role = 'personalizado' AND 'comercial' = ANY(perfis)))", [id]));
 }
 
 export async function marcarEtiqueta(c: Consulta, id: number, etiquetaId: number | null) {
@@ -152,7 +153,8 @@ export async function apagar(c: Consulta, id: number) {
 
 export async function comerciaisActivos(c: Consulta, perfis: string[]) {
   return many<{ id: string; name: string }>(c,
-    "SELECT id, name FROM users WHERE active = true AND role = ANY($1::text[]) ORDER BY name", [pgTextArray(perfis)]);
+    "SELECT id, name FROM users WHERE active = true AND (role = ANY($1::text[]) OR (role = 'personalizado' AND perfis && $1::text[])) ORDER BY name",
+    [pgTextArray(perfis)]);
 }
 
 /* ── Opções das listas («Como conheceu a ENA», métodos, campanhas) ───────── */

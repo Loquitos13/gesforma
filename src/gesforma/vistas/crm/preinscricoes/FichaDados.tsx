@@ -11,6 +11,7 @@ import { toastError } from "../../../../partilhado/toastBus";
 import { ETAPAS, podeMudarEtapa, rotuloEtapa } from "./util";
 import { GENEROS_FIN, HABILITACOES_FIN, rotuloPais } from "../../../../partilhado/dadosPessoaisFin";
 import { LISTA_PAISES } from "../../../../partilhado/execucaoFisica";
+import { perfilNoRegime } from "../../../../partilhado/perfisUtilizador";
 
 const PAISES = LISTA_PAISES.map(v => ({ valor: v, rotulo: rotuloPais(v) }));
 const GENEROS = GENEROS_FIN.map(g => ({ valor: g.valor, rotulo: g.rotulo }));
@@ -73,7 +74,7 @@ export function FichaDados({ d, onMudou }: { d: DossieLead; onMudou: () => void 
   }
 
   function mudarEtapa() {
-    const erro = podeMudarEtapa(l.estado, etapa, user.role, l.regime);
+    const erro = podeMudarEtapa(l.estado, etapa, perfilNoRegime(user, l.regime), l.regime);
     if (erro) { toastError(new Error(erro)); return; }
     if (etapa === "Formando") { toastError(new Error("Para passar a Formando use «Validação» e escolha a turma.")); return; }
     void gravar({ estado: etapa, ...(etapa === "Pago" ? { pagamentoMetodo: metodo } : {}) });

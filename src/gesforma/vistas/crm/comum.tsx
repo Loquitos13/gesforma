@@ -4,6 +4,7 @@ import { useAuth } from "../../../partilhado/AuthGate";
 import { type Tom } from "../../../partilhado/ui";
 import { numeroPt } from "../../../partilhado/ui/formatos";
 import type { Vista } from "../../rotasGesforma";
+import { temPerfil } from "../../../partilhado/perfisUtilizador";
 
 export type Regime = "gold" | "fin";
 
@@ -138,7 +139,7 @@ export function Dados({ itens }: { itens: { rotulo: string; valor: ReactNode; fo
 /** Administração e secretaria: apagam registos e editam modelos (o servidor confirma). */
 export function useGestao() {
   const { user } = useAuth();
-  return user.role === "admin" || user.role === "secretaria";
+  return temPerfil(user, "admin", "secretaria");
 }
 
 export function useEu() {

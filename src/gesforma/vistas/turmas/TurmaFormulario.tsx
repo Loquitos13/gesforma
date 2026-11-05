@@ -12,6 +12,7 @@ import { CronogramaEditor } from "../../CronogramaEditor";
 import { ValoresHoraFormador } from "../../ValoresHoraFormador";
 import { lembrarPrograma, ordenarPorRecentes, programasRecentes } from "../../programasRecentes";
 import { useAuth } from "../../../partilhado/AuthGate";
+import { perfilNoRegime } from "../../../partilhado/perfisUtilizador";
 
 type Rascunho = {
   nome: string; curso: string; local: string; horario: string; formador: string; formadores: string[];
@@ -45,7 +46,7 @@ export function TurmaFormulario({ regime, turmaId, aberto, onFechar, onGuardado 
   const nomesUsados = useOpcoes("turmas", { regime, todos: true });
   const { byCursoId, loaded: locaisProntos } = useCursoFichaLocais(regime);
   const [r, setR] = useState<Rascunho>(() => VAZIO(regime));
-  const verCustos = useAuth().user.role !== "comercial";
+  const verCustos = perfilNoRegime(useAuth().user, "gold") !== "comercial";
   const [erro, setErro] = useState("");
   const [aGravar, setAGravar] = useState(false);
   const nomeManual = useRef(false);

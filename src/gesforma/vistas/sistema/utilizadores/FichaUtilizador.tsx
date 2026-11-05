@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../../../../partilhado/AuthGate";
 import {
-  apiAlterarUtilizador, apiApagarUtilizador, apiCriarUtilizador, apiTerminarSessoes, apiUtilizador, type PerfilUtilizador,
+  apiAlterarUtilizador, apiApagarUtilizador, apiCriarUtilizador, apiTerminarSessoes, apiUtilizador, type PerfilCombinavel, type PerfilUtilizador,
 } from "../../../../partilhado/api/utilizadores";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../../partilhado/dados/useRecurso";
@@ -10,13 +10,17 @@ import { gerarPalavraPasse, mensagemPalavraPasse, palavraPasseValida } from "../
 import {
   Aviso, Botao, Caixa, Campo, ConfirmarPerigo, Entrada, ErroCarregar, Esqueleto, Modal, dataHora, num,
 } from "../../../../partilhado/ui";
-import { STAFF_ROLES } from "../../../UsersView";
+import { PERFIS_COMBINAVEIS, STAFF_ROLES, roleLabel } from "../../../UsersView";
 import { NovaPalavraPasse, PalavraPasseTemporaria } from "./PalavraPasse";
 
 const INVALIDAR = ["utilizadores:"];
 
-function EscolherPerfil({ valor, onMudar, desativado }: { valor: string; onMudar: (p: PerfilUtilizador) => void; desativado?: boolean }) {
+function EscolherPerfil({ valor, onMudar, desativado, perfis, onPerfis }: {
+  valor: string; onMudar: (p: PerfilUtilizador) => void; desativado?: boolean;
+  perfis: PerfilCombinavel[]; onPerfis: (p: PerfilCombinavel[]) => void;
+}) {
   return (
+    <>
     <fieldset className="m-0 p-0 border-0" disabled={desativado}>
       <legend className="text-[13px] font-medium text-tinta mb-1.5">Perfil</legend>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -31,24 +35,44 @@ function EscolherPerfil({ valor, onMudar, desativado }: { valor: string; onMudar
         ))}
       </div>
     </fieldset>
+    {valor === "personalizado" && (
+      <fieldset className="m-0 rounded-controlo border border-linha p-3" disabled={desativado}>
+        <legend className="px-1 text-[13px] font-medium text-tinta">Perfis a juntar</legend>
+        <p className="m-0 mb-2 text-xs text-tinta-suave">A pessoa fica com tudo o que cada perfil marcado tem, ao mesmo tempo (menus, acessos e avisos por email).</p>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {PERFIS_COMBINAVEIS.map(p => (
+            <label key={p} className="flex items-center gap-2 text-sm text-tinta">
+              <input type="checkbox" className="accent-[#1D4E89]" checked={perfis.includes(p)}
+                onChange={e => onPerfis(e.target.checked ? [...perfis, p] : perfis.filter(x => x !== p))} />
+              {roleLabel(p)}
+            </label>
+          ))}
+        </div>
+        {!perfis.length && <p className="m-0 mt-2 text-xs font-semibold text-perigo">Marque pelo menos um perfil.</p>}
+      </fieldset>
+    )}
+    </>
   );
 }
+
+const iguais = (a: readonly string[], b: readonly string[]) => [...a].sort().join(",") === [...b].sort().join(",");
 
 export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar: () => void; perfilInicial?: PerfilUtilizador | "" }) {
   const { user: eu } = useAuth();
   const { dados, erro, recarregar } = useRecurso(id ? `utilizadores:ficha:${id}` : null, signal => apiUtilizador(id!, signal));
   const u = dados?.user;
-  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador });
+  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[] });
   const [palavraPasse, setPalavraPasse] = useState(false);
   const [apagar, setApagar] = useState(false);
   const [desactivar, setDesactivar] = useState(false);
-  useEffect(() => { if (u) setF({ name: u.name, email: u.email, role: u.role }); }, [u]);
+  useEffect(() => { if (u) setF({ name: u.name, email: u.email, role: u.role, perfis: u.perfis ?? [] }); }, [u]);
 
   const gravar = useAccao(apiAlterarUtilizador, { ok: "Dados do utilizador actualizados.", invalidar: INVALIDAR });
   const terminar = useAccao(apiTerminarSessoes, { ok: r => `${num(r.terminadas)} sessão(ões) terminada(s).`, invalidar: INVALIDAR });
   const remover = useAccao(apiApagarUtilizador, { ok: "Utilizador eliminado.", invalidar: INVALIDAR });
   const propria = u?.id === eu.id;
-  const mudou = u && (f.name !== u.name || f.email !== u.email || f.role !== u.role);
+  const mudou = u && (f.name !== u.name || f.email !== u.email || f.role !== u.role || (f.role === "personalizado" && !iguais(f.perfis, u.perfis ?? [])));
+  const perfisOk = f.role !== "personalizado" || f.perfis.length > 0;
 
   return (
     <Modal
@@ -63,8 +87,8 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
             onClick={() => (u.active ? setDesactivar(true) : void gravar.correr(u.id, { active: true }).then(() => recarregar()))}>
             {u.active ? "Desactivar" : "Activar"}
           </Botao>
-          <Botao variante="primario" disabled={!mudou || f.name.trim().length < 2} aCarregar={gravar.aCorrer}
-            onClick={() => void gravar.correr(u.id, { name: f.name.trim(), email: f.email.trim(), role: f.role }).then(() => recarregar())}>
+          <Botao variante="primario" disabled={!mudou || !perfisOk || f.name.trim().length < 2} aCarregar={gravar.aCorrer}
+            onClick={() => void gravar.correr(u.id, { name: f.name.trim(), email: f.email.trim(), role: f.role, ...(f.role === "personalizado" ? { perfis: f.perfis } : {}) }).then(() => recarregar())}>
             Guardar
           </Botao>
         </>
@@ -77,7 +101,7 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
           <Campo rotulo="Email" obrigatorio ajuda="É o utilizador do login. Para entrar com Google ou Microsoft, tem de ser o mesmo email dessa conta.">
             {a => <Entrada {...a} type="email" value={f.email} maxLength={254} onChange={e => setF({ ...f, email: e.target.value })} />}
           </Campo>
-          <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} desativado={propria} />
+          <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} desativado={propria} perfis={f.perfis} onPerfis={perfis => setF({ ...f, perfis })} />
 
           <section aria-label="Acesso" className="rounded-cartao border border-linha p-4 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">
@@ -133,20 +157,23 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
 }
 
 export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: boolean; onFechar: (id?: string) => void; perfilInicial: PerfilUtilizador | "" }) {
-  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, password: "", mudar: true });
+  const [f, setF] = useState({ name: "", email: "", role: "secretaria" as PerfilUtilizador, perfis: [] as PerfilCombinavel[], password: "", mudar: true });
   const [criada, setCriada] = useState<{ id: string; email: string; password: string } | null>(null);
   const criar = useAccao(apiCriarUtilizador, { ok: "Utilizador criado.", invalidar: INVALIDAR });
   useEffect(() => {
     if (aberto) {
-      setF({ name: "", email: "", role: perfilInicial || "secretaria", password: gerarPalavraPasse(), mudar: true });
+      setF({ name: "", email: "", role: perfilInicial || "secretaria", perfis: [], password: gerarPalavraPasse(), mudar: true });
       setCriada(null);
     }
   }, [aberto, perfilInicial]);
   const erroPass = f.password && !palavraPasseValida(f.password) ? mensagemPalavraPasse(f.password) : null;
-  const valido = f.name.trim().length > 1 && /\S+@\S+\.\S+/.test(f.email) && !erroPass && f.password;
+  const valido = f.name.trim().length > 1 && /\S+@\S+\.\S+/.test(f.email) && !erroPass && f.password && (f.role !== "personalizado" || f.perfis.length > 0);
 
   async function gravar() {
-    const r = await criar.correr({ name: f.name.trim(), email: f.email.trim(), role: f.role, password: f.password, mustChangePassword: f.mudar });
+    const r = await criar.correr({
+      name: f.name.trim(), email: f.email.trim(), role: f.role, password: f.password, mustChangePassword: f.mudar,
+      ...(f.role === "personalizado" ? { perfis: f.perfis } : {}),
+    });
     if (r) setCriada({ id: r.user.id, email: r.user.email, password: f.password });
   }
 
@@ -175,7 +202,7 @@ export function NovoUtilizador({ aberto, onFechar, perfilInicial }: { aberto: bo
               {a => <Entrada {...a} type="email" value={f.email} maxLength={254} onChange={e => setF({ ...f, email: e.target.value })} />}
             </Campo>
           </div>
-          <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} />
+          <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} perfis={f.perfis} onPerfis={perfis => setF({ ...f, perfis })} />
           <Campo rotulo="Palavra-passe temporária" obrigatorio erro={erroPass}>
             {a => (
               <div className="flex gap-2">

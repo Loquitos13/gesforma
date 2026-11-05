@@ -38,6 +38,9 @@ export function cursoECcp(nome: string | undefined) {
   return /ccp/i.test(nome ?? "");
 }
 
+/** Aviso nos cronogramas de qualquer turma do CCP (ecrã, impressão e página pública). */
+export const AVISO_PRESENCA_CCP = "Presença obrigatória nos Módulos 2 e 9. A falta a qualquer uma destas sessões implica a reprovação e impossibilita a conclusão do curso.";
+
 /** CCP: e-learning (todos os módulos excepto 2 e 9), simulações desses módulos, projeto e nota final. */
 export function avaliacaoCcp(): AvaliacaoCurso {
   return {

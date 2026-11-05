@@ -1,3 +1,4 @@
+import { AVISO_PRESENCA_CCP, cursoECcp } from "../partilhado/avaliacaoNota";
 import { formatDiaMes, formatHoraRange, sessaoModulos, sessaoModalidade, type SessaoCronograma } from "../partilhado/turmaModel";
 
 function esc(value: string) {
@@ -57,6 +58,7 @@ export function htmlCronograma(input: {
 <body>
   <h1>${esc(titulo)}</h1>
   <p>${esc(meta || "Cronograma da turma")}</p>
+  ${cursoECcp(input.curso) ? `<p style="color:#92400e;font-weight:700;border:1px solid #b45309;background:#fef3c7;padding:6px 8px">&#9888; ${esc(AVISO_PRESENCA_CCP)}</p>` : ""}
   <table>
     <thead><tr><th>Data</th><th>Horas</th><th>Modalidade</th><th>Módulo</th><th>Formador</th></tr></thead>
     <tbody>${linhas || `<tr><td colspan="5">Ainda sem sessões neste cronograma.</td></tr>`}</tbody>

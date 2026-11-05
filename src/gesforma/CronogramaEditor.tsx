@@ -10,7 +10,8 @@ import { useOpcoesFormador, useSessoesNoutrasTurmas } from "../partilhado/dados/
 import { descarregarCronograma } from "./cronogramaExport";
 import { apiPublicarCronograma } from "../partilhado/api";
 import { toastError, toastOk } from "../partilhado/toastBus";
-import { ConfirmarPerigo } from "../partilhado/ui";
+import { Aviso, ConfirmarPerigo } from "../partilhado/ui";
+import { AVISO_PRESENCA_CCP, cursoECcp } from "../partilhado/avaliacaoNota";
 import { hojeIso, emptySessao, formatDiaMes, formatHoraRange, formatMesAno, formadoresNasSessoes, groupCronogramaByMonth, horasCronograma, isSessaoLectiva, modulosDoFormador, modulosLabel, periodoCronograma, proximaSessao, sessaoEstado, sessaoFormadores, sessaoModulos, type SessaoCronograma } from "../partilhado/turmaModel";
 import { IconPlus, KpiCard, SessaoRow } from "./TurmaCronograma";
 
@@ -162,6 +163,7 @@ export function CronogramaEditor({
 
   return (
     <div className={page ? "space-y-4" : "space-y-3"}>
+      {cursoECcp(curso) && <Aviso tom="aviso">{AVISO_PRESENCA_CCP}</Aviso>}
       {/* No separador Cronograma da turma, o cartão do cabeçalho não aparece (a grelha tem as suas ações). */}
       {!page && <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
         <div className="min-w-0">

@@ -29,6 +29,13 @@ describe("cronograma comprido no PDF", () => {
     const blocos = html.split('class="bloco-grelha"').length - 1;
     expect(blocos).toBeGreaterThan(1);
     expect(html.split("Horário das aulas").length - 1).toBe(blocos);
+    // CCP: o aviso da presença obrigatória nos módulos 2 e 9.
+    expect(html).toContain("Presença obrigatória nos Módulos 2 e 9.");
+    expect(buildCronogramaPrintHtml({
+      horario: "Laboral manhã", curso: "Técnico de Vendas", nome: "Outro", matricula: "", inicio: "2026-09-07",
+      local: { localizacao: "Lisboa", morada: "" } as never, dates: datesFromRange("2026-09-07", "2026-09-08"),
+      linhas: linhasFromSessoes(sessoes.slice(0, 1), "Laboral manhã"), sessoes: sessoes.slice(0, 1), cores: "gold", embutido: true,
+    })).not.toContain("Presença obrigatória");
     if (process.env.CRONOGRAMA_HTML) writeFileSync(process.env.CRONOGRAMA_HTML, html);
   });
 

@@ -131,5 +131,15 @@ describe("fichas já existentes (sem lista guardada)", () => {
     const outro = docs.find(d => d.id !== "cc")!;
     expect((await carregar("fin", id, outro.id)).statusCode).toBe(200);
     expect((await linha()).docs).toMatchObject({ validados: 2, total: 2 });
+
+    // «Substituir ficheiro»: o anterior sai (não fica outro documento na Drive).
+    const idDe = async () => (await ctx.db.query<{ drive_file_id: string }>(
+      "SELECT drive_file_id FROM formando_docs WHERE regime = 'fin' AND formando_id = $1 AND doc_id = 'cc'", [id])).rows[0]!.drive_file_id;
+    const antes = await idDe();
+    expect((await carregar("fin", id, "cc")).statusCode).toBe(200);
+    const depois = await idDe();
+    expect(depois).not.toBe(antes);
+    expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [antes])).rows).toHaveLength(0);
+    expect((await ctx.db.query("SELECT 1 FROM drive_files WHERE id = $1", [depois])).rows).toHaveLength(1);
   });
 });

@@ -6,7 +6,7 @@
 import { hojeLisboa } from "./datas.js";
 import type { Db } from "./db/pool.js";
 import { pastaDoFormando } from "./driveArvore.js";
-import { storeDriveFile } from "./driveFicheiros.js";
+import { apagarFicheiroSubstituido, storeDriveFile } from "./driveFicheiros.js";
 import { ficheiroDeDocumentoDaEquipa, nomeIdentificado } from "./ficheirosValidacao.js";
 import { docsDefinidosDoFormando, RE_DOC_OUTRO } from "./formandoDocsLista.js";
 import { mergeDocsJson } from "./formandoFinDocs.js";
@@ -38,6 +38,8 @@ export async function carregarDocPelaEquipa(
   if (!f) return { ok: false, status: 404, error: "Formando inexistente." };
   const pessoa = `${f.nome ?? ""} ${f.apelido ?? ""}`.replace(/\s+/g, " ").trim();
   const label = def?.label ?? docId;
+  const anterior = (await db.query<{ drive_file_id: string | null }>(
+    "SELECT drive_file_id FROM formando_docs WHERE regime = $1 AND formando_id = $2 AND doc_id = $3", [regime, formandoId, docId])).rows[0]?.drive_file_id ?? "";
   // Na pasta do formando, com os outros documentos dele (sem Drive ligada, a regra habitual).
   const pasta = await pastaDoFormando(db, regime, formandoId).catch(() => null);
   const guardado = await storeDriveFile(db, actor.id, { ...file, name: nomeIdentificado(file.name, label, pessoa) }, {
@@ -45,6 +47,7 @@ export async function carregarDocPelaEquipa(
     ...(pasta ? { parentDriveId: pasta.pastaId, folderPath: pasta.path } : {}),
   });
   const data = hojeLisboa();
+  if (anterior && anterior !== guardado.id) await substituirFicheiroAnterior(db, anterior, { id: guardado.id, nome: guardado.name, url: guardado.openUrl ?? "" });
   await docCarregadoPelaEquipa(db, regime, formandoId, docId, { nome: guardado.name, data, driveFileId: guardado.id, driveUrl: guardado.openUrl ?? "" }, actor.id);
   if (outro && nomeOutro) {
     await db.query("UPDATE formando_docs SET rotulo = $4 WHERE regime = $1 AND formando_id = $2 AND doc_id = $3", [regime, formandoId, docId, nomeOutro]);
@@ -53,4 +56,15 @@ export async function carregarDocPelaEquipa(
   if (regime === "fin" && !outro) await mergeDocsJson(db, formandoId, { [docId]: { ok: true, data } });
   await inserirNota(db, regime, formandoId, actor.name, actor.id, `Documento carregado pela equipa (validado) · ${label}`);
   return { ok: true, nome: guardado.name };
+}
+
+/**
+ * «Substituir ficheiro»: o anterior sai da Drive (não fica uma cópia a mais). A pré-inscrição de onde veio aponta para o
+ * mesmo ficheiro e passa para o novo. Um anexo do WhatsApp guardado na ficha ainda o abre: aí fica.
+ */
+async function substituirFicheiroAnterior(db: Db, anterior: string, novo: { id: string; nome: string; url: string }) {
+  await db.query("UPDATE preinscricao_docs SET drive_file_id = $2, drive_url = $3, nome = $4 WHERE drive_file_id = $1", [anterior, novo.id, novo.url, novo.nome]);
+  await db.query("UPDATE formando_docs SET drive_file_id = $2, drive_url = $3, file_name = $4 WHERE drive_file_id = $1", [anterior, novo.id, novo.url, novo.nome]);
+  const doWhatsapp = (await db.query("SELECT 1 FROM whatsapp_anexos WHERE drive_file_id = $1 LIMIT 1", [anterior])).rows.length > 0;
+  if (!doWhatsapp) await apagarFicheiroSubstituido(db, anterior).catch(err => console.error("[drive] ficheiro substituído por apagar:", err));
 }

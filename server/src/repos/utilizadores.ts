@@ -32,8 +32,9 @@ export async function listarUtilizadores(c: Consulta, f: { perfil?: string; esta
   w.add("u.role = ?", f.perfil);
   if (f.estado === "ativos") w.sempre("u.active = true");
   if (f.estado === "inativos") w.sempre("u.active = false");
-  if (f.perfil !== "formando") w.sempre("u.role <> 'formando'");
   const p = padraoPesquisa(f.q);
+  // As contas de formando só aparecem no seu filtro ou numa pesquisa (ex.: o email que «já existe» ao criar).
+  if (f.perfil !== "formando" && !p) w.sempre("u.role <> 'formando'");
   w.add("(u.name ILIKE ? OR u.email ILIKE ?)", p, p);
   const linhas = await many<LinhaUtilizador>(c, `${SELECT} ${w.where} ORDER BY u.active DESC, u.name ASC LIMIT 500`, w.params);
   const contagens = await many<{ role: string; total: number; ativos: number }>(

@@ -311,15 +311,29 @@ describe("Gold ou Financiada", () => {
     expect(pagina).toMatch(/\/formacao\//);
     expect(pagina).not.toMatch(/€/);
     const email = `wa.fin.${t}@exemplo.pt`;
-    await handleWhatsappText(ctx.db, t, "1");
-    for (const passo of ["fin", "Ana", "Reis", email, "Porto"]) await handleWhatsappText(ctx.db, t, passo);
-    let r = await handleWhatsappText(ctx.db, t, fin.nome);
+    // Já se sabe que é Financiada e qual o curso: a pré-inscrição não volta a perguntar nem um nem outro.
+    const inicio = (await handleWhatsappText(ctx.db, t, "1")).replies.join("\n");
+    expect(inicio).toMatch(/pré-inscrição em Formação Financiada/);
+    expect(inicio).not.toMatch(/Formação Gold/);
+    for (const passo of ["Ana", "Reis", email]) await handleWhatsappText(ctx.db, t, passo);
+    let r = await handleWhatsappText(ctx.db, t, "Porto");
+    expect(r.replies.join("\n")).not.toMatch(/Curso de Formação Financiada a que se quer/);
     if (/Onde prefere/.test(r.replies[0] ?? "")) r = await handleWhatsappText(ctx.db, t, "1");
     expect(r.replies.join("\n")).toMatch(/sim/i);
     await handleWhatsappText(ctx.db, t, "sim");
     const lead = (await ctx.db.query<{ regime: string; curso: string; origem: string }>(
       "SELECT regime, curso, origem FROM preinscricoes WHERE email = $1", [email])).rows[0];
     expect(lead).toMatchObject({ regime: "fin", curso: fin.nome, origem: "WhatsApp" });
+  });
+
+  it("o regime escrito na mensagem não volta a ser perguntado", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const t = tel();
+    const r = (await handleWhatsappText(ctx.db, t, "quero fazer a pré-inscrição na formação financiada")).replies.join("\n");
+    expect(r).toMatch(/pré-inscrição em Formação Financiada/);
+    expect(r).not.toMatch(/Formação Gold/);
+    const l = (await handleWhatsappText(ctx.db, `${t.slice(0, -1)}${(Number(t.at(-1)) + 1) % 10}`, "ver cursos gold")).replies.join("\n");
+    expect(l).toMatch(/^Cursos Gold:/);
   });
 });
 

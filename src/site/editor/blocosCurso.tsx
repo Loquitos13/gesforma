@@ -5,6 +5,7 @@ import { createContext, useContext, useEffect, useState, type ComponentType, typ
 import type { ComponentConfig, Slot } from "@puckeditor/core";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
 import { CursoDaRotaCtx } from "./blocosCursoPagina";
+import { DestaqueCurso } from "./DestaqueCurso";
 import { campoCor, campoCurso, campoNumero, simNao } from "./campos";
 import { TOPICOS_CURSO, type ChaveTopicoCurso } from "../../partilhado/topicosCurso";
 import { campoAparencia, campoTipografia } from "./camposGrupos";
@@ -242,6 +243,7 @@ export const CursoBanner: ComponentConfig<BannerProps> = {
 
 // ─── Síntese ─────────────────────────────────────────────────────────────────
 
+
 type SinteseProps = Base & { etiqueta: string; tEtiqueta: Tipografia; texto: Tipografia };
 
 export const CursoSintese: ComponentConfig<SinteseProps> = {
@@ -261,9 +263,12 @@ export const CursoSintese: ComponentConfig<SinteseProps> = {
         // A etiqueta antiga «Síntese» (páginas gravadas antes) passa a «Enquadramento».
         const titulo = /^s[ií]ntese$/i.test(p.etiqueta.trim()) ? "Enquadramento" : p.etiqueta;
         return (
+          <>
+          <DestaqueCurso texto={curso.destaquePagina} />
           <CartaoCurso titulo={titulo} t={e}>
             <TextoFormatado texto={textoAutomaticoCurso(curso.description, curso)} className={juntar(TEXTO_CARTAO, t.className)} style={t.style} nivel={4} />
           </CartaoCurso>
+          </>
         );
       }}
     </Caixa>

@@ -1,6 +1,7 @@
 // Separadores de texto da ficha: conteúdo do site e programa (os planos de sessão estão em TabPlanos.tsx).
 import { TOPICOS_CURSO } from "../../../../partilhado/topicosCurso";
-import { AreaTexto, Aviso, Botao, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
+import { AreaTexto, Aviso, Botao, Caixa, Campo, Cartao, Entrada, Estado, Selecao, Vazio } from "../../../../partilhado/ui";
+import { DESTAQUE_PAGINA_MAX } from "../../../../partilhado/textosCurso";
 import { codigoTopico, juntarHoras, novoTopicoId, partirHoras, textoPrograma } from "../../../cursoPrograma";
 import { useState } from "react";
 import { RESUMO_IDEAL, RESUMO_MAX, textosCurso } from "../../../../partilhado/textosCurso";
@@ -39,6 +40,22 @@ function TextoDestaque({ f }: { f: FichaCurso }) {
   );
 }
 
+/** Financiada: frase destacada na página do curso, por cima do enquadramento (ex.: um aviso importante do programa). */
+function DestaquePagina({ f }: { f: FichaCurso }) {
+  const { data, patch } = f;
+  return (
+    <Cartao titulo="Frase em destaque na página do curso" subtitulo="Aparece destacada no topo da página do curso, por cima do enquadramento.">
+      <Caixa rotulo="Mostrar na página do curso" checked={data.destaquePaginaAtivo} onChange={e => patch({ destaquePaginaAtivo: e.target.checked })} />
+      {data.destaquePaginaAtivo && (
+        <Campo rotulo="Texto em destaque" className="mt-3" ajuda={`${data.destaquePagina.length}/${DESTAQUE_PAGINA_MAX} caracteres.`}>
+          {p => <Entrada {...p} maxLength={DESTAQUE_PAGINA_MAX} value={data.destaquePagina} placeholder="Ex.: Inscrições abertas até 30 de novembro."
+            onChange={e => patch({ destaquePagina: e.target.value })} />}
+        </Campo>
+      )}
+    </Cartao>
+  );
+}
+
 export function TabConteudo({ f }: { f: FichaCurso }) {
   const { data, patch } = f;
   const gerado = textoPrograma(data.organizacaoPrograma, data.topicosPrograma);
@@ -46,6 +63,7 @@ export function TabConteudo({ f }: { f: FichaCurso }) {
     <div className="space-y-4">
       <Aviso tom="info">Cada bloco é uma secção da página pública. Escreva para o formando, não para a operação interna.</Aviso>
       <TextoDestaque f={f} />
+      {f.regime === "fin" && <DestaquePagina f={f} />}
       <BlocoTexto rotulo="Enquadramento" ajuda="O primeiro texto da página do curso, abaixo do banner: para quem é, o que se leva daqui e como funciona. Pode ser longo e ter vários parágrafos." valor={data.sintese} onMudar={v => patch({ sintese: v })} linhas={9} />
       <BlocoTexto rotulo="Objetivos" ajuda="O que o formando será capaz de fazer. Uma ideia por linha." valor={data.objetivos} onMudar={v => patch({ objetivos: v })} />
       {gerado ? (

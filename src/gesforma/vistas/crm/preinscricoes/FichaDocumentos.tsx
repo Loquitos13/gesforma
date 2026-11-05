@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Aviso, Botao, ConfirmarPerigo, Entrada, Estado, Vazio, dataHora, eur } from "../../../../partilhado/ui";
-import { apiEnviarLigacao, apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
+import { apiEntregarDoc, apiEnviarLigacao, apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
@@ -32,6 +32,11 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   const novaLigacao = useAccao(apiNovaLigacao, { ok: "Nova ligação enviada por email. A anterior deixou de funcionar." });
   // A ligação atual (a mesma, com a turma escolhida agora) por email: pré-inscrição repetida ou email que não chegou.
   const enviarLigacao = useAccao(apiEnviarLigacao, { ok: "Ligação pessoal enviada por email." });
+  // A equipa entrega um documento pela pessoa (não conseguiu ou não sabe): fica por validar, como se ela o enviasse.
+  const escolha = useRef<HTMLInputElement>(null);
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const entregar = useAccao((tipo: string, f: File) => apiEntregarDoc(id, tipo, f), { ok: "Documento entregue. Fica por validar.", invalidar: ["crm:", "painel:"] });
+  const paraEntregar = d.docsFechado || !pode("crm.escrever") ? [] : d.docsParaEntregar ?? [];
 
   async function copiar() {
     try {
@@ -118,6 +123,30 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
             );
           })}
         </ul>
+      )}
+
+      {paraEntregar.length > 0 && (
+        <section aria-label="Entregar documentos pela pessoa" className="rounded-cartao border border-linha p-3">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Entregar pela pessoa</p>
+          <p className="m-0 mt-0.5 text-xs text-tinta-suave">Se a pessoa não conseguir enviar pela ligação pessoal: o ficheiro vai para a pasta dela na Drive e fica por validar.</p>
+          <input ref={escolha} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
+            onChange={e => {
+              const f = e.target.files?.[0];
+              e.target.value = "";
+              if (f && alvo) void entregar.correr(alvo, f).then(r => r && onMudou());
+            }} />
+          <ul className="m-0 mt-2 flex list-none flex-col gap-1.5 p-0">
+            {paraEntregar.map(p => (
+              <li key={p.id} className="flex items-center gap-2 text-[13px]">
+                <span className="min-w-0 flex-1 truncate">{p.label}</span>
+                <Botao tamanho="sm" variante="secundario" aCarregar={entregar.aCorrer && alvo === p.id}
+                  onClick={() => { setAlvo(p.id); escolha.current?.click(); }}>
+                  {d.documentos.some(x => x.tipo === p.id) ? "Substituir ficheiro" : "Carregar ficheiro"}
+                </Botao>
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {lembretes && !d.docsFechado && (

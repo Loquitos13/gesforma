@@ -102,6 +102,9 @@ export function FichaUtilizador({ id, onFechar }: { id: string | null; onFechar:
             {a => <Entrada {...a} type="email" value={f.email} maxLength={254} onChange={e => setF({ ...f, email: e.target.value })} />}
           </Campo>
           <EscolherPerfil valor={f.role} onMudar={role => setF({ ...f, role })} desativado={propria} perfis={f.perfis} onPerfis={perfis => setF({ ...f, perfis })} />
+          {u.role === "formando" && f.role !== "formando" && (
+            <Aviso tom="aviso">Esta é uma conta de formando. Com um perfil da equipa passa a entrar no GesForma e deixa de entrar na área do formando.</Aviso>
+          )}
 
           <section aria-label="Acesso" className="rounded-cartao border border-linha p-4 space-y-3">
             <div className="flex items-center gap-2 flex-wrap">

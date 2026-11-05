@@ -372,7 +372,7 @@ export function buildCronogramaPrintHtml(input: CronogramaPrintInput) {
     .cell.bloco { padding: 0; vertical-align: top; }
     .blocos { position: relative; width: 100%; }
     .aula { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; font-size: 7px; font-weight: 700; line-height: 1.1; text-align: center; border: 0.5px solid #fff; }
-    .aviso-ccp { margin: 0 0 8px; padding: 6px 8px; border: 1.5px solid #b45309; background: #fef3c7; font-size: 11px; font-weight: 700; max-width: 260mm; }
+    .aviso-ccp { display: table; width: auto; margin: 0 0 8px; padding: 6px 8px; border: 1.5px solid #b45309; background: #fef3c7; font-size: 11px; font-weight: 700; max-width: 260mm; }
     .legend { margin-top: 12px; max-width: 260mm; }
     .legend h3 { margin: 0 0 6px; font-size: 11px; }
     .swatch { display: flex; align-items: flex-start; gap: 8px; margin: 3px 0; font-size: 9px; }

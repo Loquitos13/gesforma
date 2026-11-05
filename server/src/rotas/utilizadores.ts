@@ -5,7 +5,7 @@ import { ressincronizarPartilhas } from "../repos/drive.js";
 import { sessoesAtivasDe, terminarSessoesDe } from "../repos/sessoes.js";
 import {
   PERFIS, actualizarUtilizador, apagarUtilizador, criarUtilizador, definirPalavraPasse, eUltimoAdmin,
-  eViolacaoUnica, listarUtilizadores, obterUtilizador, type LinhaUtilizador,
+  eViolacaoUnica, listarUtilizadores, obterUtilizador, utilizadorPorEmail, type LinhaUtilizador,
 } from "../repos/utilizadores.js";
 import { PERFIS_COMBINAVEIS, perfisValidos } from "../permissoes/personalizado.js";
 import { hashPassword, isEmail, normalizeEmail } from "../security.js";
@@ -19,6 +19,11 @@ import type { Deps } from "./tipos.js";
 const equipaDaDrive = (u: { role: string; active: boolean }) => u.active && !["formando", "formador", "comercial"].includes(u.role);
 
 const uuidParam = z.object({ id: z.string().uuid() });
+const ROTULO_PERFIL: Record<string, string> = {
+  admin: "Administração", secretaria: "Coordenação pedagógica Gold", comercial: "Comercial Gold", financiada: "Coordenação pedagógica Financiada",
+  contabilidade: "Contabilidade", formador: "Formador", formando: "conta de formando (área do formando)", personalizado: "Personalizado",
+};
+
 const criarSchema = z.object({
   name: z.string().trim().min(2).max(120),
   email: z.string().max(254),
@@ -92,6 +97,14 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     return { user: mapear(u), sessoes: await sessoesAtivasDe(db, v.params.id) };
   });
 
+  /** Email já usado: diz que conta é (perfil e estado), para a encontrar na tabela (as de formando só aparecem pesquisando). */
+  async function mensagemEmailRepetido(email: string) {
+    const u = await utilizadorPorEmail(db, email).catch(() => null);
+    if (!u) return "já existe um utilizador com este email";
+    const perfil = ROTULO_PERFIL[u.role] ?? u.role;
+    return `Já existe uma conta com este email: ${u.name} · ${perfil}${u.active ? "" : " (inativa)"}. Pesquise o email na tabela para a abrir${u.role === "formando" ? " e mudar o perfil para o da equipa" : ""}.`;
+  }
+
   app.post(base, { config: { rateLimit: { max: 20, timeWindow: "1 minute" } } }, async (req, reply) => {
     if (!soAdmin(req, reply)) return;
     const v = validar(reply, { body: criarSchema }, req);
@@ -106,7 +119,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
         active: v.body.active, mustChangePassword: v.body.mustChangePassword,
       });
     } catch (err) {
-      if (eViolacaoUnica(err)) return reply.code(409).send({ error: "já existe um utilizador com este email" });
+      if (eViolacaoUnica(err)) return reply.code(409).send({ error: await mensagemEmailRepetido(email) });
       throw err;
     }
     await audit(db, req.actor!.id, "user.create", "user", id, req.ip, { email, role: v.body.role });

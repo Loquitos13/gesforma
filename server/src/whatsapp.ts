@@ -15,7 +15,7 @@ import { sanitizeText } from "./security.js";
 import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import { situacaoPagamento } from "./docsCurso.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "./docsLink.js";
-import { guardarDocDaPreinscricao } from "./docsPreinscricao.js";
+import { guardarDocDaPreinscricao, tiposDoLead } from "./docsPreinscricao.js";
 import { readDriveContent } from "./driveFicheiros.js";
 import { linhaVisivel } from "./repos/crmVisivel.js";
 import { fecharConversaWhatsapp, verificarInatividade } from "./whatsappInatividade.js";
@@ -235,15 +235,6 @@ async function enviarAnexoCloudApi(db: Db, to: string, a: { bytes: Buffer; nome:
 }
 
 /** Tipos de documento de uma pré-inscrição onde se pode guardar um ficheiro (e se já estão validados). */
-async function tiposDoLead(db: Db, lead: Record<string, unknown>) {
-  const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
-  const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
-  const ja = await listarDocsLead(db, Number(lead.id));
-  const validado = (id: string) => ja.some(d => d.tipo === id && d.estado === "validado");
-  const tipos = pedidos.map(p => ({ id: p.id, label: p.label, validado: validado(p.id) }));
-  if ((await situacaoPagamento(db, lead)).pedeComprovativo) tipos.push({ id: COMPROVATIVO.id, label: COMPROVATIVO.label, validado: validado(COMPROVATIVO.id) });
-  return { tipos, pedidos, ja };
-}
 
 /** Ficheiros recebidos até este tamanho ficam guardados para a equipa ver (a Meta aceita até 100 MB nos documentos). */
 const ANEXO_RECEBIDO_MAX = 16 * 1024 * 1024;

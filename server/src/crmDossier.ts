@@ -112,6 +112,11 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const labels = new Map(pedidos.map(p => [p.id, p.label]));
   labels.set("comprovativo", "Comprovativo de pagamento");
   const { ok, emFalta } = docsCompletos(pedidos, ficheiros.map(f => f.tipo));
+  // Documentos que a equipa pode entregar pela pessoa (os do curso e, se se pede, o comprovativo), menos os já validados.
+  const validados = new Set(ficheiros.filter(f => f.estado === "validado").map(f => f.tipo));
+  const entregaveis = [...pedidos.map(p => ({ id: p.id, label: p.label })),
+    ...((await situacaoPagamento(db, row).catch(() => null))?.pedeComprovativo ? [{ id: "comprovativo", label: "Comprovativo de pagamento" }] : [])]
+    .filter(p => !validados.has(p.id));
   let docsUrl = "";
   try { docsUrl = documentosUrl(await ensureDocsToken(db, id)); } catch { docsUrl = ""; }
   // Pagamento por transferência com comprovativo: sem referências nem entidade Multibanco.
@@ -163,6 +168,7 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
     docsUrl,
     docsCompletos: ok,
     docsEmFalta: emFalta.map(d => d.label),
+    docsParaEntregar: entregaveis,
     documentos: ficheiros.map(f => ({
       id: f.id,
       tipo: f.tipo,

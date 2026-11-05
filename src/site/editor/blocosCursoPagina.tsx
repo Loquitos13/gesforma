@@ -2,6 +2,7 @@
 // e cartão de inscrição). A mesma página serve todos os cursos; no editor escolhe-se o curso a ver.
 import { createContext, useContext, useEffect, type ComponentType, type CSSProperties } from "react";
 import type { ComponentConfig, Slot } from "@puckeditor/core";
+import { DestaqueCurso } from "./DestaqueCurso";
 import { ePrepago, ePreinscricao, rotuloBotaoInscricao, TEXTO_DIRETO, textoDiretoAtual } from "../../partilhado/siteConteudo";
 import { useInscricaoOpcional } from "../SiteInscricao";
 import { Icon, OfertaCtx, type Course } from "../SiteLanding";
@@ -83,6 +84,7 @@ function Detalhe({ p, curso, editar, Z }: { p: Props; curso: Course; editar: boo
       <section className="px-5 py-12 lg:px-8 lg:py-16">
         <div className={`mx-auto grid gap-12 ${p.mostrarCartao ? "lg:grid-cols-[1fr_360px]" : ""}`} style={{ maxWidth: "var(--largura)" }}>
           <div className="max-w-3xl">
+            <DestaqueCurso texto={curso.destaquePagina} />
             {p.tituloSintese && <p className="text-xs font-extrabold uppercase tracking-[0.18em] text-[var(--c-destaque)]">{/^s[ií]ntese$/i.test(p.tituloSintese.trim()) ? "Enquadramento" : p.tituloSintese}</p>}
             <p className="mt-4 whitespace-pre-line text-lg leading-8 opacity-75">{curso.description}</p>
             {p.mostrarDados && (

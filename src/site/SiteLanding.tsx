@@ -13,6 +13,8 @@ export type Course = {
   price: string;
   /** Texto completo (página do curso). */
   description: string;
+  /** Frase em destaque na página do curso, por cima do enquadramento. */
+  destaquePagina?: string;
   /** Texto de destaque (cartões, catálogo e listagens). */
   resumo: string;
   funding: "Financiada" | "Gold";
@@ -60,6 +62,7 @@ type CatalogoApi = {
     descricao: string;
     resumo?: string;
     descricaoCompleta?: string;
+    destaquePagina?: string;
     financiamento: "Gold" | "Financiada";
     inscricao: InscricaoPublica;
     miniatura: string | null;
@@ -95,6 +98,7 @@ function mapCurso(curso: CatalogoApi["cursos"][number]): Course {
     start: curso.inicio,
     price: curso.precoLabel,
     description: curso.descricaoCompleta || curso.descricao,
+    destaquePagina: curso.destaquePagina ?? "",
     resumo: curso.resumo || cortarNaPalavra(curso.descricao),
     funding: curso.financiamento,
     enrollment: curso.inscricao,

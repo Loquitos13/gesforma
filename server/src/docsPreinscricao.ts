@@ -8,6 +8,8 @@ import { avisarDocumentoRecebido } from "./avisosEquipa.js";
 import { comprovativoRecebido } from "./comprovativoContabilidade.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
+import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
+import { situacaoPagamento } from "./docsCurso.js";
 import { COMPROVATIVO, docsDoCurso, listarDocsLead } from "./docsLink.js";
 import { garantirPastaPendente } from "./driveArvore.js";
 import { apagarFicheiroSubstituido, storeDriveFile } from "./driveFicheiros.js";
@@ -67,4 +69,15 @@ export async function guardarDocDaPreinscricao(
     }
   }
   return file;
+}
+
+/** Documentos que se podem entregar nesta pré-inscrição (os do curso e, se se pede, o comprovativo), com os já validados. */
+export async function tiposDoLead(db: Db, lead: Record<string, unknown>) {
+  const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
+  const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
+  const ja = await listarDocsLead(db, Number(lead.id));
+  const validado = (id: string) => ja.some(d => d.tipo === id && d.estado === "validado");
+  const tipos = pedidos.map(p => ({ id: p.id, label: p.label, validado: validado(p.id) }));
+  if ((await situacaoPagamento(db, lead)).pedeComprovativo) tipos.push({ id: COMPROVATIVO.id, label: COMPROVATIVO.label, validado: validado(COMPROVATIVO.id) });
+  return { tipos, pedidos, ja };
 }

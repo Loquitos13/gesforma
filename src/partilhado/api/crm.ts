@@ -1,5 +1,5 @@
 // API do domínio "crm": pré-inscrições (lista com filas e filtros, ficha, notas, documentos, validação e pagamento).
-import { BASE, api, enviar, qs } from "./cliente";
+import { BASE, api, enviar, enviarFicheiro, qs } from "./cliente";
 
 export type RegimeCrm = "gold" | "fin";
 export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
@@ -141,6 +141,8 @@ export type DossieLead = {
   docsUrl: string;
   docsCompletos: boolean;
   docsEmFalta: string[];
+  /** Documentos que a equipa pode entregar pela pessoa (ainda não validados). */
+  docsParaEntregar?: { id: string; label: string }[];
   documentos: DocumentoLead[];
   docsFechado: boolean;
   pagamento: { id: string; valor: number; estado: string; metodo: string } | null;
@@ -218,6 +220,9 @@ export const apiCriarCampo = (label: string, tipo: CampoCrm["tipo"]) =>
   enviar.post<{ campo: CampoCrm }>("/v1/crm/campos", { label, tipo });
 
 export const apiValidarDoc = (id: number, docId: number) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/documentos/${docId}/validar`, {});
+/** A equipa entrega um documento pela pessoa (fica por validar, como se ela o tivesse enviado). */
+export const apiEntregarDoc = (id: number, tipo: string, ficheiro: File) =>
+  enviarFicheiro<DossieLead>(`/v1/crm/leads/${id}/documentos/entregar/${encodeURIComponent(tipo)}`, ficheiro);
 export const apiRecusarDoc = (id: number, docId: number, observacao: string) =>
   enviar.post<DossieLead & { avisoRecusa?: { enviado: boolean; adiado: boolean } }>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { observacao });
 /** «Reenviar pedido agora»: documentos recusados (com o motivo) ou em falta, com a ligação pessoal. */

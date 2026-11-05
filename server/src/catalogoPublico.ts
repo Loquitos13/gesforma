@@ -7,7 +7,7 @@ import { hojeLisboa } from "./datas.js";
 import { escolherPreco, regrasDoPayload } from "./precoOferta.js";
 import { eur } from "../../src/partilhado/ui/formatos.js";
 import { CONTACTOS_LOCAL } from "../../src/partilhado/contactosLocal.js";
-import { textosCurso } from "../../src/partilhado/textosCurso.js";
+import { destaquePagina, textosCurso } from "../../src/partilhado/textosCurso.js";
 import { AREA_FINANCIADA, areaCanonica } from "../../src/partilhado/areasFormacao.js";
 import { diaAntesDe } from "../../src/partilhado/moodle.js";
 import { turmaCheia, turmasParaMostrar } from "../../src/partilhado/oferta.js";
@@ -55,6 +55,8 @@ export type CursoPublico = {
   resumo: string;
   /** Texto completo (página do curso): a síntese da ficha ou, vazia, «Área. N horas.». */
   descricaoCompleta: string;
+  /** Frase em destaque na página do curso, por cima do enquadramento (vazia = nenhuma). */
+  destaquePagina: string;
   financiamento: "Gold" | "Financiada";
   inscricao: "Acesso direto" | "Pré-pago" | "Pré-inscrição";
   miniatura: string | null;
@@ -404,6 +406,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       descricao: textos.completo,
       resumo: textos.resumo,
       descricaoCompleta: textos.completo,
+      destaquePagina: destaquePagina(payload),
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
       inscricao: entrada,
       miniatura,

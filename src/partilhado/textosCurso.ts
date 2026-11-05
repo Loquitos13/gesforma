@@ -11,6 +11,14 @@ import { textoSimples } from "./textoFormatado.js";
 export const RESUMO_IDEAL = 160;
 /** Limite duro do destaque (o servidor recusa mais). */
 export const RESUMO_MAX = 200;
+/** Frase em destaque na página do curso (por cima do enquadramento). */
+export const DESTAQUE_PAGINA_MAX = 300;
+
+/** A frase em destaque a mostrar na página do curso: só com a caixa ligada e texto escrito. */
+export function destaquePagina(payload: { destaquePaginaAtivo?: unknown; destaquePagina?: unknown }) {
+  return payload.destaquePaginaAtivo === true && typeof payload.destaquePagina === "string" ? payload.destaquePagina.replace(/\s+/g, " ").trim().slice(0, DESTAQUE_PAGINA_MAX) : "";
+}
+
 /** Limite do texto completo (generoso: só trava colagens acidentais). */
 export const SINTESE_MAX = 10000;
 

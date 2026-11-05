@@ -37,6 +37,8 @@ export type CursoSite = {
   metodologias: string; certificacao: string; destinatarios: string; requisitos: string;
   /** Texto de destaque (catálogo, cartões e listagens); vazio = a síntese cortada numa palavra com «…». */
   resumo: string;
+  /** Frase destacada na página do curso, por cima do enquadramento (só aparece com a caixa ligada). */
+  destaquePaginaAtivo: boolean; destaquePagina: string;
   /** Pesquisa (Google): título e descrição próprios; vazios = o título e o texto de destaque. */
   seoTitulo: string; seoDescricao: string;
   /** Contactos próprios deste curso por local (só valem para os locais atribuídos ao curso); vazio = os de Locais. */
@@ -127,6 +129,7 @@ export function fichaInicial(curso: CursoBase | null, regime: Regime, modelos: O
     banner: null, capa: null, miniatura: null,
     sintese: t?.sintese ?? "",
     resumo: "",
+    destaquePaginaAtivo: false, destaquePagina: "",
     objetivos: t?.objetivos ?? "",
     programa,
     funcionamento: t?.funcionamento ?? "",
@@ -189,6 +192,8 @@ export function fundirGuardado(base: CursoSite, guardado: Record<string, unknown
     entidadeResponsavel: String(guardado.entidadeResponsavel ?? base.entidadeResponsavel ?? ""),
     conteudosMoodle: parseConteudosMoodle(guardado.conteudosMoodle),
     resumo: typeof guardado.resumo === "string" ? guardado.resumo : "",
+    destaquePaginaAtivo: guardado.destaquePaginaAtivo === true,
+    destaquePagina: typeof guardado.destaquePagina === "string" ? guardado.destaquePagina : "",
     ...topicosDoPayload(guardado),
     // A área CNAEF é do curso (tabela), não do conteúdo do site gravado.
     areaCnaef: base.areaCnaef,

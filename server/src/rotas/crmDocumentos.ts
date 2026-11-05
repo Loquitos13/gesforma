@@ -9,7 +9,10 @@ import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
 import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
-import { definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas } from "../docsLink.js";
+import { abrirAlerta, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas, syncLigacao } from "../docsLink.js";
+import { guardarDocDaPreinscricao, tiposDoLead } from "../docsPreinscricao.js";
+import { ficheiroDeDocumentoDaEquipa } from "../ficheirosValidacao.js";
+import { linhaVisivel } from "../repos/crmVisivel.js";
 import { concluirInscricaoPaga } from "../inscricaoPaga.js";
 import { regenerarToken } from "../ligacaoPessoal.js";
 import { confirmarPagamento } from "../ops.js";
@@ -58,6 +61,45 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     await dispensarAlerta(db, v.params.id, req.actor!);
     return { ok: true };
+  });
+
+  // A equipa (coordenação e comerciais) entrega um documento pela pessoa (não conseguiu ou não sabe): fica como se ela o
+  // tivesse enviado na ligação pessoal (pasta na Drive, por rever pela coordenação; o comprovativo segue para a contabilidade).
+  app.post("/v1/crm/leads/:id/documentos/entregar/:tipo", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam.extend({ tipo: z.string().trim().min(1).max(60) }) }, req);
+    if (!v) return;
+    const { id, tipo } = v.params;
+    const lead = await leads.lead(db, id);
+    if (!lead || !(await linhaVisivel(db, "preinscricoes", id, req.actor!))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    let up: { name: string; mime: string; bytes: Buffer } | null = null;
+    try {
+      for await (const part of req.parts()) {
+        if (part.type === "file") up = { name: part.filename || "documento", mime: part.mimetype || "application/octet-stream", bytes: await part.toBuffer() };
+      }
+    } catch {
+      return reply.code(400).send({ error: "upload inválido" });
+    }
+    if (!up?.bytes.length) return reply.code(400).send({ error: "Escolha o ficheiro do documento." });
+    const ficheiro = ficheiroDeDocumentoDaEquipa(up.name, up.bytes);
+    if ("erro" in ficheiro) return reply.code(400).send({ error: ficheiro.erro });
+    const { tipos, pedidos, ja } = await tiposDoLead(db, lead as Record<string, unknown>);
+    const doc = tipos.find(t => t.id === tipo);
+    if (!doc) return reply.code(400).send({ error: "Este documento não faz parte do curso desta pré-inscrição." });
+    if (doc.validado) return reply.code(409).send({ error: "Este documento já está validado." });
+    const por = req.actor!.name || req.actor!.email || "Equipa";
+    try {
+      await guardarDocDaPreinscricao(db, lead as Record<string, unknown>, tipo, { ...up, name: ficheiro.nome, mime: ficheiro.mime }, {
+        pedidos, ja, actorId: req.actor!.id, origem: `entregue pela equipa, por ${por}`,
+      });
+    } catch (err) {
+      req.log.warn({ err }, "documento da pré-inscrição não guardado");
+      return reply.code(502).send({ error: "Não foi possível guardar o documento (Drive). Tente outra vez." });
+    }
+    await syncLigacao(db, id);
+    await abrirAlerta(db, id);
+    await audit(db, req.actor!.id, "crm.doc_entregue_equipa", "preinscricao", String(id), req.ip, { tipo });
+    return getLeadDossier(db, id, req.actor!);
   });
 
   app.post("/v1/crm/leads/:id/documentos/:docId/validar", async (req, reply) => {

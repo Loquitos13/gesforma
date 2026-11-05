@@ -26,6 +26,8 @@ type Dados = {
   regime?: "gold" | "fin";
   /** Lista de cursos mostrada (opção 3): o regime, para a escolha do curso dar a página certa. */
   listaRegime?: "gold" | "fin";
+  /** Curso visto na lista (opção 3): a pré-inscrição a seguir já não pergunta o regime nem o curso. */
+  cursoInteresse?: string;
   nome?: string;
   apelido?: string;
   email?: string;
@@ -154,6 +156,13 @@ function lerRegime(t: string): "gold" | "fin" | null {
   const q = t.trim().toLowerCase();
   if (q === "1" || q === "gold" || /\bgold\b/.test(q)) return "gold";
   if (q === "2" || q === "fin" || /financ/.test(q)) return "fin";
+  return null;
+}
+
+/** Regime escrito por extenso na mensagem («quero a financiada»); os números não contam (são opções do menu). */
+function regimeNoTexto(t: string): "gold" | "fin" | null {
+  if (/\bgold\b/i.test(t)) return "gold";
+  if (/financ/i.test(t)) return "fin";
   return null;
 }
 
@@ -328,11 +337,49 @@ export async function handleWhatsappText(
     return { replies, mensagens, telefone, passo, leadId };
   }
 
+  /** Curso da Financiada escolhido: o local preferido, ou o consentimento se não houver locais. */
+  const escolherCursoFin = async (curso: string) => {
+    dados.curso = curso;
+    dados.local = undefined;
+    const locais = await locaisFin(db, curso);
+    if (locais.length) {
+      passo = "localFin";
+      say(listaNumerada(`Onde prefere fazer ${curso}?`, locais));
+    } else {
+      passo = "consentimento";
+      say(await pedidoConsentimento(db));
+    }
+  };
+  /** Curso Gold escolhido: os locais das turmas abertas. */
+  const escolherCursoGold = async (curso: string) => {
+    dados.curso = curso;
+    dados.local = undefined;
+    dados.horario = undefined;
+    dados.dataInicio = undefined;
+    const locais = uniqueOferta(filtrarOferta(await listOfertaGold(db), { curso }), "local");
+    if (!locais.length) {
+      say(`Ainda não há turma liberada para *${curso}* (falta local + horário + data). Escolha outro curso ou escreva *menu*.`);
+    } else {
+      passo = "local";
+      say(listaNumerada(`Local para ${curso}:`, locais));
+    }
+  };
+
   if (passo === "menu" || (passo as string) === "consulta") {
     if (escolha?.acao === "preinscricao") {
-      passo = "regime";
+      // Regime já identificado na conversa (curso visto na lista ou escrito na mensagem): não se pergunta outra vez.
+      const regime = dados.listaRegime ?? regimeNoTexto(text);
+      const cursoInteresse = dados.listaRegime ? dados.cursoInteresse : undefined;
       dados = {};
-      say(ESCOLHA_REGIME("Vamos à pré-inscrição. Que formação procura?"));
+      if (regime) {
+        dados.regime = regime;
+        if (cursoInteresse) dados.cursoInteresse = cursoInteresse;
+        passo = "nome";
+        say(`Vamos à pré-inscrição em ${regime === "gold" ? "Formação Gold" : "Formação Financiada"}${cursoInteresse ? ` (${cursoInteresse})` : ""}.\nQual é o *primeiro nome*?`);
+      } else {
+        passo = "regime";
+        say(ESCOLHA_REGIME("Vamos à pré-inscrição. Que formação procura?"));
+      }
     } else if (escolha?.acao === "estado") {
       const leads = await leadsPorTelefone(db, telefone);
       if (leads[0]) {
@@ -344,8 +391,16 @@ export async function handleWhatsappText(
         say(`${ass.textos.semPedido} ${nPre ? `Escreva *${nPre}* para se pré-inscrever ou contacte a secretaria.` : "Contacte a secretaria."}`);
       }
     } else if (escolha?.acao === "cursos") {
-      passo = "regimeLista";
-      say(ESCOLHA_REGIME("Que cursos quer ver?"));
+      const regime = regimeNoTexto(text);
+      if (regime) {
+        const nomes = await nomesDaLista(db, regime);
+        say(listaNumerada(`${regime === "gold" ? "Cursos Gold" : "Cursos de Formação Financiada"}:\nEscolha um curso para ver a página dele no site (locais, horários e preços).`, nomes));
+        dados = { listaRegime: regime };
+        passo = nomes.length ? "cursoSite" : "menu";
+      } else {
+        passo = "regimeLista";
+        say(ESCOLHA_REGIME("Que cursos quer ver?"));
+      }
     } else if (escolha?.acao === "faq") {
       say(`${escolha.resposta ?? ""}\n\nEscreva *menu* para voltar às opções.`.trim());
     } else {
@@ -374,7 +429,8 @@ export async function handleWhatsappText(
     const nomes = await nomesDaLista(db, regime);
     const n = Number(text);
     const curso = Number.isInteger(n) && n >= 1 && n <= nomes.length ? nomes[n - 1]! : "";
-    dados = {};
+    // O regime e o curso ficam: escrever o número da pré-inscrição a seguir já não os pergunta.
+    dados = curso ? { listaRegime: regime, cursoInteresse: curso } : {};
     passo = "menu";
     if (!curso) say(MENU);
     else {
@@ -404,31 +460,30 @@ export async function handleWhatsappText(
   } else if (passo === "concelho") {
     dados.concelho = sanitizeHeader(text).slice(0, 80);
     passo = "curso";
-    if (dados.regime === "fin") {
+    // Curso já escolhido na lista: segue para o local, sem a lista de cursos.
+    const interesse = dados.cursoInteresse ?? "";
+    const doInteresse = interesse
+      ? (dados.regime === "fin" ? await cursosFin(db) : (await cursosActivos(db)).map(c => c.nome)).find(c => c.toLowerCase() === interesse.toLowerCase())
+      : undefined;
+    dados.cursoInteresse = undefined;
+    if (doInteresse) {
+      if (dados.regime === "fin") await escolherCursoFin(doInteresse);
+      else await escolherCursoGold(doInteresse);
+    } else if (dados.regime === "fin") {
       say(listaNumerada("Curso de Formação Financiada a que se quer pré-inscrever:", await cursosFin(db), "Neste momento não há cursos de Formação Financiada abertos. Escreva *menu*."));
       await saveSessao(db, telefone, passo, dados, leadId);
       for (const r of replies) await logMsg(db, telefone, "out", r);
       return { replies, mensagens, telefone, passo, leadId };
+    } else {
+      const cursos = await cursosActivos(db);
+      say("Agora o *curso*. Depois escolhe o local, o horário e a data de início entre as turmas abertas.");
+      say(listaNumerada("Curso a que se quer inscrever:", cursos.map(c => c.nome)));
     }
-    const cursos = await cursosActivos(db);
-    say("Agora o *curso*. Depois escolhe o local, o horário e a data de início entre as turmas abertas.");
-    say(listaNumerada("Curso a que se quer inscrever:", cursos.map(c => c.nome)));
   } else if (passo === "curso" && dados.regime === "fin") {
     const cursos = await cursosFin(db);
     const curso = pickOpcao(text, cursos);
     if (!curso) say(listaNumerada("Não percebi o curso. Escolha um número:", cursos));
-    else {
-      dados.curso = curso;
-      dados.local = undefined;
-      const locais = await locaisFin(db, curso);
-      if (locais.length) {
-        passo = "localFin";
-        say(listaNumerada(`Onde prefere fazer ${curso}?`, locais));
-      } else {
-        passo = "consentimento";
-        say(await pedidoConsentimento(db));
-      }
-    }
+    else await escolherCursoFin(curso);
   } else if (passo === "localFin") {
     const locais = await locaisFin(db, dados.curso ?? "");
     const local = pickOpcao(text, locais);
@@ -466,19 +521,7 @@ export async function handleWhatsappText(
     }
   } else if (passo === "curso") {
     const cursos = await cursosActivos(db);
-    const curso = pickOpcao(text, cursos.map(c => c.nome)) || sanitizeHeader(text).slice(0, 200);
-    dados.curso = curso;
-    dados.local = undefined;
-    dados.horario = undefined;
-    dados.dataInicio = undefined;
-    const oferta = filtrarOferta(await listOfertaGold(db), { curso });
-    const locais = uniqueOferta(oferta, "local");
-    if (!locais.length) {
-      say(`Ainda não há turma liberada para *${curso}* (falta local + horário + data). Escolha outro curso ou escreva *menu*.`);
-    } else {
-      passo = "local";
-      say(listaNumerada(`Local para ${curso}:`, locais));
-    }
+    await escolherCursoGold(pickOpcao(text, cursos.map(c => c.nome)) || sanitizeHeader(text).slice(0, 200));
   } else if (passo === "local") {
     const oferta = filtrarOferta(await listOfertaGold(db), { curso: dados.curso });
     const locais = uniqueOferta(oferta, "local");

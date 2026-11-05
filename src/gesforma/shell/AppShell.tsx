@@ -31,7 +31,6 @@ function paramsDe(d: Partial<Destino>, drive?: string): ParamsVista {
 
 /** Aplica as regras de acesso do perfil a um destino (o servidor volta a verificar tudo). */
 function destinoPermitido(d: Destino, role: string): Destino {
-  if (d.view === "site" && role !== "admin") return { view: painelDoPerfil(role) };
   if (role === "formador" && !VISTAS_FORMADOR.has(d.view)) return { view: "formador-turmas" };
   if (role === "formador" && (d.view === "gold-cockpit-turma" || d.view === "fin-cockpit-turma")) return { ...d, tab: tabDoFormador(d.tab) };
   if (role !== "formador" && !vistaNoMenuDoPerfil(role, d.view)) return { view: painelDoPerfil(role) };

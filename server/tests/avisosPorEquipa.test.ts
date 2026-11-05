@@ -1,5 +1,5 @@
 // Avisos internos por equipa: documentos e comprovativo vão para os utilizadores das equipas da regra («Enviar para»),
-// nunca para a administração (o email da entidade ou do local deixou de contar).
+// nunca para a administração, e também para o email do local da pessoa (o da entidade deixou de contar).
 import { beforeAll, describe, expect, it, vi } from "vitest";
 import { arrancar, pedido, type Ctx } from "./helpers.js";
 
@@ -63,5 +63,23 @@ describe("avisos internos por equipa", () => {
     await avisarDocumentoRecebido(ctx.db, l, "Todos os documentos obrigatórios: CC", "f4");
     expect(await destinos("equipa.documentos_recebidos", l.id)).toEqual(await emailsDosPerfis(["contabilidade"]));
     await pedido(ctx, "admin", "PATCH", `/v1/email/rules/${regra.id}`, { destinatarios: ["gold"] });
+  });
+
+  it("o email do local da pessoa também recebe (só os das pré-inscrições desse local)", async () => {
+    const { avisarDocumentoRecebido } = await import("../src/avisosEquipa.js");
+    const n = 990000 + Math.floor(Math.random() * 9000);
+    const local = `Penafiel Teste ${n}`;
+    const emailLocal = `local.${n}@exemplo.pt`;
+    await ctx.db.query("INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1, 'locais', 'gold', $2::jsonb)",
+      [n, JSON.stringify({ nome: local, email: emailLocal, status: "Ativo" })]);
+    const l = { ...lead("gold"), local };
+    await ctx.db.query(`INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, estado, regime, local)
+      VALUES ($1, '2031-01-01 10:00', 'Rui', 'Costa', $2, '912000000', 'CCP', '1º Contacto', 'gold', $3)`, [l.id, l.email, local]);
+    await avisarDocumentoRecebido(ctx.db, l, "Todos os documentos obrigatórios: CC", "f5");
+    expect(await destinos("equipa.documentos_recebidos", l.id)).toEqual([...await emailsDosPerfis(["comercial", "secretaria"]), emailLocal].sort());
+    // Uma pré-inscrição de outro local (ou sem local) não vai para este email.
+    const outra = lead("gold");
+    await avisarDocumentoRecebido(ctx.db, outra, "Todos os documentos obrigatórios: CC", "f6");
+    expect(await destinos("equipa.documentos_recebidos", outra.id)).not.toContain(emailLocal);
   });
 });

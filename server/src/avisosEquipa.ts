@@ -2,7 +2,8 @@
  * Avisos internos por regra de email (Sistema › Emails › Regras):
  *  - equipa.documentos_recebidos: a pessoa entregou os documentos obrigatórios na ligação pessoal;
  *  - equipa.comprovativo_recebido: chegou o comprovativo de pagamento;
- *    os dois vão para os utilizadores das equipas escolhidas na regra («Enviar para»; nunca a administração);
+ *    os dois vão para os utilizadores das equipas escolhidas na regra («Enviar para»; nunca a administração) e para o
+ *    email do local da pessoa (Edição de cursos › Locais), como antes;
  *  - formador.atribuido: um formador passa a estar na turma (ficha da turma ou cronograma) → email do formador.
  * Sem regra activa não sai nada; cada aviso sai uma só vez a cada pessoa (chave de idempotência).
  *
@@ -15,6 +16,7 @@ import type { Db } from "./db/pool.js";
 import { enviarModelo } from "./emailModelo.js";
 import { emailsDaEquipa } from "./equipaDestinatarios.js";
 import { regrasActivasPara } from "./repos/emails.js";
+import { remetenteDoDestinatario } from "./remetenteLocal.js";
 import { leadsPorTelefoneWhatsapp, reservarAvisoPedidoWhatsapp } from "./repos/whatsapp.js";
 import { gruposPorOmissao } from "../../src/partilhado/equipasAviso.js";
 import { areaDoRegime } from "../../src/partilhado/emailAreas.js";
@@ -43,9 +45,13 @@ export async function avisarDocumentoRecebido(
     nome_formando: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.replace(/\s+/g, " ").trim() || "—",
     documento, link: `${origem()}/gesforma/${vista}/pre-inscricoes?lead=${id}`,
   };
+  // O email do local da pessoa (ex.: ccppenafiel@…) recebe também, só os das pré-inscrições desse local.
+  const local = await remetenteDoDestinatario(db, String(lead.email ?? "")).catch(() => null);
   for (const regra of await regrasActivasPara(db, [evento], area)) {
     const grupos = regra.destinatarios?.length ? regra.destinatarios : gruposPorOmissao(evento, area);
-    for (const pessoa of await emailsDaEquipa(db, grupos, { crm: true })) {
+    const pessoas = await emailsDaEquipa(db, grupos, { crm: true });
+    if (local && !pessoas.some(p => p.email === local.email)) pessoas.push({ nome: local.nome, email: local.email });
+    for (const pessoa of pessoas) {
       await ingestEvent(db, evento,
         { email: pessoa.email, nome: pessoa.nome, curso: String(lead.curso ?? ""), regime },
         `${opts.comprovativo ? "comprovativo" : "docrecebido"}:${id}:${documento}:${ficheiroId}:${regra.id}:${pessoa.email}`.slice(0, 200),

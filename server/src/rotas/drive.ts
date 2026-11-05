@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { algumPerfil } from "../permissoes/personalizado.js";
 import { z } from "zod";
 import { config, newToken, oauthRedirectUri, siteOriginFromHeaders } from "../config.js";
 import {
@@ -216,11 +217,11 @@ export async function registar(app: FastifyInstance, deps: Deps) {
       turma: q.turma,
       formando: q.formando,
     });
-    const visiveis = await Promise.all(files.map(async f => (
-      eContrato({ kind: f.kind, contrato_id: f.contratoId }) ? veContrato(db, actor, { contrato_id: f.contratoId })
-        : actor.role === "comercial" ? comercialVeFicheiro(db, actor, { id: f.id, created_by: null })
-          : veRegime(actor.role, f.regime)
-    )));
+    const visiveis = await Promise.all(files.map(f => algumPerfil(req, a => (
+      eContrato({ kind: f.kind, contrato_id: f.contratoId }) ? veContrato(db, a, { contrato_id: f.contratoId })
+        : a.role === "comercial" ? comercialVeFicheiro(db, a, { id: f.id, created_by: null })
+          : veRegime(a.role, f.regime)
+    ))));
     return { files: files.filter((_, i) => visiveis[i]) };
   });
 
@@ -229,7 +230,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { params: idTexto }, req);
     if (!v) return;
     const row = await ficheiroDrive(db, v.params.id);
-    if (!row || !(await podeVerFicheiro(db, req.actor!, row))) return reply.code(404).send({ error: "ficheiro inexistente" });
+    if (!row || !(await algumPerfil(req, a => podeVerFicheiro(db, a, row)))) return reply.code(404).send({ error: "ficheiro inexistente" });
     return { file: mapFile(row) };
   });
 
@@ -239,7 +240,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const id = v.params.id;
     const row = await ficheiroDrive(db, id);
-    if (!row || !(await podeVerFicheiro(db, req.actor!, row))) return reply.code(404).send({ error: "ficheiro inexistente" });
+    if (!row || !(await algumPerfil(req, a => podeVerFicheiro(db, a, row)))) return reply.code(404).send({ error: "ficheiro inexistente" });
     const content = await readDriveContent(db, id);
     if (!content) return reply.code(404).send({ error: "ficheiro inexistente" });
     if (content.redirect && !content.bytes) return reply.redirect(content.redirect);
@@ -255,7 +256,7 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!v) return;
     const id = v.params.id;
     const row = await ficheiroDrive(db, id);
-    if (!row || !(await podeVerFicheiro(db, req.actor!, row))) return reply.code(404).send({ error: "ficheiro inexistente" });
+    if (!row || !(await algumPerfil(req, a => podeVerFicheiro(db, a, row)))) return reply.code(404).send({ error: "ficheiro inexistente" });
     let ok: boolean;
     try {
       ok = await deleteDriveFile(db, id);

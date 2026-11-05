@@ -6,8 +6,9 @@ import { useOpcoes } from "../../../../partilhado/dados/useOpcoes";
 import { ETAPAS, rotuloEtapa } from "./util";
 
 /** Acções em lote sobre as pré-inscrições seleccionadas. */
-export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
+export function BarraLote({ ids, regime, comerciais, etiquetas, onLimpar }: {
   ids: number[];
+  regime: "gold" | "fin";
   comerciais: OpcaoSelecao[];
   etiquetas: Etiqueta[];
   onLimpar: () => void;
@@ -29,7 +30,7 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
   });
 
   async function correr(a: Omit<AccaoLote, "ids">) {
-    const r = await lote.correr({ ids, ...a });
+    const r = await lote.correr({ ids, ...a }, regime);
     if (r) onLimpar();
   }
 
@@ -77,7 +78,7 @@ export function BarraLote({ ids, comerciais, etiquetas, onLimpar }: {
       <ConfirmarPerigo aberto={apagar} onFechar={() => setApagar(false)} acao="Apagar"
         titulo={`Apagar ${ids.length} ${ids.length === 1 ? "pré-inscrição" : "pré-inscrições"}?`}
         descricao="As pré-inscrições seleccionadas saem do CRM, com o histórico e os documentos. Não se pode desfazer. As já validadas (ou que já são formandos) só o administrador as apaga: as outras pessoas veem-nas ficar, com o motivo."
-        onConfirmar={async () => { setApagar(false); const r = await apagarLote.correr(ids); if (r) onLimpar(); }} />
+        onConfirmar={async () => { setApagar(false); const r = await apagarLote.correr(ids, regime); if (r) onLimpar(); }} />
     </div>
   );
 }

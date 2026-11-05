@@ -188,7 +188,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
       />
 
       {selecionados.size > 0 && f.vista === "lista" && pode("crm.escrever") && (
-        <BarraLote ids={[...selecionados]} comerciais={opComerciais} etiquetas={etiquetas.dados?.etiquetas ?? []} onLimpar={() => setSelecionados(new Set())} />
+        <BarraLote ids={[...selecionados]} regime={regime} comerciais={opComerciais} etiquetas={etiquetas.dados?.etiquetas ?? []} onLimpar={() => setSelecionados(new Set())} />
       )}
 
       {erro && !dados ? <ErroCarregar erro={erro} onTentar={recarregar} /> : f.vista === "pipeline" ? (

@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from "fastify";
+import { perfisDoPedido } from "../permissoes/personalizado.js";
 import { arrumarNaPastaDaTurma } from "../driveFicheiros.js";
 import { z } from "zod";
 import { timingSafeEqual } from "node:crypto";
@@ -202,7 +203,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
   const actor = (req: FastifyRequest) => req.actor!;
 
   /** Áreas de quem pede (a administração vê todas). */
-  const areasDe = (req: FastifyRequest) => areasDoPerfil(actor(req).role);
+  // Perfil personalizado: as áreas de todos os perfis com acesso a estes ecrãs (os outros: as do seu perfil).
+  const areasDe = (req: FastifyRequest) => [...new Set(perfisDoPedido(req).flatMap(p => areasDoPerfil(p)))];
   /** A área pedida se o perfil a pode usar; sem ela, a primeira do perfil. */
   const areaPedida = (req: FastifyRequest, pedida?: AreaEmail): AreaEmail | null => {
     const areas = areasDe(req);

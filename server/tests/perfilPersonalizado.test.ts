@@ -92,4 +92,63 @@ describe("perfil personalizado", () => {
     const { eComercial } = await import("../src/repos/leads.js");
     expect(await eComercial(ctx.db, id)).toBe(true);
   });
+
+  it("auditoria: regime no corpo, lotes, ficheiros, emails, pesquisa e alertas somam os perfis", async () => {
+    const sf = await criar(["secretaria", "financiada"]);
+    const cf = await criar(["comercial", "financiada"]);
+    const cc = await criar(["comercial", "contabilidade"]);
+    const fc = await criar(["financiada", "contabilidade"]);
+    const regimeDe = async (id: number) => (await ctx.db.query<{ regime: string }>("SELECT regime FROM preinscricoes WHERE id = $1", [id])).rows[0]?.regime;
+
+    // 1. Criar no regime pedido (vem no corpo).
+    let r = await sf("POST", "/v1/preinscricoes", { nome: "Audit", email: `a1.${randomUUID().slice(0, 6)}@exemplo.pt`, regime: "fin", curso: "Primeiros Socorros" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(await regimeDe(r.json().preinscricao.id)).toBe("fin");
+    r = await cf("POST", "/v1/preinscricoes", { nome: "Audit", email: `a2.${randomUUID().slice(0, 6)}@exemplo.pt`, regime: "gold", curso: "Formação de Formadores - CCP" });
+    expect(r.statusCode, r.body).toBe(200);
+    expect(await regimeDe(r.json().preinscricao.id)).toBe("gold");
+
+    // 2. Lotes com o regime da lista.
+    const base = 960000 + Math.floor(Math.random() * 9000);
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, estado, regime) VALUES
+         ($1, '2031-01-01 10:00', 'Quokkaaudit', 'G', $3, '912', 'C', '1º Contacto', 'gold'),
+         ($2, '2031-01-01 10:00', 'Quokkaaudit', 'F', $4, '913', 'C', '1º Contacto', 'fin')`,
+      [base, base + 1, `qg${base}@exemplo.pt`, `qf${base}@exemplo.pt`]);
+    expect((await cf("POST", "/v1/crm/lote?regime=gold", { ids: [base], acao: "estado", estado: "2º Contacto" })).json().updated).toBe(1);
+    expect((await sf("POST", "/v1/crm/lote?regime=fin", { ids: [base + 1], acao: "estado", estado: "2º Contacto" })).json().updated).toBe(1);
+
+    // 5. Pesquisa: os dois regimes.
+    const regimes = (r2: { json(): { leads: { regime: string }[] } }) => r2.json().leads.map(l => l.regime).sort();
+    expect(regimes(await sf("GET", "/v1/crm/search?q=Quokkaaudit"))).toEqual(["fin", "gold"]);
+    expect(regimes(await cf("GET", "/v1/crm/search?q=Quokkaaudit"))).toEqual(["fin", "gold"]);
+
+    // 6. Alertas de documentos dos dois regimes.
+    await ctx.db.query("INSERT INTO doc_alertas (id, preinscricao_id) VALUES ($1, $2), ($3, $4)", [`al-${base}`, base, `al-${base + 1}`, base + 1]);
+    const alertas = (await sf("GET", "/v1/alertas/documentos")).json().alertas.map((a: { preinscricaoId: number }) => a.preinscricaoId);
+    expect(alertas).toEqual(expect.arrayContaining([base, base + 1]));
+
+    // 3. Ficheiros: Financiada com a coordenação Financiada; documento da pré-inscrição Gold com o comercial.
+    const fFin = `ff-${base}`;
+    const fGold = `fg-${base}`;
+    await ctx.db.query(
+      `INSERT INTO drive_files (id, name, kind, regime, formando, stored_in) VALUES
+         ($1, 'cc.pdf', 'formando-doc', 'fin', 'Ana', 'local'), ($2, 'cc.pdf', 'preinscricao-doc', 'gold', 'Ana', 'local')`, [fFin, fGold]);
+    await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, drive_file_id) VALUES ($1, 'cc', 'cc.pdf', $2)", [base, fGold]);
+    expect((await sf("GET", `/v1/drive/files/${fFin}`)).statusCode).toBe(200);
+    expect((await cc("GET", `/v1/drive/files/${fGold}`)).statusCode).toBe(200);
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/drive/files/${fFin}`)).statusCode).toBe(404);
+
+    // 4. Emails automáticos: as áreas dos dois perfis.
+    const areas = (await fc("GET", "/v1/email/templates")).json();
+    const areasVistas = new Set(((areas.templates ?? areas.modelos ?? []) as { area: string }[]).map(t => t.area));
+    expect(areasVistas.has("fin")).toBe(true);
+    expect(areasVistas.has("contabilidade")).toBe(true);
+  });
+
+  it("8. a base não aceita um personalizado sem perfis", async () => {
+    await expect(ctx.db.query(
+      "INSERT INTO users (id, name, email, password_hash, role, active, perfis) VALUES ($1, 'X', $2, 'x', 'personalizado', true, '{}')",
+      [randomUUID(), `vazio.${randomUUID().slice(0, 6)}@exemplo.pt`])).rejects.toThrow();
+  });
 });

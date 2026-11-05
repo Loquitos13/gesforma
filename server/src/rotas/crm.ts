@@ -3,6 +3,7 @@
  * etiquetas, acções em lote, documentos, validação, pedido de pagamento e nova ligação pessoal.
  */
 import type { FastifyInstance, FastifyReply } from "fastify";
+import { somarPorPerfil } from "../permissoes/personalizado.js";
 import { z } from "zod";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { exportCrmLeads, queryCrmLeads, searchCrmLeads } from "../crm.js";
@@ -124,7 +125,9 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const v = validar(reply, { query: z.object({ q: textoQuery(80) }) }, req);
     if (!v) return;
     const q = v.query.q ?? "";
-    return { leads: q.length < 2 ? [] : await searchCrmLeads(db, q, 12, req.actor!) };
+    // Perfil personalizado: o que cada perfil encontra, junto.
+    const leads = q.length < 2 ? [] : (await somarPorPerfil(req, a => searchCrmLeads(db, q, 12, a), l => l.id)).slice(0, 12);
+    return { leads };
   });
 
   app.get("/v1/search", async (req, reply) => {

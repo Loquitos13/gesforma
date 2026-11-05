@@ -4,6 +4,7 @@
  * validar a pré-inscrição, pedir o pagamento, nova ligação pessoal e sugestão por turma cheia.
  */
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import { somarPorPerfil } from "../permissoes/personalizado.js";
 import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
@@ -37,7 +38,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
 
   app.get("/v1/alertas/documentos", async (req, reply) => {
     if (!requireAuth(req, reply)) return;
-    const alertas = await listarAlertasAbertas(db, req.actor!);
+    const alertas = await somarPorPerfil(req, a => listarAlertasAbertas(db, a), a => a.id);
     return {
       alertas: alertas.map(a => ({
         id: a.id,

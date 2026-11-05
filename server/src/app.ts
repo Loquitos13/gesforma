@@ -147,7 +147,10 @@ export async function buildApp(db: Db, opts: { worker?: boolean } = {}) {
       // e, num registo do CRM, que o pode ver.
       const q = (req.query ?? {}) as Record<string, unknown>;
       const regimeQuery = q.regime === "gold" || q.regime === "fin" ? q.regime : null;
-      const candidatos = candidatosParaPedido(req.actor.perfis as Perfil[], regimeDoCaminho(path) ?? regimeQuery)
+      // O regime também pode vir no corpo (ex.: criar uma pré-inscrição da Financiada).
+      const b = (req.body && typeof req.body === "object" ? req.body : {}) as Record<string, unknown>;
+      const regimeCorpo = b.regime === "gold" || b.regime === "fin" ? b.regime : null;
+      const candidatos = candidatosParaPedido(req.actor.perfis as Perfil[], regimeDoCaminho(path) ?? regimeQuery ?? regimeCorpo)
         .filter(p => podeAceder(p, req.method, path));
       if (!candidatos.length) return reply.code(403).send({ error: "Sem permissão para esta operação." });
       let escolhido: Perfil | null = candidatos[0]!;

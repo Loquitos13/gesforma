@@ -10,7 +10,7 @@ import { avisarPedidoWhatsapp, avisarWhatsappHumano } from "./avisosEquipa.js";
 import type { Db } from "./db/pool.js";
 import { lerDefinicao } from "./repos/settings.js";
 import {
-  HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, limparAnexosWhatsapp, marcarConversaIniciadaWhatsapp, registarMensagemWhatsapp,
+  emAtendimento, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, limparAnexosWhatsapp, marcarConversaIniciadaWhatsapp, registarMensagemWhatsapp,
 } from "./repos/whatsapp.js";
 import type { Resposta } from "./whatsappBot.js";
 
@@ -56,8 +56,11 @@ async function janelaAberta(db: Db, telefone: string) {
  */
 export async function fecharConversaWhatsapp(db: Db, telefone: string, por: string, enviar: EnviarWhatsapp) {
   const { despedida } = await lerRegrasWhatsapp(db);
+  // Fechada por inatividade depois de a equipa responder: sem despedida e o assistente continua calado na conversa.
+  const daEquipa = por === "Inatividade" && Boolean((await db.query<{ humano_por: string | null }>(
+    "SELECT humano_por FROM whatsapp_sessoes WHERE telefone = $1", [telefone])).rows[0]?.humano_por);
   let saiu = false;
-  if (despedida && await janelaAberta(db, telefone)) {
+  if (despedida && !daEquipa && await janelaAberta(db, telefone)) {
     saiu = (await enviar(telefone, despedida).catch(() => ({ sent: false }))).sent;
     if (saiu) await registarMensagemWhatsapp(db, telefone, "out", despedida, undefined, por);
   }
@@ -65,9 +68,10 @@ export async function fecharConversaWhatsapp(db: Db, telefone: string, por: stri
   await registarMensagemWhatsapp(db, telefone, "evento", por === "Inatividade" ? "Conversa fechada por inatividade" : `Conversa fechada por ${por}`);
   await db.query(
     `INSERT INTO whatsapp_sessoes (telefone, passo, fechada_em, fechada_por, actualizado_em) VALUES ($1, 'menu', now(), $2, now())
-     ON CONFLICT (telefone) DO UPDATE SET passo = 'menu', dados = '{}'::jsonb, humano_desde = NULL, humano_por = NULL,
+     ON CONFLICT (telefone) DO UPDATE SET passo = 'menu', dados = '{}'::jsonb,
+       humano_desde = CASE WHEN $3 THEN whatsapp_sessoes.humano_desde END, humano_por = CASE WHEN $3 THEN whatsapp_sessoes.humano_por END,
        fechada_em = now(), fechada_por = $2, lembrete_em = NULL, aviso_equipa_em = NULL, lida_em = now()`,
-    [telefone, por.slice(0, 120)]);
+    [telefone, por.slice(0, 120), daEquipa]);
   return { despedida: saiu };
 }
 
@@ -82,7 +86,7 @@ export async function reabrirConversaWhatsapp(db: Db, telefone: string) {
   return r.rows.length > 0;
 }
 
-type Sessao = { telefone: string; passo: string; humano_desde: string | null; ultima: string; ultima_in: string | null; resposta_equipa: string | null };
+type Sessao = { telefone: string; passo: string; humano_desde: string | null; humano_por: string | null; ultima: string; ultima_in: string | null; resposta_equipa: string | null };
 
 /** Uma volta das regras de inatividade (corre a cada minuto dentro da API). */
 export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
@@ -99,7 +103,7 @@ export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
   }
   if (!r.fecharHoras && !r.lembreteMin && !r.avisoEquipaHoras) return { fechadas: 0, lembretes: 0, avisos: 0 };
   const sessoes = (await db.query<Sessao>(
-    `SELECT s.telefone, s.passo, s.humano_desde::text AS humano_desde,
+    `SELECT s.telefone, s.passo, s.humano_desde::text AS humano_desde, s.humano_por,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao <> 'evento') AS ultima,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'in') AS ultima_in,
             (SELECT max(created_at)::text FROM whatsapp_mensagens m WHERE m.telefone = s.telefone AND m.direccao = 'out'
@@ -113,7 +117,7 @@ export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
   const ha = (iso: string | null) => (iso ? (agora - new Date(iso).getTime()) / 60_000 : Infinity);
   let fechadas = 0, lembretes = 0, avisos = 0;
   for (const s of sessoes) {
-    const humano = s.humano_desde != null && ha(s.humano_desde) < HUMANO_EXPIRA_HORAS * 60;
+    const humano = emAtendimento(s, agora);
     // 1. Sem mensagens há X horas: fecha.
     if (r.fecharHoras && ha(s.ultima) >= r.fecharHoras * 60) {
       await fecharConversaWhatsapp(db, s.telefone, "Inatividade", enviar);

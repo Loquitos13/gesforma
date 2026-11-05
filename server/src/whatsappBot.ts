@@ -11,7 +11,7 @@ import { isEmail, normalizeEmail, sanitizeHeader, sanitizeText } from "./securit
 import { avisarPedidoWhatsapp } from "./avisosEquipa.js";
 import { reabrirConversaWhatsapp } from "./whatsappInatividade.js";
 import {
-  gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, HUMANO_EXPIRA_HORAS, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
+  emAtendimento, gravarNomePerfilWhatsapp, gravarSessaoWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp,
   entradasWhatsapp, marcarConversaIniciadaWhatsapp, pedirHumanoWhatsapp, registarEntradaWhatsapp, registarMensagemWhatsapp, sessaoWhatsapp,
 } from "./repos/whatsapp.js";
 
@@ -180,13 +180,12 @@ function textoEstado(lead: ReturnType<typeof mapPreinscricao>) {
 
 async function getSessao(db: Db, telefone: string) {
   const r = await sessaoWhatsapp(db, telefone);
-  const desde = r?.humano_desde ? new Date(r.humano_desde).getTime() : 0;
   return {
     passo: (r?.passo ?? "menu") as Passo,
     dados: parseDados(r?.dados),
     leadId: r?.lead_id ?? null,
-    // Atendimento por uma pessoa: o bot não responde até a conversa voltar ao assistente (ou caducar sem resposta).
-    humano: desde > 0 && Date.now() - desde < HUMANO_EXPIRA_HORAS * 3600_000,
+    // Atendimento por uma pessoa: o bot não responde até a conversa voltar ao assistente (ou o pedido caducar sem resposta).
+    humano: emAtendimento(r),
   };
 }
 

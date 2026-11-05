@@ -6,7 +6,7 @@ import { config, newToken } from "./config.js";
 import type { Db } from "./db/pool.js";
 import { openSecret, sealSecret } from "./secretBox.js";
 import {
-  apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
+  apagarConversaWhatsapp, apagarWhatsapp, contarSessoesWhatsapp, conversasWhatsapp, conversaWhatsapp, emAtendimento, gravarWhatsapp, HUMANO_EXPIRA_HORAS,
   conversasPorLerWhatsapp, leadsPorTelefoneWhatsapp, libertarHumanoWhatsapp, pedidosPendentesWhatsapp, marcarLidaWhatsapp, refrescarHumanoWhatsapp, registarMensagemWhatsapp,
   anexoWhatsapp, anexosDaConversaWhatsapp, marcarAnexoGuardadoWhatsapp, passarAnexoParaDriveWhatsapp, registarAnexoRecebidoWhatsapp,
   sessaoWhatsapp, ultimaEntradaWhatsapp, wamidJaVisto, whatsappGuardado,
@@ -537,7 +537,7 @@ export function registerWhatsappRoutes(
       conversas: rows.map(r => ({
         telefone: r.telefone,
         nome: r.nome_perfil || "",
-        humano: Boolean(r.humano_desde) && agora - new Date(r.humano_desde!).getTime() < HUMANO_EXPIRA_HORAS * 3600_000,
+        humano: emAtendimento(r, agora),
         humanoPor: r.humano_por || "",
         ultima: r.ultima,
         ultimaDireccao: r.ultima_direccao,
@@ -560,7 +560,7 @@ export function registerWhatsappRoutes(
     const leads = n9.length === 9 ? await leadsPorTelefoneWhatsapp(db, tel, n9) : [];
     return {
       telefone: tel,
-      humano: Boolean(sessao?.humano_desde) && Date.now() - new Date(sessao!.humano_desde!).getTime() < HUMANO_EXPIRA_HORAS * 3600_000,
+      humano: emAtendimento(sessao),
       podeResponder: dentroDas24h(ultima),
       ultimaEntrada: ultima ?? null,
       fechada: Boolean(sessao?.fechada_em),

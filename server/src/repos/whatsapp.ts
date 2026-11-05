@@ -28,9 +28,9 @@ export async function contarSessoesWhatsapp(c: Consulta) {
 }
 
 export function sessaoWhatsapp(c: Consulta, telefone: string) {
-  return one<{ passo: string; dados: unknown; lead_id: number | null; humano_desde: string | null; fechada_em: string | null; fechada_por: string | null }>(
+  return one<{ passo: string; dados: unknown; lead_id: number | null; humano_desde: string | null; humano_por: string | null; fechada_em: string | null; fechada_por: string | null }>(
     c,
-    `SELECT passo, dados, lead_id, humano_desde::text AS humano_desde, fechada_em::text AS fechada_em, fechada_por
+    `SELECT passo, dados, lead_id, humano_desde::text AS humano_desde, humano_por, fechada_em::text AS fechada_em, fechada_por
        FROM whatsapp_sessoes WHERE telefone = $1`,
     [telefone],
   );
@@ -38,6 +38,16 @@ export function sessaoWhatsapp(c: Consulta, telefone: string) {
 
 /** Horas sem resposta da equipa ao fim das quais o assistente volta a responder nessa conversa. */
 export const HUMANO_EXPIRA_HORAS = 72;
+
+/**
+ * Conversa em atendimento por uma pessoa (o assistente não responde nem manda lembretes): depois de a equipa responder
+ * ou assumir, até «Devolver ao assistente» ou a pessoa escrever *menu*; um pedido ainda sem resposta caduca ao fim de
+ * HUMANO_EXPIRA_HORAS.
+ */
+export function emAtendimento(s: { humano_desde?: string | null; humano_por?: string | null } | null | undefined, agora = Date.now()) {
+  if (!s?.humano_desde) return false;
+  return Boolean(s.humano_por) || agora - new Date(s.humano_desde).getTime() < HUMANO_EXPIRA_HORAS * 3600_000;
+}
 
 /** A pessoa pediu para falar com a equipa: o bot fica em pausa nesta conversa (uma pausa já caducada recomeça agora). */
 export async function pedirHumanoWhatsapp(c: Consulta, telefone: string) {

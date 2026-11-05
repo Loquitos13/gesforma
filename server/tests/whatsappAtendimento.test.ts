@@ -213,6 +213,30 @@ describe("fechar conversas e inatividade", () => {
     expect(corpos.some((c: string) => c.startsWith("Combinado."))).toBe(true);
   });
 
+  it("depois de a equipa responder, o assistente não volta a falar sozinho (nem dias depois, nem ao fechar por inatividade)", async () => {
+    const { handleWhatsappText } = await import("../src/whatsappBot.js");
+    const { verificarInatividade } = await import("../src/whatsappInatividade.js");
+    await ctx.db.query(
+      `INSERT INTO app_settings (id, values) VALUES ('whatsapp_regras', '{"lembreteMin": "30", "avisoEquipaHoras": "0", "fecharHoras": "24"}'::jsonb)
+       ON CONFLICT (id) DO UPDATE SET values = EXCLUDED.values`);
+    const enviadas: { to: string; m: unknown }[] = [];
+    const enviar = async (to: string, m: unknown) => { enviadas.push({ to, m }); return { sent: true }; };
+    const t = tel();
+    await handleWhatsappText(ctx.db, t, "1"); // a meio da pré-inscrição
+    expect((await pedido(ctx, "comercial", "POST", "/v1/crm/whatsapp/responder", { telefone: t, texto: "Olá! Sou a Joana, da ENA." })).statusCode).toBe(200);
+    // Cinco dias depois (mais do que as 72 horas de um pedido sem resposta) a pessoa escreve: o assistente fica calado.
+    await ctx.db.query("UPDATE whatsapp_sessoes SET humano_desde = now() - interval '5 days' WHERE telefone = $1", [t]);
+    expect((await handleWhatsappText(ctx.db, t, "Obrigada, já fiz a transferência")).replies).toEqual([]);
+    // Dias sem mensagens: fecha por inatividade, sem despedida nem lembrete, e continua com a equipa.
+    await ctx.db.query("UPDATE whatsapp_mensagens SET created_at = created_at - interval '2 days' WHERE telefone = $1", [t]);
+    await verificarInatividade(ctx.db, enviar);
+    expect(enviadas.filter(e => e.to === t)).toEqual([]);
+    expect((await ctx.db.query<{ fechada_em: string | null }>("SELECT fechada_em FROM whatsapp_sessoes WHERE telefone = $1", [t])).rows[0]!.fechada_em).not.toBeNull();
+    // Volta a escrever: a conversa reabre e o assistente continua calado; *menu* devolve-a ao assistente.
+    expect((await handleWhatsappText(ctx.db, t, "Bom dia, tenho mais uma dúvida")).replies).toEqual([]);
+    expect((await handleWhatsappText(ctx.db, t, "menu")).replies[0]).toContain("Como posso ajudar?");
+  });
+
   it("regras: lembra quem parou a meio, avisa a equipa sem resposta e fecha sem mensagens", async () => {
     const { handleWhatsappText } = await import("../src/whatsappBot.js");
     const { verificarInatividade } = await import("../src/whatsappInatividade.js");

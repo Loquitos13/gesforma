@@ -113,6 +113,9 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
       </section>
 
       <div className="grid gap-[18px] lg:grid-cols-[minmax(0,1fr)_360px] items-start">
+        <div className="flex flex-col gap-[18px] min-w-0">
+        {/* Gold: o pagamento e os comprovativos (prestações) em destaque, por cima das secções. */}
+        {gold && <CartaoPagamento ficha={ficha} podeEditar={podeEditar} />}
         <section className="bg-superficie border border-linha rounded-cartao overflow-hidden min-w-0">
           <Separadores<Aba>
             rotulo="Secções da ficha"
@@ -137,11 +140,11 @@ export default function FormandoFicha({ view, params, navigate }: VistaProps) {
             {aba === "historico" && <SeparadorHistorico ficha={ficha} podeEditar={podeEditar} />}
           </div>
         </section>
+        </div>
 
         <aside className="flex flex-col gap-4 min-w-0" aria-label="Resumo da ficha">
           <CartaoDados ficha={ficha} podeEditar={podeEditar} onEditar={() => setEditar(true)} />
           {podeAcesso && <CartaoAcesso ficha={ficha} podeEditar={podeAcesso} />}
-          {gold && <CartaoPagamento ficha={ficha} podeEditar={podeEditar} />}
           {!gold && <CartaoElegibilidade ficha={ficha} />}
           {!gold && <CartaoApoios formandoId={ficha.id} onAbrir={() => setAba("apoios")} />}
           <CartaoTurma ficha={ficha} onAbrir={t => navigate({ view: gold ? "gold-cockpit-turma" : "fin-cockpit-turma", turmaId: t })} />

@@ -82,7 +82,12 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   const pedir = useAccao(() => apiPedirPagamentoFormando(ficha.id), { invalidar: INVALIDAR, ok: r => `Pagamento de ${eur(r.valor, true)} pedido por email.` });
   const p = ficha.pagamento;
   if (!p) return null;
-  const s = PAGAMENTO[p.situacao];
+  // Em prestações com alguma por pagar: «1 de 2 pagas» (o pagamento ligado fica «Pago» com a 1.ª).
+  const comps = p.comprovativos ?? [];
+  const pagas = comps.filter(c => c.estado === "validado").length;
+  const s = comps.length > 1 && pagas < comps.length
+    ? { rotulo: `${pagas} de ${comps.length} prestações pagas`, tom: "aviso" as const }
+    : PAGAMENTO[p.situacao];
   const porPagar = p.situacao === "por_pagar";
   const pagoMov = p.movimentos.find(m => /^pago$/i.test(m.estado));
   return (

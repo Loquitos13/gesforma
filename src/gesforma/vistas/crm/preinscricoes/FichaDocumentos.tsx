@@ -1,9 +1,10 @@
 import { useRef, useState } from "react";
 import { Aviso, Botao, ConfirmarPerigo, Entrada, Estado, Vazio, dataHora, eur } from "../../../../partilhado/ui";
-import { apiEntregarDoc, apiEnviarLigacao, apiNovaLigacao, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
+import { apiEntregarDoc, apiEnviarLigacao, apiNovaLigacao, apiPrestacoes, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
+import { JanelaPrestacoes, resumoPrestacoes } from "./Prestacoes";
 
 const ESTADO_DOC: Record<string, { texto: string; tom: "sucesso" | "perigo" | "aviso" }> = {
   validado: { texto: "Validado", tom: "sucesso" },
@@ -36,7 +37,27 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   const escolha = useRef<HTMLInputElement>(null);
   const [alvo, setAlvo] = useState<string | null>(null);
   const entregar = useAccao((tipo: string, f: File) => apiEntregarDoc(id, tipo, f), { ok: "Documento entregue. Fica por validar.", invalidar: ["crm:", "painel:"] });
-  const paraEntregar = d.docsFechado || !pode("crm.escrever") ? [] : d.docsParaEntregar ?? [];
+  // O servidor decide o que se pode entregar (validada, já só os comprovativos das prestações em falta).
+  const paraEntregar = !pode("crm.escrever") ? [] : d.docsParaEntregar ?? [];
+  const prestacoes = d.prestacoes ?? [];
+  const eComprovativo = (t: string) => /^comprovativo(-\d+)?$/.test(t);
+  // Comprovativo sem as prestações confirmadas: primeiro «em quantas vezes» (com o ficheiro); «Alterar» sem ficheiro.
+  const [janela, setJanela] = useState<{ tipo: string | null; rotulo?: string } | null>(null);
+  const [aGravarPrestacoes, setAGravarPrestacoes] = useState(false);
+  async function confirmarPrestacoes(valores: number[], ficheiro: File | null) {
+    setAGravarPrestacoes(true);
+    try {
+      await apiPrestacoes(id, valores);
+      if (ficheiro && janela?.tipo) await entregar.correr(janela.tipo, ficheiro);
+      else toastOk("Prestações gravadas.");
+      setJanela(null);
+      onMudou();
+    } catch (e) {
+      toastError(e, "Não foi possível gravar as prestações.");
+    } finally {
+      setAGravarPrestacoes(false);
+    }
+  }
 
   async function copiar() {
     try {
@@ -105,7 +126,7 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
                   {doc.url && <a className="text-[13px] font-semibold text-ligacao" href={doc.url} target="_blank" rel="noreferrer">Abrir</a>}
                 </div>
                 {doc.observacao && <p className="m-0 mt-1 text-xs text-perigo">{doc.observacao}</p>}
-                {podeValidar && (doc.tipo !== "comprovativo" || podeComprovativo) && doc.estado !== "validado" && !d.docsFechado && (
+                {(eComprovativo(doc.tipo) ? podeComprovativo : podeValidar) && doc.estado !== "validado" && !d.docsFechado && (
                   <div className="mt-2 flex flex-wrap items-center gap-2">
                     <Entrada
                       aria-label={`O que está incorrecto em ${doc.label}`}
@@ -140,14 +161,26 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
               <li key={p.id} className="flex items-center gap-2 text-[13px]">
                 <span className="min-w-0 flex-1 truncate">{p.label}</span>
                 <Botao tamanho="sm" variante="secundario" aCarregar={entregar.aCorrer && alvo === p.id}
-                  onClick={() => { setAlvo(p.id); escolha.current?.click(); }}>
+                  onClick={() => {
+                    if (eComprovativo(p.id) && !prestacoes.length) { setJanela({ tipo: p.id, rotulo: p.label }); return; }
+                    setAlvo(p.id); escolha.current?.click();
+                  }}>
                   {d.documentos.some(x => x.tipo === p.id) ? "Substituir ficheiro" : "Carregar ficheiro"}
                 </Botao>
               </li>
             ))}
           </ul>
+          {prestacoes.length > 0 && (
+            <p className="m-0 mt-2 flex flex-wrap items-center gap-2 text-xs text-tinta-suave">
+              {resumoPrestacoes(prestacoes)}
+              <Botao tamanho="sm" variante="fantasma" onClick={() => setJanela({ tipo: null })}>Alterar</Botao>
+            </p>
+          )}
         </section>
       )}
+      <JanelaPrestacoes aberto={Boolean(janela)} preco={Number(d.lead.preco) || 0} atuais={prestacoes} comFicheiro={Boolean(janela?.tipo)}
+        rotuloFicheiro={janela?.rotulo} aGravar={aGravarPrestacoes || entregar.aCorrer} onFechar={() => setJanela(null)}
+        onConfirmar={(v, f) => void confirmarPrestacoes(v, f)} />
 
       {lembretes && !d.docsFechado && (
         <section aria-label="Lembretes automáticos" className="rounded-cartao border border-linha p-3 text-[13px]">

@@ -57,6 +57,25 @@ export async function situacaoPagamento(
   return { estado, pago: estado === "pago", pedeComprovativo: estado === "pedido" };
 }
 
+/** Comprovativo de pagamento: o 1.º («comprovativo») ou o de uma prestação seguinte («comprovativo-2», …). */
+export const RE_COMPROVATIVO = /^comprovativo(-([2-9]|1[0-2]))?$/;
+export const eComprovativo = (tipo: string | null | undefined) => RE_COMPROVATIVO.test(String(tipo ?? ""));
+/** Tipo do comprovativo da prestação n (1 = o de sempre). */
+export const tipoPrestacao = (n: number) => (n <= 1 ? "comprovativo" : `comprovativo-${n}`);
+
+/** Valores das prestações confirmados pela equipa (vazio = ainda não confirmado). */
+export function prestacoesDoLead(lead: { prestacoes?: unknown }): number[] {
+  const v = typeof lead.prestacoes === "string" ? (() => { try { return JSON.parse(lead.prestacoes as string) as unknown; } catch { return null; } })() : lead.prestacoes;
+  return Array.isArray(v) ? v.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
+}
+
+/** Rótulo do comprovativo de uma prestação: «Comprovativo de pagamento (2.ª de 3 · 65,00 €)». */
+export function rotuloPrestacao(n: number, valores: number[]) {
+  if (valores.length <= 1) return "Comprovativo de pagamento";
+  const v = valores[n - 1];
+  return `Comprovativo de pagamento (${n}.ª de ${valores.length}${v ? ` · ${v.toFixed(2).replace(".", ",")} €` : ""})`;
+}
+
 /**
  * A equipa pode entregar o comprovativo pela pessoa: com o pagamento pedido ou, sem o pedir, com os documentos
  * obrigatórios todos validados (curso Gold pago, ainda por pagar).
@@ -68,6 +87,29 @@ export async function comprovativoPelaEquipa(
 ) {
   const s = await situacaoPagamento(db, lead);
   return s.pedeComprovativo || (s.estado === "por_pedir" && docsValidados);
+}
+
+/**
+ * Comprovativos que a equipa pode entregar pela pessoa (ainda por validar): o 1.º, nas condições de
+ * `comprovativoPelaEquipa`; os das prestações seguintes, depois disso ou com o pagamento já confirmado (também com a
+ * pessoa já na turma).
+ */
+export async function comprovativosPelaEquipa(
+  db: Db,
+  lead: { regime?: unknown; preco?: unknown; pagamento_id?: unknown; pagamento_pedido_em?: unknown; prestacoes?: unknown; estado?: unknown; validada_em?: unknown },
+  docsJa: { tipo: string; estado: string }[],
+  docsValidados: boolean,
+) {
+  const valores = prestacoesDoLead(lead);
+  const validado = (t: string) => docsJa.some(d => d.tipo === t && d.estado === "validado");
+  const primeiro = await comprovativoPelaEquipa(db, lead, docsValidados);
+  const out: { id: string; label: string }[] = [];
+  if (primeiro && !validado("comprovativo")) out.push({ id: "comprovativo", label: rotuloPrestacao(1, valores) });
+  const pago = validado("comprovativo") || /^(pago|formando)$/i.test(String(lead.estado ?? "")) || Boolean(lead.validada_em);
+  if (primeiro || pago) {
+    for (let n = 2; n <= valores.length; n++) if (!validado(tipoPrestacao(n))) out.push({ id: tipoPrestacao(n), label: rotuloPrestacao(n, valores) });
+  }
+  return out;
 }
 
 export type DocExtraPreinscricao = { id: string; label: string; required: boolean };

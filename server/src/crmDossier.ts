@@ -2,7 +2,7 @@ import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
 import type { AtorCrm, Consulta } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
-import { comprovativoPelaEquipa, faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
+import { comprovativosPelaEquipa, faltaPedirPagamento, faltaValidarPreinscricao, prestacoesDoLead, rotuloPrestacao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { GENEROS_FIN, mascararFim, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
@@ -116,9 +116,13 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const validados = new Set(ficheiros.filter(f => f.estado === "validado").map(f => f.tipo));
   const obrig = pedidos.filter(p => p.required);
   const todosValidados = obrig.length > 0 && obrig.every(p => validados.has(p.id));
-  const entregaveis = [...pedidos.map(p => ({ id: p.id, label: p.label })),
-    ...((await comprovativoPelaEquipa(db, row, todosValidados).catch(() => false)) ? [{ id: "comprovativo", label: "Comprovativo de pagamento" }] : [])]
+  // Validada (ligação fechada): já só os comprovativos das prestações em falta.
+  const comprovativos = await comprovativosPelaEquipa(db, row, ficheiros, todosValidados).catch(() => []);
+  const entregaveis = [...(row.validada_em ? [] : pedidos.map(p => ({ id: p.id, label: p.label }))), ...comprovativos]
     .filter(p => !validados.has(p.id));
+  for (const c of comprovativos) labels.set(c.id, c.label);
+  for (const f of ficheiros) if (/^comprovativo(-\d+)?$/.test(f.tipo)) labels.set(f.tipo, rotuloPrestacao(f.tipo === "comprovativo" ? 1 : Number(f.tipo.split("-")[1]), prestacoesDoLead(row)));
+  const prestacoes = prestacoesDoLead(row);
   let docsUrl = "";
   try { docsUrl = documentosUrl(await ensureDocsToken(db, id)); } catch { docsUrl = ""; }
   // Pagamento por transferência com comprovativo: sem referências nem entidade Multibanco.
@@ -171,6 +175,8 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
     docsCompletos: ok,
     docsEmFalta: emFalta.map(d => d.label),
     docsParaEntregar: entregaveis,
+    /** Valores das prestações confirmados pela equipa (vazio = ainda não confirmado; 1 valor = pagamento de uma vez). */
+    prestacoes,
     documentos: ficheiros.map(f => ({
       id: f.id,
       tipo: f.tipo,

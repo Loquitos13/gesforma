@@ -17,8 +17,8 @@ function noPeriodo(f: FiltroPainel) {
 }
 
 /** Documentos da ligação pessoal: algum enviado e nenhum por rever ou recusado. */
-const DOCS_REVISTOS = `(EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo <> 'comprovativo')
-  AND NOT EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo <> 'comprovativo'
+const DOCS_REVISTOS = `(EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo !~ '^comprovativo(-[0-9]+)?$')
+  AND NOT EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo !~ '^comprovativo(-[0-9]+)?$'
                    AND COALESCE(d.estado, 'pendente') IN ('pendente', 'recusado')))`;
 
 const PAGOU = `EXISTS (SELECT 1 FROM pagamentos pg WHERE pg.estado ILIKE 'pago%'
@@ -198,13 +198,13 @@ export async function tarefasGold(c: Consulta, f: FiltroPainel): Promise<Tarefa[
   const w = filtrarLeads(f).sempre(LEAD_ABERTO).sempre("p.validada_em IS NULL");
   const r = await one(c, `SELECT
       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id
-                                      AND d.tipo <> 'comprovativo' AND COALESCE(d.estado, 'pendente') = 'pendente'))::int AS docs_leads,
+                                      AND d.tipo !~ '^comprovativo(-[0-9]+)?$' AND COALESCE(d.estado, 'pendente') = 'pendente'))::int AS docs_leads,
       (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id IN (SELECT p.id FROM preinscricoes p ${w.where})
-          AND d.tipo <> 'comprovativo' AND COALESCE(d.estado, 'pendente') = 'pendente') AS docs_n,
+          AND d.tipo !~ '^comprovativo(-[0-9]+)?$' AND COALESCE(d.estado, 'pendente') = 'pendente') AS docs_n,
       count(*) FILTER (WHERE COALESCE(p.preco, 0) > 0 AND p.pagamento_pedido_em IS NULL AND p.percurso_concluido_em IS NOT NULL
                          AND ${DOCS_REVISTOS} AND NOT ${PAGOU})::int AS pedir,
       count(*) FILTER (WHERE EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = p.id
-                                      AND d.tipo = 'comprovativo' AND COALESCE(d.estado, 'pendente') = 'pendente'))::int AS comprovativos,
+                                      AND d.tipo ~ '^comprovativo(-[0-9]+)?$' AND COALESCE(d.estado, 'pendente') = 'pendente'))::int AS comprovativos,
       count(*) FILTER (WHERE p.estado = 'Pré-inscrição' AND p.secretaria_em IS NOT NULL)::int AS secretaria
     FROM preinscricoes p ${w.where}`, w.params);
   const ws = filtrarLeads(f).sempre("p.validada_em IS NOT NULL").sempre(LEAD_ABERTO).sempre("p.email <> ''")

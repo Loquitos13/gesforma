@@ -1,6 +1,6 @@
 import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
-import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento } from "./docsCurso.js";
+import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento, eComprovativo } from "./docsCurso.js";
 import { lerEntidade } from "./regrasConfig.js";
 import { faturacaoDoPercurso } from "./faturacao.js";
 import { avisarDocumentosEmFalta, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
@@ -365,7 +365,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     ? turmas.find(t => t.id === turmaId) ?? await turmaPorId(db, regime, turmaId)
     : null;
   const turmaEscolhida = turmaBruta && recusadas.has(turmaBruta.id) ? null : turmaBruta;
-  const recusados = docs.filter(d => d.estado === "recusado" && d.tipo !== COMPROVATIVO.id);
+  const recusados = docs.filter(d => d.estado === "recusado" && !eComprovativo(d.tipo));
   const encerrada = Boolean(lead.validada_em);
   const percursoConcluido = Boolean(lead.percurso_concluido_em) && (Boolean(turmaEscolhida) || !escolheTurma) && recusados.length === 0;
   return {

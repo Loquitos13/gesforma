@@ -12,6 +12,7 @@ import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
 import { abrirAlerta, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas, syncLigacao } from "../docsLink.js";
 import { guardarDocDaPreinscricao, tiposDoLead } from "../docsPreinscricao.js";
 import { ensurePagamentoPendente } from "../pagamentoPedido.js";
+import { eComprovativo, prestacoesDoLead } from "../docsCurso.js";
 import * as pagsLead from "../repos/pagamentosLead.js";
 import { ficheiroDeDocumentoDaEquipa } from "../ficheirosValidacao.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
@@ -34,7 +35,7 @@ const docParams = idParam.extend({ docId: z.coerce.number().int().positive() });
  * os outros documentos, a coordenação. Validar o comprovativo confirma o pagamento e conclui a inscrição.
  */
 function podeDecidir(role: string, tipo: string | null) {
-  return pode(role, tipo === "comprovativo" ? "pagamentos.validarComprovativo" : "crm.validarDocumentos");
+  return pode(role, eComprovativo(tipo) ? "pagamentos.validarComprovativo" : "crm.validarDocumentos");
 }
 const SEM_PERMISSAO = "Sem permissão para validar este documento.";
 
@@ -65,6 +66,31 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     return { ok: true };
   });
 
+  // Pagamento em prestações: a comercial ou a coordenação confirma em quantas vezes e o valor de cada uma (1x por
+  // omissão), ao anexar o primeiro comprovativo; pode corrigir depois, sem tirar prestações que já têm comprovativo.
+  app.put("/v1/crm/leads/:id/prestacoes", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam, body: z.object({ valores: z.array(z.number().positive().max(100_000)).min(1).max(12) }) }, req);
+    if (!v) return;
+    const { id } = v.params;
+    const lead = await leads.lead(db, id);
+    if (!lead || !(await linhaVisivel(db, "preinscricoes", id, req.actor!))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    if (String(lead.regime ?? "gold") === "fin") return reply.code(400).send({ error: "A Formação Financiada não tem pagamento." });
+    const valores = v.body.valores.map(x => Math.round(x * 100) / 100);
+    const comComprovativo = (await docs.docsDoLead(db, id)).filter(d => eComprovativo(d.tipo) && d.estado !== "recusado")
+      .map(d => (d.tipo === "comprovativo" ? 1 : Number(d.tipo.split("-")[1])));
+    if (comComprovativo.some(n => n > valores.length)) {
+      return reply.code(409).send({ error: `A prestação ${Math.max(...comComprovativo)} já tem comprovativo: não pode ficar com menos prestações.` });
+    }
+    await db.query("UPDATE preinscricoes SET prestacoes = $2::jsonb WHERE id = $1", [id, JSON.stringify(valores)]);
+    const total = valores.reduce((a, b) => a + b, 0);
+    const fmt = (n: number) => `${n.toFixed(2).replace(".", ",")} €`;
+    await logLeadEvent(db, id, req.actor!.id, "seguimento", valores.length === 1 ? "Pagamento de uma vez" : `Pagamento em ${valores.length} prestações`,
+      `${valores.map(fmt).join(" + ")} = ${fmt(total)}`);
+    await audit(db, req.actor!.id, "crm.prestacoes", "preinscricao", String(id), req.ip, { valores });
+    return getLeadDossier(db, id, req.actor!);
+  });
+
   // A equipa (coordenação e comerciais) entrega um documento pela pessoa (não conseguiu ou não sabe): fica como se ela o
   // tivesse enviado na ligação pessoal (pasta na Drive, por rever pela coordenação; o comprovativo segue para a contabilidade).
   app.post("/v1/crm/leads/:id/documentos/entregar/:tipo", async (req, reply) => {
@@ -89,13 +115,19 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     const doc = tipos.find(t => t.id === tipo);
     if (!doc) return reply.code(400).send({ error: "Este documento não faz parte do curso desta pré-inscrição." });
     if (doc.validado) return reply.code(409).send({ error: "Este documento já está validado." });
+    // Comprovativo: em quantas vezes é o pagamento tem de estar confirmado pela equipa (1x por omissão, no ecrã).
+    if (eComprovativo(tipo) && !prestacoesDoLead(lead as Record<string, unknown>).length) {
+      return reply.code(409).send({ error: "Confirme primeiro em quantas vezes é o pagamento." });
+    }
     const por = req.actor!.name || req.actor!.email || "Equipa";
     // Comprovativo sem o pagamento pedido (documentos todos validados): o pagamento fica registado como pendente, como
     // se tivesse sido pedido, mas sem email à pessoa.
-    if (tipo === "comprovativo" && !lead.pagamento_pedido_em) {
+    if (tipo === "comprovativo" && (!lead.pagamento_pedido_em || !lead.pagamento_id)) {
       const pag = await ensurePagamentoPendente(db, { ...(lead as never as Parameters<typeof ensurePagamentoPendente>[1]), preco: Number(lead.preco) || 0 });
-      await pagsLead.definirMetodoPendente(db, String(pag.id), "Transferência bancária");
-      await pagsLead.marcarPagamentoPedido(db, id);
+      if (!lead.pagamento_pedido_em) {
+        await pagsLead.definirMetodoPendente(db, String(pag.id), "Transferência bancária");
+        await pagsLead.marcarPagamentoPedido(db, id);
+      }
     }
     let guardado: { id: string; name: string };
     try {
@@ -107,7 +139,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
       return reply.code(502).send({ error: "Não foi possível guardar o documento (Drive). Tente outra vez." });
     }
     // Documento do curso entregue pela coordenação (quem os valida): fica logo validado. O do comercial fica por validar.
-    if (tipo !== "comprovativo" && pode(req.actor!.role, "crm.validarDocumentos")) {
+    if (!eComprovativo(tipo) && pode(req.actor!.role, "crm.validarDocumentos")) {
       const doc = (await docs.docsDoLead(db, id)).find(d => d.tipo === tipo && d.drive_file_id === guardado.id);
       if (doc) await definirEstadoDoc(db, id, doc.id, "validado", "", req.actor!.id);
     }
@@ -130,7 +162,11 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento validado", String(docId));
     // Comprovativo aceite = pagamento recebido: confirma o pagamento ligado à pré-inscrição.
-    if ((await docs.tipoDoDoc(db, docId)) === "comprovativo") {
+    const tipoValidado = await docs.tipoDoDoc(db, docId);
+    if (tipoValidado && tipoValidado !== "comprovativo" && eComprovativo(tipoValidado)) {
+      await logLeadEvent(db, id, req.actor!.id, "seguimento", `Prestação ${tipoValidado.split("-")[1]} paga`, "Comprovativo validado na ficha da pré-inscrição.");
+    }
+    if (tipoValidado === "comprovativo") {
       const lead = await leads.lead(db, id);
       const pag = lead?.pagamento_id ? await dossie.pagamento(db, String(lead.pagamento_id)) : null;
       // Só um pagamento pendente: um cancelado ou reembolsado nunca volta a «Pago».
@@ -156,7 +192,7 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!observacao) return reply.code(400).send({ error: "Escreva o que está incorrecto." });
     const doc = await docs.tipoEstadoDoDoc(db, docId);
     if (!podeDecidir(req.actor!.role, doc?.tipo ?? null)) return reply.code(403).send({ error: SEM_PERMISSAO });
-    if (doc?.estado === "validado" && doc.tipo === "comprovativo") {
+    if (doc?.estado === "validado" && eComprovativo(doc.tipo)) {
       return reply.code(409).send({ error: "Este comprovativo já foi validado (o pagamento está confirmado)." });
     }
     const ok = await definirEstadoDoc(db, id, docId, "recusado", observacao, req.actor!.id);
@@ -164,7 +200,8 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
     await audit(db, req.actor!.id, "crm.doc_recusado", "preinscricao", String(id), req.ip, { docId });
     // A pessoa recebe logo o pedido de reenvio (recusas seguidas agrupam-se num só email).
-    const aviso = await avisarRecusasLead(db, id, { actorId: req.actor!.id }).catch(err => {
+    // O comprovativo de uma prestação seguinte é tratado pela equipa: a pessoa não recebe pedido de reenvio.
+    const aviso = doc?.tipo && doc.tipo !== "comprovativo" && eComprovativo(doc.tipo) ? null : await avisarRecusasLead(db, id, { actorId: req.actor!.id }).catch(err => {
       req.log.error({ err }, "aviso da recusa falhou");
       return null;
     });

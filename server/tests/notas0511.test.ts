@@ -165,6 +165,9 @@ describe("comprovativo entregue pela equipa quando aguarda pagamento", () => {
       const d = (await pedido(ctx, role, "GET", `/v1/crm/leads/${id}`)).json() as { docsFechado: boolean; docsParaEntregar: { id: string }[] };
       expect(d.docsFechado).toBe(false);
       expect(d.docsParaEntregar.map(x => x.id)).toContain("comprovativo");
+      // Sem confirmar em quantas vezes, recusado.
+      expect((await entregar(ctx, role, id, "comprovativo")).statusCode).toBe(409);
+      expect((await pedido(ctx, role, "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [125] })).statusCode).toBe(200);
       const r = await entregar(ctx, role, id, "comprovativo");
       expect(r.statusCode, r.body).toBe(200);
       expect((r.json().documentos as { tipo: string; estado: string }[]).find(x => x.tipo === "comprovativo")?.estado).toBe("pendente");
@@ -223,11 +226,51 @@ describe("documentos todos validados: aguarda pagamento sem o pedir", () => {
     // Sem pedir o pagamento, o comprovativo já se pode entregar.
     d = (await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}`)).json();
     expect(d.docsParaEntregar.map(x => x.id)).toContain("comprovativo");
+    expect((await pedido(ctx, "comercial", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [130] })).statusCode).toBe(200);
     const c = await entregar(ctx, "comercial", id, "comprovativo");
     expect(c.statusCode, c.body).toBe(200);
     const row = (await ctx.db.query<{ pagamento_id: string | null; pagamento_pedido_em: string | null }>("SELECT pagamento_id, pagamento_pedido_em FROM preinscricoes WHERE id = $1", [id])).rows[0]!;
     expect(row.pagamento_id).toBeTruthy();
     expect(row.pagamento_pedido_em).toBeTruthy();
     expect((await lista("pagamento_validar")).map(l => l.id)).toEqual([id]);
+  });
+});
+
+describe("pagamento em prestações", () => {
+  it("a equipa confirma 2 prestações; o 1.º comprovativo validado confirma o pagamento; o 2.º anexa-se depois, mesmo validada", async () => {
+    const ctx = await arrancar();
+    const id = 940000 + Math.floor(Math.random() * 9000);
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em)
+       VALUES ($1, '2031-01-01 10:00', 'Prest', 'T', $2, '912000000', 'Formação de Formadores - CCP', 130, 'Pré-inscrição', 'gold', now())`,
+      [id, `prest.${id}@exemplo.pt`]);
+    expect((await pedido(ctx, "comercial", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [] })).statusCode).toBe(400);
+    let d = (await pedido(ctx, "comercial", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [65, 65] })).json() as { prestacoes: number[]; docsParaEntregar: { id: string; label: string }[] };
+    expect(d.prestacoes).toEqual([65, 65]);
+    expect(d.docsParaEntregar.find(x => x.id === "comprovativo")?.label).toMatch(/1\.ª de 2/);
+    expect(d.docsParaEntregar.some(x => x.id === "comprovativo-2")).toBe(true);
+    const r1 = await entregar(ctx, "comercial", id, "comprovativo");
+    expect(r1.statusCode, r1.body).toBe(200);
+    const doc1 = (r1.json().documentos as { id: number; tipo: string }[]).find(x => x.tipo === "comprovativo")!;
+    // O 1.º validado confirma o pagamento (pode ir para a turma).
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/validar`)).statusCode).toBe(200);
+    const pag = (await ctx.db.query<{ estado: string }>("SELECT pg.estado FROM preinscricoes p JOIN pagamentos pg ON pg.id = p.pagamento_id WHERE p.id = $1", [id])).rows[0];
+    expect(pag?.estado).toBe("Pago");
+    // Validada (ligação fechada): a 2.ª prestação continua por entregar.
+    await ctx.db.query("UPDATE preinscricoes SET validada_em = now() WHERE id = $1", [id]);
+    d = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json();
+    expect(d.docsParaEntregar.map(x => x.id)).toEqual(["comprovativo-2"]);
+    // Menos prestações do que as que já têm comprovativo: recusado (a 1.ª tem). Não se pode ficar com 0.
+    const r2 = await entregar(ctx, "secretaria", id, "comprovativo-2");
+    expect(r2.statusCode, r2.body).toBe(200);
+    expect((await pedido(ctx, "comercial", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [130] })).statusCode).toBe(409);
+    const doc2 = (r2.json().documentos as { id: number; tipo: string; estado: string; label: string }[]).find(x => x.tipo === "comprovativo-2")!;
+    expect(doc2.estado).toBe("pendente");
+    expect(doc2.label).toMatch(/2\.ª de 2/);
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc2.id}/validar`)).statusCode).toBe(200);
+    d = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json();
+    expect(d.docsParaEntregar).toEqual([]);
+    const ev = (await ctx.db.query<{ titulo: string }>("SELECT titulo FROM preinscricao_eventos WHERE preinscricao_id = $1", [id]).catch(() => ({ rows: [] as { titulo: string }[] }))).rows.map(r => r.titulo);
+    if (ev.length) expect(ev).toEqual(expect.arrayContaining(["Pagamento em 2 prestações", "Prestação 2 paga"]));
   });
 });

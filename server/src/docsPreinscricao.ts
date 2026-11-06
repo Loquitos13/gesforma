@@ -9,7 +9,7 @@ import { comprovativoRecebido } from "./comprovativoContabilidade.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
 import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
-import { comprovativoPelaEquipa } from "./docsCurso.js";
+import { comprovativosPelaEquipa, eComprovativo, prestacoesDoLead, rotuloPrestacao } from "./docsCurso.js";
 import { COMPROVATIVO, docsDoCurso, listarDocsLead } from "./docsLink.js";
 import { garantirPastaPendente } from "./driveArvore.js";
 import { apagarFicheiroSubstituido, storeDriveFile } from "./driveFicheiros.js";
@@ -29,13 +29,17 @@ export async function guardarDocDaPreinscricao(
   const leadId = Number(lead.id);
   const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
   const comprovativo = tipo === COMPROVATIVO.id;
+  // Prestação seguinte (comprovativo-2, …): fica na ficha e avisa a equipa e a contabilidade, sem o passo da faturação.
+  const prestacao = !comprovativo && eComprovativo(tipo);
   const antigo = ctx.ja.find(d => d.tipo === tipo && d.drive_file_id);
   const zona = await garantirPastaPendente(db, { id: leadId, nome: String(lead.nome ?? ""), apelido: String(lead.apelido ?? "") });
   // O ficheiro fica com o nome do documento e da pessoa («Cartão de Cidadão - Ana Silva.pdf»).
-  const rotulo = comprovativo ? COMPROVATIVO.label : ctx.pedidos.find(p => p.id === tipo)?.label ?? tipo;
+  const rotulo = comprovativo || prestacao
+    ? rotuloPrestacao(prestacao ? Number(tipo.split("-")[1]) : 1, prestacoesDoLead(lead))
+    : ctx.pedidos.find(p => p.id === tipo)?.label ?? tipo;
   const nome = nomeIdentificado(up.name, rotulo, `${lead.nome ?? ""} ${lead.apelido ?? ""}`);
   const file = await storeDriveFile(db, undefined, { name: nome, mime: up.mime, bytes: up.bytes }, {
-    kind: comprovativo ? "comprovativo-pagamento" : "preinscricao-doc",
+    kind: comprovativo || prestacao ? "comprovativo-pagamento" : "preinscricao-doc",
     regime,
     formando: `${lead.nome} ${lead.apelido}`.trim(),
     label: tipo,
@@ -48,7 +52,7 @@ export async function guardarDocDaPreinscricao(
     await apagarFicheiroSubstituido(db, antigo.drive_file_id);
   }
   await docsRepo.substituirDoc(db, { leadId, tipo, nome: file.name, driveFileId: file.id, driveUrl: file.openUrl ?? "" });
-  const titulo = comprovativo ? "Comprovativo de pagamento na ficha" : `Documento na ficha · ${tipo}`;
+  const titulo = comprovativo || prestacao ? `${rotulo} na ficha` : `Documento na ficha · ${tipo}`;
   await logLeadEvent(db, leadId, ctx.actorId, "campo", ctx.origem ? `${titulo} (${ctx.origem})` : titulo, file.name);
   // O comprovativo segue também para a contabilidade (com o ficheiro e os dados de faturação; sem estes, espera por
   // eles: é o passo seguinte da ligação). Uma falha no email não recusa o envio.
@@ -57,7 +61,7 @@ export async function guardarDocDaPreinscricao(
       .catch(err => console.error("[pagamentos] comprovativo para a contabilidade:", err));
   }
   // Aviso à equipa: o comprovativo logo; os documentos só quando estão todos os obrigatórios (um email, não um por ficheiro).
-  if (comprovativo) {
+  if (comprovativo || prestacao) {
     await avisarDocumentoRecebido(db, lead, rotulo, file.id, { comprovativo: true }).catch(err => console.error("[emails] aviso de comprovativo recebido:", err));
   } else {
     const agora = await listarDocsLead(db, leadId);
@@ -80,6 +84,6 @@ export async function tiposDoLead(db: Db, lead: Record<string, unknown>) {
   const tipos = pedidos.map(p => ({ id: p.id, label: p.label, validado: validado(p.id) }));
   const obrigatorios = pedidos.filter(p => p.required);
   const todosValidados = obrigatorios.length > 0 && obrigatorios.every(p => validado(p.id));
-  if (await comprovativoPelaEquipa(db, lead, todosValidados)) tipos.push({ id: COMPROVATIVO.id, label: COMPROVATIVO.label, validado: validado(COMPROVATIVO.id) });
+  for (const c of await comprovativosPelaEquipa(db, lead, ja, todosValidados)) tipos.push({ ...c, validado: false });
   return { tipos, pedidos, ja };
 }

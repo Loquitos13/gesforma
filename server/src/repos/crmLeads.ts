@@ -43,9 +43,9 @@ const FECHADOS = "estado NOT IN ('Formando','Desistiu')";
 // Filas da validação (sobre `preinscricoes`, sem alias): documentos enviados por validar (sem o comprovativo);
 // o último comprovativo de pagamento por validar; e o pagamento pedido (Gold) ainda sem comprovativo nem confirmação.
 const COMPROVATIVO_POR_VALIDAR = `COALESCE((SELECT d.estado = 'pendente' FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id
-  AND d.tipo = 'comprovativo' ORDER BY d.created_at DESC, d.id DESC LIMIT 1), false)`;
+  AND d.tipo ~ '^comprovativo(-[0-9]+)?$' ORDER BY d.created_at DESC, d.id DESC LIMIT 1), false)`;
 const DOCS_POR_VALIDAR = `${FECHADOS} AND EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id
-  AND d.tipo <> 'comprovativo' AND d.estado = 'pendente')`;
+  AND d.tipo !~ '^comprovativo(-[0-9]+)?$' AND d.estado = 'pendente')`;
 const PAGAMENTO_POR_VALIDAR = `${FECHADOS} AND ${COMPROVATIVO_POR_VALIDAR}`;
 // Aguarda pagamento: pedido, ou (sem o pedir) com os documentos obrigatórios todos validados.
 const AGUARDA_PAGAMENTO = `${FECHADOS} AND COALESCE(regime, 'gold') = 'gold' AND preco > 0
@@ -102,7 +102,7 @@ function comEtiqueta(inner: string) {
                  (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.estado = 'validado') AS docs_validados,
                  (SELECT count(*)::int FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.estado = 'recusado') AS docs_recusados,
                  -- O último comprovativo de pagamento enviado ainda está por validar.
-                 COALESCE((SELECT d.estado = 'pendente' FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo = 'comprovativo'
+                 COALESCE((SELECT d.estado = 'pendente' FROM preinscricao_docs d WHERE d.preinscricao_id = p.id AND d.tipo ~ '^comprovativo(-[0-9]+)?$'
                             ORDER BY d.created_at DESC, d.id DESC LIMIT 1), false) AS comprovativo_pendente
             FROM (${inner}) p
             LEFT JOIN crm_etiquetas e ON e.id = p.etiqueta_id

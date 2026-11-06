@@ -24,7 +24,7 @@ export function formandoNaTurmaDoCurso(c: Consulta, regime: Regime, email: strin
 export function docsValidadosDoLead(c: Consulta, leadId: number) {
   return many<{ tipo: string; nome: string; drive_file_id: string; drive_url: string; validated_by: string | null }>(c,
     `SELECT tipo, nome, drive_file_id, drive_url, validated_by::text AS validated_by FROM preinscricao_docs
-      WHERE preinscricao_id = $1 AND estado = 'validado' AND tipo <> 'comprovativo'`,
+      WHERE preinscricao_id = $1 AND estado = 'validado' AND tipo !~ '^comprovativo(-[0-9]+)?$'`,
     [leadId]);
 }
 

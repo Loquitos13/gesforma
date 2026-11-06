@@ -22,6 +22,19 @@ export const LEMBRETE_PADRAO = "Ainda está aí? Pode continuar onde ficou ou es
 /** Minutos à espera do assunto antes de o aviso à equipa sair sem ele. */
 export const ESPERA_ASSUNTO_MIN = 5;
 
+/** O lembrete só sai numa pausa com menos de 12 horas (não no dia seguinte a uma conversa da véspera à noite). */
+const LEMBRETE_ATE_HORAS = 12;
+
+/**
+ * Mensagens automáticas à pessoa (lembrete e despedida) só das 9:00 às 21:00, hora de Lisboa; de noite esperam.
+ * AVISOS_HORARIO=sempre (testes): sem horário.
+ */
+export function horaDeMensagens(agora = new Date()) {
+  if (process.env.AVISOS_HORARIO === "sempre") return true;
+  const h = Number(new Intl.DateTimeFormat("en-GB", { timeZone: "Europe/Lisbon", hour: "2-digit", hourCycle: "h23" }).format(agora));
+  return h >= 9 && h < 21;
+}
+
 export type RegrasWhatsapp = { despedida: string; fecharHoras: number; lembreteMin: number; lembreteTexto: string; avisoEquipaHoras: number };
 
 const numero = (v: unknown, padrao: number) => {
@@ -118,17 +131,20 @@ export async function verificarInatividade(db: Db, enviar: EnviarWhatsapp) {
   let fechadas = 0, lembretes = 0, avisos = 0;
   for (const s of sessoes) {
     const humano = emAtendimento(s, agora);
-    // 1. Sem mensagens há X horas: fecha.
+    // 1. Sem mensagens há X horas: fecha. A despedida não sai de noite: fecha de manhã.
     if (r.fecharHoras && ha(s.ultima) >= r.fecharHoras * 60) {
+      if (!horaDeMensagens()) continue;
       await fecharConversaWhatsapp(db, s.telefone, "Inatividade", enviar);
       fechadas++;
       continue;
     }
-    // 2. Parou a meio da pré-inscrição (o bot fez a última pergunta): «ainda está aí?», uma vez por pausa.
-    if (r.lembreteMin && !humano && s.passo !== "menu" && ha(s.ultima) >= r.lembreteMin && ha(s.ultima_in) < 24 * 60) {
+    // 2. Parou a meio da pré-inscrição (o bot fez a última pergunta): «ainda está aí?», uma só vez por pausa (a pausa
+    // conta desde a última mensagem da pessoa: o próprio lembrete não a reabre). Só de dia e numa pausa recente.
+    if (r.lembreteMin && !humano && s.passo !== "menu" && s.ultima_in && ha(s.ultima) >= r.lembreteMin
+      && ha(s.ultima_in) < LEMBRETE_ATE_HORAS * 60 && horaDeMensagens()) {
       const marcada = await db.query(
         `UPDATE whatsapp_sessoes SET lembrete_em = now() WHERE telefone = $1
-           AND (lembrete_em IS NULL OR lembrete_em < $2::timestamptz) RETURNING telefone`, [s.telefone, s.ultima]);
+           AND (lembrete_em IS NULL OR lembrete_em < $2::timestamptz) RETURNING telefone`, [s.telefone, s.ultima_in]);
       if (marcada.rows.length) {
         const ok = (await enviar(s.telefone, r.lembreteTexto).catch(() => ({ sent: false }))).sent;
         if (ok) { await registarMensagemWhatsapp(db, s.telefone, "out", r.lembreteTexto); lembretes++; }

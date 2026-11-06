@@ -255,6 +255,13 @@ describe("fechar conversas e inatividade", () => {
     await verificarInatividade(ctx.db, enviar);
     await verificarInatividade(ctx.db, enviar);
     expect(enviadas.filter(e => e.to === meio).map(e => e.m)).toEqual([expect.stringContaining("Ainda está aí?")]);
+    // Horas depois, sem a pessoa responder: o próprio lembrete não reabre a pausa (não sai de hora a hora).
+    for (let i = 0; i < 3; i++) {
+      await recuar(meio, "70 minutes");
+      await ctx.db.query("UPDATE whatsapp_sessoes SET lembrete_em = lembrete_em - interval '70 minutes' WHERE telefone = $1", [meio]);
+      await verificarInatividade(ctx.db, enviar);
+    }
+    expect(enviadas.filter(e => e.to === meio)).toHaveLength(1);
 
     // Pediu a equipa há 5 horas e ninguém respondeu: novo aviso por email (uma vez).
     const espera = tel();

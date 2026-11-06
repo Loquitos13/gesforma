@@ -297,6 +297,16 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
     const actual = datasFin.get(key);
     if (key && (!actual || data < actual.data)) datasFin.set(key, { data, local: String(d.local ?? "") });
   }
+  // Programas da Financiada (Edição de cursos › Programas): a frase de destaque de cada um (com a caixa ligada) vai
+  // para a página dos cursos desse programa. Curso sem programa escolhido: o único programa activo, se só houver um.
+  const programas = (await db.query<{ payload: Record<string, unknown> }>(
+    "SELECT payload FROM catalog_items WHERE kind = 'programas' AND regime = 'fin'")).rows.map(r => r.payload)
+    .filter(p => !/^inac?tivo$/i.test(String(p.status ?? "")));
+  const destaquePrograma = (nome: string) => {
+    const p = nome.trim() ? programas.find(x => chave(String(x.nome ?? "")) === chave(nome)) : programas.length === 1 ? programas[0] : undefined;
+    const ativo = p && (p.destaqueAtivo === true || p.destaqueAtivo === "1");
+    return ativo ? String(p.destaque ?? "").replace(/\s+/g, " ").trim().slice(0, 300) : "";
+  };
   const cheias = new Set<string>();
   // Locais com turmas abertas e vagas, por curso: com mais de um, o cartão diz «Em várias localizações».
   const locaisAbertos = new Map<string, Set<string>>();
@@ -406,7 +416,7 @@ export async function listarCatalogoPublico(db: Db): Promise<{ cursos: CursoPubl
       descricao: textos.completo,
       resumo: textos.resumo,
       descricaoCompleta: textos.completo,
-      destaquePagina: destaquePagina(payload),
+      destaquePagina: destaquePagina(payload) || (curso.regime === "fin" ? destaquePrograma(String(payload.programaFin ?? "")) : ""),
       financiamento: curso.regime === "fin" ? "Financiada" : "Gold",
       inscricao: entrada,
       miniatura,

@@ -4,7 +4,7 @@ import { apiApagarItem, apiCatalogo, apiCriarItem, apiEditarItem, textoUso, tota
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  AreaTexto, Aviso, Botao, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Estado, Filtros, Interruptor, Modal, Selecao, Tabela, Vazio,
+  AreaTexto, Aviso, Botao, Caixa, Campo, Cartao, ConfirmarPerigo, Entrada, ErroCarregar, Estado, Filtros, Interruptor, Modal, Selecao, Tabela, Vazio,
   useFiltrosUrl, type Coluna, type OpcaoSelecao,
 } from "../../../partilhado/ui";
 
@@ -12,7 +12,9 @@ import {
 export type CampoCatalogo = {
   chave: string;
   rotulo: string;
-  tipo?: "texto" | "numero" | "data" | "opcoes" | "area";
+  tipo?: "texto" | "numero" | "data" | "opcoes" | "area" | "caixa";
+  /** Só aparece com este outro campo preenchido (ex.: o texto, com a caixa ligada). */
+  visivelSe?: string;
   opcoes?: OpcaoSelecao[];
   obrigatorio?: boolean;
   ajuda?: string;
@@ -229,7 +231,12 @@ function EditorItem({ config, item, itens, inicial, onFechar }: {
     >
       <form className="grid grid-cols-2 gap-3" onSubmit={e => { e.preventDefault(); void submeter(); }}>
         {erro && <Aviso tom="perigo" className="col-span-2">{erro}</Aviso>}
-        {config.campos.map(c => (
+        {config.campos.filter(c => !c.visivelSe || valores[c.visivelSe]).map(c => c.tipo === "caixa" ? (
+          <div key={c.chave} className="col-span-2">
+            <Caixa rotulo={c.rotulo} ajuda={c.ajuda} checked={Boolean(valores[c.chave])}
+              onChange={e => { setErro(null); setValores(x => ({ ...x, [c.chave]: e.target.checked ? "1" : "" })); }} />
+          </div>
+        ) : (
           <Campo key={c.chave} rotulo={c.rotulo} obrigatorio={c.obrigatorio} ajuda={c.ajuda} className={c.metade ? "col-span-2 sm:col-span-1" : "col-span-2"}>
             {p => {
               const valor = String(valores[c.chave] ?? "");

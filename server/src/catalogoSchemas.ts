@@ -47,6 +47,9 @@ const campoPrograma = z.string().trim().max(CANDIDATURA_FIN_MAX).optional();
 const programa = z.object({
   nome: z.string().trim().min(1).max(120),
   ...Object.fromEntries(CAMPOS_CANDIDATURA_FIN.map(({ chave }) => [chave, campoPrograma])),
+  /** Frase de destaque na página dos cursos do programa (só com a caixa ligada). */
+  destaqueAtivo: z.union([z.literal(""), z.literal("1"), z.boolean()]).optional(),
+  destaque: z.string().trim().max(300, "Frase de destaque: até 300 caracteres.").optional(),
 }).passthrough();
 
 const SCHEMAS: Record<string, z.ZodTypeAny> = {

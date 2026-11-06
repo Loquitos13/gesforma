@@ -371,3 +371,26 @@ describe("modelo do lembrete da prestação", () => {
     expect(m.text).toMatch(/3\.ª prestação \(de 4\).*€ 40,00/);
   });
 });
+
+describe("frase de destaque do programa", () => {
+  it("com a caixa ligada no programa, aparece na página dos cursos desse programa", async () => {
+    const ctx = await arrancar();
+    const nome = `Programa Destaque ${Date.now()}`;
+    await ctx.db.query("INSERT INTO catalog_items (id, kind, regime, payload) VALUES ($1, 'programas', 'fin', $2::jsonb)",
+      [970000 + Math.floor(Math.random() * 9000), JSON.stringify({ nome, status: "Ativo", destaqueAtivo: "1", destaque: "Formação gratuita para empregados e desempregados." })]);
+    const cat = (await ctx.app.inject({ method: "GET", url: "/v1/public/catalogo" })).json() as { cursos: { titulo: string; regime: string; destaquePagina: string }[] };
+    const fin = cat.cursos.find(c => c.regime === "fin");
+    expect(fin).toBeTruthy();
+    if (!fin) return;
+    const curso = (await ctx.db.query<{ id: number }>("SELECT id FROM cursos_fin WHERE nome_comercial = $1 OR ufcd = $1 LIMIT 1", [fin.titulo])).rows[0]!;
+    await ctx.db.query(
+      `INSERT INTO curso_fichas (regime, curso_id, payload) VALUES ('fin', $1, $2::jsonb)
+       ON CONFLICT (regime, curso_id) DO UPDATE SET payload = curso_fichas.payload || EXCLUDED.payload`, [curso.id, JSON.stringify({ programaFin: nome })]);
+    const depois = (await ctx.app.inject({ method: "GET", url: "/v1/public/catalogo" })).json() as typeof cat;
+    expect(depois.cursos.find(c => c.titulo === fin.titulo)!.destaquePagina).toBe("Formação gratuita para empregados e desempregados.");
+    // Caixa desligada: não aparece.
+    await ctx.db.query("UPDATE catalog_items SET payload = payload || '{\"destaqueAtivo\": \"\"}'::jsonb WHERE kind = 'programas' AND payload->>'nome' = $1", [nome]);
+    const sem = (await ctx.app.inject({ method: "GET", url: "/v1/public/catalogo" })).json() as typeof cat;
+    expect(sem.cursos.find(c => c.titulo === fin.titulo)!.destaquePagina).toBe("");
+  });
+});

@@ -71,6 +71,9 @@ export default function Tabelas({ view, navigate }: VistaProps) {
         campos: [
           { chave: "nome", rotulo: "Nome", obrigatorio: true, placeholder: "Ex.: PESSOAS 2030", ajuda: "Para escolher o programa na turma." },
           ...CAMPOS_CANDIDATURA_FIN.map(c => ({ chave: c.chave, rotulo: c.rotulo, placeholder: CANDIDATURA_FIN_OMISSAO[c.chave] })),
+          { chave: "destaqueAtivo", rotulo: "Frase de destaque na página dos cursos", tipo: "caixa" as const,
+            ajuda: "Aparece em destaque na página de cada curso deste programa, por cima do enquadramento." },
+          { chave: "destaque", rotulo: "Frase de destaque", tipo: "area" as const, visivelSe: "destaqueAtivo", placeholder: "Ex.: Formação gratuita para empregados e desempregados." },
         ],
         colunas: [
           { id: "nome", titulo: "Programa", principal: true, celula: i => <span className="font-semibold">{txt(i.nome)}</span> },

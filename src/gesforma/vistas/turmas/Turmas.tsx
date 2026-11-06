@@ -21,7 +21,7 @@ import { TurmaFormulario } from "./TurmaFormulario";
 import { BARRA, FASES, FASE_ESTADO, alertasDaTurma, tomOcupacao } from "./turmasUi";
 import { rotuloCodigoCurso } from "../../../partilhado/codigoCurso";
 
-const PADRAO = { fase: "", q: "", curso: "", local: "", horario: "", formador: "", financiador: "", de: "", ate: "", ordem: "", pagina: "1", regime: "" };
+const PADRAO = { fase: "", q: "", curso: "", local: "", horario: "", formador: "", financiador: "", de: "", ate: "", ordem: "", pagina: "1", porPagina: String(25), regime: "" };
 const POR_PAGINA = 25;
 
 export default function Turmas({ view, navigate }: VistaProps) {
@@ -45,8 +45,8 @@ export default function Turmas({ view, navigate }: VistaProps) {
   const [regrasApoios, setRegrasApoios] = useState(false);
 
   const { regime: _r, ...filtros } = f;
-  const pedido = { ...filtros, regime, pagina: Number(f.pagina) || 1, porPagina: POR_PAGINA };
-  const lista = useRecurso(`turmas:${regime}:${JSON.stringify(pedido)}`, s => apiTurmas(pedido, s));
+  const pedido = { ...filtros, regime, pagina: Number(f.pagina) || 1, porPagina: Number(f.porPagina) || POR_PAGINA };
+  const lista = useRecurso(`turmas:${regime}:${JSON.stringify(pedido)}`, s => apiTurmas(pedido, s), { manterAnterior: true });
   const dtp = useRecurso(formador ? null : `dtp:pct:${regime}`, () => apiDtpResumo(regime));
   const cursos = useOpcoes("cursos", { regime });
   const locais = useOpcoes("locais", { regime });
@@ -261,7 +261,8 @@ export default function Turmas({ view, navigate }: VistaProps) {
         )}
         {lista.dados && lista.dados.total > POR_PAGINA && (
           <div className="border-t border-linha px-4 py-3">
-            <Paginacao pagina={lista.dados.pagina} porPagina={lista.dados.porPagina} total={lista.dados.total} onMudar={p => setF({ pagina: String(p) })} />
+            <Paginacao pagina={lista.dados.pagina} porPagina={lista.dados.porPagina} total={lista.dados.total} onMudar={p => setF({ pagina: String(p) })}
+              onPorPagina={n => setF({ porPagina: String(n) })} />
           </div>
         )}
       </Cartao>

@@ -4,7 +4,7 @@ import { useAuth } from "../../../partilhado/AuthGate";
 import { apiUtilizadores, type PerfilUtilizador, type Utilizador } from "../../../partilhado/api/utilizadores";
 import { useRecurso } from "../../../partilhado/dados/useRecurso";
 import {
-  Aviso, Botao, Cartao, ErroCarregar, Estado, Filtros, PageHeader, Separadores, Tabela, Vazio, dataHora, num, useFiltrosUrl, type Coluna, type Tom,
+  Aviso, Botao, Cartao, ErroCarregar, Estado, Filtros, PageHeader, Paginacao, Separadores, Tabela, Vazio, dataHora, num, useFiltrosUrl, type Coluna, type Tom,
 } from "../../../partilhado/ui";
 import { STAFF_ROLES, rotuloDoUtilizador } from "../../UsersView";
 import type { VistaProps } from "../../shell/tipos";
@@ -22,10 +22,13 @@ function Iniciais({ nome }: { nome: string }) {
 export default function Utilizadores({ navigate }: VistaProps) {
   const { user } = useAuth();
   const admin = user.role === "admin";
-  const [f, setF, limpar] = useFiltrosUrl({ perfil: "", estado: "", q: "", sel: "" });
+  const [f, setF, limpar] = useFiltrosUrl({ perfil: "", estado: "", q: "", pagina: "1", porPagina: "50", sel: "" });
+  const pagina = Number(f.pagina) || 1;
+  const porPagina = Number(f.porPagina) || 50;
   const { dados, erro, aCarregar, recarregar } = useRecurso(
-    admin ? `utilizadores:${f.perfil}:${f.estado}:${f.q}` : null,
-    signal => apiUtilizadores({ perfil: f.perfil, estado: f.estado, q: f.q }, signal),
+    admin ? `utilizadores:${f.perfil}:${f.estado}:${f.q}:${pagina}:${porPagina}` : null,
+    signal => apiUtilizadores({ perfil: f.perfil, estado: f.estado, q: f.q, pagina, porPagina }, signal),
+    { manterAnterior: true },
   );
   const [novo, setNovo] = useState(false);
 
@@ -98,7 +101,7 @@ export default function Utilizadores({ navigate }: VistaProps) {
           linhas={linhas}
           colunas={colunas}
           chave={u => u.id}
-          onLinha={u => setF({ sel: u.id })}
+          onLinha={u => setF({ sel: u.id, pagina: f.pagina })}
           linhaAtiva={f.sel || null}
           aCarregar={aCarregar && !dados}
           vazio={(
@@ -108,9 +111,13 @@ export default function Utilizadores({ navigate }: VistaProps) {
             />
           )}
         />
+      {dados && dados.total > 0 && (
+        <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+          onPorPagina={n => setF({ porPagina: String(n) })} />
+      )}
       </Cartao>
-      <FichaUtilizador id={f.sel || null} onFechar={() => setF({ sel: "" })} perfilInicial={f.perfil as PerfilUtilizador | ""} />
-      <NovoUtilizador aberto={novo} onFechar={id => { setNovo(false); if (id) setF({ sel: id }); }} perfilInicial={f.perfil as PerfilUtilizador | ""} />
+      <FichaUtilizador id={f.sel || null} onFechar={() => setF({ sel: "", pagina: f.pagina })} perfilInicial={f.perfil as PerfilUtilizador | ""} />
+      <NovoUtilizador aberto={novo} onFechar={id => { setNovo(false); if (id) setF({ sel: id, pagina: f.pagina }); }} perfilInicial={f.perfil as PerfilUtilizador | ""} />
     </div>
   );
 }

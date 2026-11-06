@@ -46,7 +46,7 @@ const listaQuery = z.object({
   de: z.preprocess(vazioUndef, dataIso.optional()),
   ate: z.preprocess(vazioUndef, dataIso.optional()),
   page: z.coerce.number().int().min(1).max(100_000).default(1),
-  perPage: z.coerce.number().int().min(10).max(100).default(50),
+  perPage: z.coerce.number().int().min(10).max(200).default(50),
   sort: z.preprocess(vazioUndef, sort.default("inscrito")),
   dir: z.preprocess(vazioUndef, z.enum(["asc", "desc"]).default("desc")),
   kanban: z.preprocess(v => v === "1" || v === "true" || v === true, z.boolean()).default(false),

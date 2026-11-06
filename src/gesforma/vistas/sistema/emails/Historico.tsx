@@ -23,11 +23,13 @@ const ESTADO: Record<EnvioEmail["estado"], { rotulo: string; tom: Tom }> = {
 export function Historico({ variasAreas = false }: { variasAreas?: boolean }) {
   const pode = usePode();
   const gerir = pode("emails.gerir");
-  const [f, setF, limpar] = useFiltrosUrl({ regra: "", estado: "", q: "", de: "", ate: "", pagina: "1" });
+  const [f, setF, limpar] = useFiltrosUrl({ regra: "", estado: "", q: "", de: "", ate: "", pagina: "1", porPagina: "25" });
   const pagina = Number(f.pagina) || 1;
+  const porPagina = Number(f.porPagina) || 25;
   const { dados, erro, aCarregar, recarregar } = useRecurso(
-    `emails:envios:${f.regra}:${f.estado}:${f.q}:${f.de}:${f.ate}:${pagina}`,
-    signal => apiEnviosEmail({ regra: f.regra, estado: f.estado, q: f.q, de: f.de, ate: f.ate, pagina, porPagina: 25 }, signal),
+    `emails:envios:${f.regra}:${f.estado}:${f.q}:${f.de}:${f.ate}:${pagina}:${porPagina}`,
+    signal => apiEnviosEmail({ regra: f.regra, estado: f.estado, q: f.q, de: f.de, ate: f.ate, pagina, porPagina }, signal),
+    { manterAnterior: true },
   );
   const { dados: regras } = useRecurso("emails:regras", apiRegrasEmail);
   const [aberto, setAberto] = useState<EnvioEmail | null>(null);
@@ -93,7 +95,8 @@ export function Historico({ variasAreas = false }: { variasAreas?: boolean }) {
           ) : undefined}
           vazio={<Vazio titulo={ativos ? "Nenhum envio com estes filtros" : "Ainda não saiu nenhum email"} acao={ativos ? <Botao tamanho="sm" onClick={limpar}>Limpar filtros</Botao> : undefined} />}
         />
-        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })} />}
+        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+          onPorPagina={n => setF({ porPagina: String(n) })} />}
       </Cartao>
 
       <Modal aberto={Boolean(aberto)} onFechar={() => setAberto(null)} titulo="Email enviado" largura="lg"

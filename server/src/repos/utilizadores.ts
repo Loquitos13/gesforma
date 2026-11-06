@@ -29,7 +29,7 @@ const SELECT = `
     FROM users u`;
 
 /** Lista com filtros de perfil, estado e pesquisa (nome/email) e contagens por perfil. */
-export async function listarUtilizadores(c: Consulta, f: { perfil?: string; estado?: "ativos" | "inativos"; q?: string }) {
+export async function listarUtilizadores(c: Consulta, f: { perfil?: string; estado?: "ativos" | "inativos"; q?: string; pagina?: number; porPagina?: number }) {
   const w = new Filtros();
   w.add("u.role = ?", f.perfil);
   if (f.estado === "ativos") w.sempre("u.active = true");
@@ -38,12 +38,18 @@ export async function listarUtilizadores(c: Consulta, f: { perfil?: string; esta
   // As contas de formando só aparecem no seu filtro ou numa pesquisa (ex.: o email que «já existe» ao criar).
   if (f.perfil !== "formando" && !p) w.sempre("u.role <> 'formando'");
   w.add("(u.name ILIKE ? OR u.email ILIKE ?)", p, p);
-  const linhas = await many<LinhaUtilizador>(c, `${SELECT} ${w.where} ORDER BY u.active DESC, u.name ASC LIMIT 500`, w.params);
+  // Página pedida ao servidor (antes vinham até 500 contas de uma vez e as restantes ficavam de fora).
+  const porPagina = Math.min(200, Math.max(1, f.porPagina ?? 50));
+  const pagina = Math.max(1, f.pagina ?? 1);
+  const total = Number((await one<{ n: number }>(c, `SELECT count(*)::int AS n FROM users u ${w.where}`, w.params))?.n ?? 0);
+  const n = w.params.length;
+  const linhas = await many<LinhaUtilizador>(c, `${SELECT} ${w.where} ORDER BY u.active DESC, u.name ASC, u.id LIMIT $${n + 1} OFFSET $${n + 2}`,
+    [...w.params, porPagina, (pagina - 1) * porPagina]);
   const contagens = await many<{ role: string; total: number; ativos: number }>(
     c,
     "SELECT role, count(*)::int AS total, count(*) FILTER (WHERE active)::int AS ativos FROM users GROUP BY role",
   );
-  return { linhas, contagens };
+  return { linhas, contagens, total, pagina, porPagina };
 }
 
 export function obterUtilizador(c: Consulta, id: string) {

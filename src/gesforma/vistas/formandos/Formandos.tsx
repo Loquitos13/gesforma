@@ -32,12 +32,12 @@ export default function Formandos({ view, navigate }: VistaProps) {
   const podeCriar = pode(gold ? "turmas.gerir" : "formandosFin.gerir");
   const [f, setF, limpar] = useFiltrosUrl({
     separador: gold ? (view === "gold-formandos-gold" ? "avulsos" : "turmas") : "todos",
-    q: "", curso: "", turma: "", local: "", pagamento: "", docs: "", acesso: "", pagina: "1", ordem: "",
+    q: "", curso: "", turma: "", local: "", pagamento: "", docs: "", acesso: "", pagina: "1", porPagina: "25", ordem: "",
   });
   const [novaAberta, setNovaAberta] = useState(false);
 
-  const filtros = { regime, ...f, separador: f.separador as SeparadorFormandos, pagina: Number(f.pagina) || 1, porPagina: 25 };
-  const { dados, erro, aCarregar, recarregar } = useRecurso(`formandos:${JSON.stringify(filtros)}`, s => apiListarFormandos(filtros, s));
+  const filtros = { regime, ...f, separador: f.separador as SeparadorFormandos, pagina: Number(f.pagina) || 1, porPagina: Number(f.porPagina) || 25 };
+  const { dados, erro, aCarregar, recarregar } = useRecurso(`formandos:${JSON.stringify(filtros)}`, s => apiListarFormandos(filtros, s), { manterAnterior: true });
 
   const cursos = useOpcoes("cursos", { regime });
   const turmas = useOpcoes("turmas", { regime, todos: true });
@@ -149,7 +149,8 @@ export default function Formandos({ view, navigate }: VistaProps) {
             />
           )}
         />
-        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })} />}
+        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+          onPorPagina={n => setF({ porPagina: String(n) })} />}
       </Cartao>
 
       <NovaFicha

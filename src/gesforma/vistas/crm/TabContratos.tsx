@@ -24,11 +24,13 @@ export function TabContratos({ selecionado, onSelecionar, onPrimeiro, onAbrir }:
   onPrimeiro: (id: number | null) => void;
   onAbrir: (id: number) => void;
 }) {
-  const [f, setF] = useFiltrosUrl({ kq: "", kestado: "", kpag: "1" });
+  const [f, setF] = useFiltrosUrl({ kq: "", kestado: "", kpag: "1", kpor: "25" });
   const pagina = Number(f.kpag) || 1;
+  const porPagina = Number(f.kpor) || 25;
   const { dados, erro, aCarregar, recarregar } = useRecurso(
-    `crm:contratos:${f.kq}:${f.kestado}:${pagina}`,
-    signal => apiContratos({ q: f.kq, estado: f.kestado, pagina }, { signal }),
+    `crm:contratos:${f.kq}:${f.kestado}:${pagina}:${porPagina}`,
+    signal => apiContratos({ q: f.kq, estado: f.kestado, pagina, porPagina }, { signal }),
+    { manterAnterior: true },
   );
   const primeiro = dados?.linhas[0]?.id ?? null;
   useEffect(() => { onPrimeiro(primeiro); }, [primeiro, onPrimeiro]);
@@ -69,7 +71,8 @@ export function TabContratos({ selecionado, onSelecionar, onPrimeiro, onAbrir }:
         onLinha={k => onSelecionar(k.id)}
         aCarregar={aCarregar && !dados}
         vazio={f.kq || f.kestado ? "Nenhum contrato com estes filtros." : "Ainda sem contratos. Crie um a partir de uma proposta aceite ou com «Novo contrato»."}
-        rodape={dados && dados.total > dados.porPagina ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ kpag: String(p) })} /> : null}
+        rodape={dados && dados.total > 0 ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ kpag: String(p) })}
+          onPorPagina={n => setF({ kpor: String(n), kpag: "1" })} /> : null}
       />
     </>
   );

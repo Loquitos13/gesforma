@@ -135,3 +135,19 @@ describe("filas das pré-inscrições: documentos e pagamento", () => {
     expect(c.aguardaPagamento).toBeGreaterThanOrEqual(1);
   });
 });
+
+describe("listas paginadas no servidor", () => {
+  it("utilizadores e pré-inscrições: página e número de linhas escolhidos pelo utilizador", async () => {
+    const ctx = await arrancar();
+    const p1 = (await pedido(ctx, "admin", "GET", "/v1/utilizadores?porPagina=2&pagina=1")).json() as { users: { id: string }[]; total: number; porPagina: number };
+    expect(p1.users).toHaveLength(2);
+    expect(p1.porPagina).toBe(2);
+    expect(p1.total).toBeGreaterThan(2);
+    const p2 = (await pedido(ctx, "admin", "GET", "/v1/utilizadores?porPagina=2&pagina=2")).json() as { users: { id: string }[] };
+    expect(p2.users.some(u => p1.users.some(x => x.id === u.id))).toBe(false);
+    expect((await pedido(ctx, "admin", "GET", "/v1/utilizadores?porPagina=500")).statusCode).toBe(400);
+    const leads = await pedido(ctx, "admin", "GET", "/v1/crm/leads?regime=gold&perPage=200");
+    expect(leads.statusCode, leads.body).toBe(200);
+    expect(leads.json().perPage).toBe(200);
+  });
+});

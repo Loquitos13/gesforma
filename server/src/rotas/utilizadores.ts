@@ -9,7 +9,7 @@ import {
 } from "../repos/utilizadores.js";
 import { PERFIS_COMBINAVEIS, perfisValidos } from "../permissoes/personalizado.js";
 import { hashPassword, isEmail, normalizeEmail } from "../security.js";
-import { textoQuery, validar } from "../validacao.js";
+import { paginacao, textoQuery, validar } from "../validacao.js";
 import { mensagemPalavraPasse, palavraPasseValida } from "../../../src/partilhado/passwordPolicy.js";
 import type { Deps } from "./tipos.js";
 
@@ -49,7 +49,7 @@ const passwordSchema = z.object({
   revokeSessions: z.boolean().optional(),
   mustChangePassword: z.boolean().optional(),
 });
-const listaQuery = z.object({
+const listaQuery = paginacao.extend({
   perfil: z.preprocess(v => (v === "" ? undefined : v), z.enum(PERFIS).optional()),
   estado: z.preprocess(v => (v === "" ? undefined : v), z.enum(["ativos", "inativos"]).optional()),
   q: textoQuery(120),
@@ -88,8 +88,8 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     if (!soAdmin(req, reply)) return;
     const v = validar(reply, { query: listaQuery }, req);
     if (!v) return;
-    const { linhas, contagens } = await listarUtilizadores(db, v.query);
-    return { users: linhas.map(mapear), contagens };
+    const { linhas, contagens, total, pagina, porPagina } = await listarUtilizadores(db, v.query);
+    return { users: linhas.map(mapear), contagens, total, pagina, porPagina };
   });
 
   app.get(`${base}/:id`, async (req, reply) => {

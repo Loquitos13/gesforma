@@ -18,7 +18,7 @@ import { AvisoAcesso } from "./AvisoAcesso";
 import { FormadorFormulario } from "./FormadorFormulario";
 import { Iniciais, estadoCcp } from "./formadoresUi";
 
-const PADRAO = { q: "", estado: "", especialidade: "", disponibilidade: "", alerta: "", ordem: "", pagina: "1" };
+const PADRAO = { q: "", estado: "", especialidade: "", disponibilidade: "", alerta: "", ordem: "", pagina: "1", porPagina: String(25) };
 const POR_PAGINA = 25;
 
 export default function Formadores({ view, navigate }: VistaProps) {
@@ -31,8 +31,8 @@ export default function Formadores({ view, navigate }: VistaProps) {
   const [apagar, setApagar] = useState<LinhaFormador | null>(null);
   const [acesso, setAcesso] = useState<AcessoCriado>(null);
 
-  const pedido = { regime, ...f, pagina: Number(f.pagina) || 1, porPagina: POR_PAGINA };
-  const lista = useRecurso(`formadores:${regime}:${JSON.stringify(pedido)}`, s => apiFormadores(pedido, s));
+  const pedido = { regime, ...f, pagina: Number(f.pagina) || 1, porPagina: Number(f.porPagina) || POR_PAGINA };
+  const lista = useRecurso(`formadores:${regime}:${JSON.stringify(pedido)}`, s => apiFormadores(pedido, s), { manterAnterior: true });
   const kpis = lista.dados?.kpis;
   const depoisDeGravar = () => { invalidar("formadores:"); invalidar("formador:"); invalidar("opcoes:formadores"); };
   const ativar = useAccao((x: LinhaFormador) => apiAlterarFormador(x.id, { estado: x.estado === "Ativo" ? "Inactivo" : "Ativo" }), {
@@ -163,7 +163,8 @@ export default function Formadores({ view, navigate }: VistaProps) {
         )}
         {lista.dados && lista.dados.total > POR_PAGINA && (
           <div className="border-t border-linha px-4 py-3">
-            <Paginacao pagina={lista.dados.pagina} porPagina={lista.dados.porPagina} total={lista.dados.total} onMudar={p => setF({ pagina: String(p) })} />
+            <Paginacao pagina={lista.dados.pagina} porPagina={lista.dados.porPagina} total={lista.dados.total} onMudar={p => setF({ pagina: String(p) })}
+              onPorPagina={n => setF({ porPagina: String(n) })} />
           </div>
         )}
       </Cartao>

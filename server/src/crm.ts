@@ -34,7 +34,7 @@ const ESTADOS_PIPELINE = ["Não contactado", "1º Contacto", "2º Contacto", "Pa
 /** Lista paginada do CRM com contagens das filas, facetas dos filtros e (opcional) colunas do pipeline. */
 export async function queryCrmLeads(db: Db, params: CrmListParams, hoje: string) {
   const page = Math.max(1, params.page ?? 1);
-  const perPage = Math.min(100, Math.max(10, params.perPage ?? 50));
+  const perPage = Math.min(200, Math.max(10, params.perPage ?? 50));
   const regime = params.regime === "gold" || params.regime === "fin" ? params.regime : "";
   const { total, linhas } = await repo.pagina(db, params, hoje, { pagina: page, porPagina: perPage, sort: params.sort, dir: params.dir });
   const ator = params.ator;

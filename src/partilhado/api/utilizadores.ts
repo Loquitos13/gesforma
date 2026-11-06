@@ -23,10 +23,10 @@ export type Utilizador = {
 
 export type SessaoUtilizador = { id: string; criada: string; expira: string; ip: string | null; navegador: string | null };
 
-export type FiltrosUtilizadores = { perfil?: string; estado?: string; q?: string };
+export type FiltrosUtilizadores = { perfil?: string; estado?: string; q?: string; pagina?: number; porPagina?: number };
 
 export function apiUtilizadores(f: FiltrosUtilizadores, signal?: AbortSignal) {
-  return api<{ users: Utilizador[]; contagens: { role: PerfilUtilizador; total: number; ativos: number }[] }>(
+  return api<{ users: Utilizador[]; contagens: { role: PerfilUtilizador; total: number; ativos: number }[]; total: number; pagina: number; porPagina: number }>(
     `/v1/utilizadores${qs(f)}`, { signal },
   );
 }

@@ -69,7 +69,7 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
     kanban: f.vista === "pipeline",
   };
   const chave = `crm:leads:${JSON.stringify(filtros)}`;
-  const { dados, erro, aCarregar, recarregar } = useRecurso(chave, s => apiLeads(filtros, s));
+  const { dados, erro, aCarregar, recarregar } = useRecurso(chave, s => apiLeads(filtros, s), { manterAnterior: true });
   const cursos = useOpcoes("cursos", { regime });
   const locais = useOpcoes("locais", { regime });
   const origens = useOpcoes("lista", { lista: "origens" });
@@ -223,17 +223,9 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
             )}
           />
           {dados && dados.total > 0 && (
-            <div className="flex flex-wrap items-center border-t border-linha">
-              <div className="flex-1">
-                <Paginacao pagina={dados.page} porPagina={dados.perPage} total={dados.total} onMudar={p => setF({ pagina: String(p) })} />
-              </div>
-              <label className="flex items-center gap-2 px-4 py-2 text-[13px] text-tinta-suave">
-                Por página
-                <select value={f.porPagina} onChange={e => setF({ porPagina: e.target.value })}
-                  className="h-8 rounded-controlo border border-linha-forte bg-superficie px-2 text-[13px] text-tinta">
-                  {["25", "50", "100"].map(n => <option key={n} value={n}>{n}</option>)}
-                </select>
-              </label>
+            <div className="border-t border-linha">
+              <Paginacao pagina={dados.page} porPagina={dados.perPage} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+                onPorPagina={n => setF({ porPagina: String(n) })} />
             </div>
           )}
         </div>

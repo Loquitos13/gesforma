@@ -22,11 +22,13 @@ export function TabPropostas({ selecionado, onSelecionar, onPrimeiro, onAbrir, o
   onAbrir: (id: number) => void;
   onVerContrato: (contratoId: number) => void;
 }) {
-  const [f, setF] = useFiltrosUrl({ pq: "", pestado: "", pcomercial: "", ppag: "1" });
+  const [f, setF] = useFiltrosUrl({ pq: "", pestado: "", pcomercial: "", ppag: "1", ppor: "25" });
   const pagina = Number(f.ppag) || 1;
+  const porPagina = Number(f.ppor) || 25;
   const { dados, erro, aCarregar, recarregar } = useRecurso(
-    `crm:propostas:${f.pq}:${f.pestado}:${f.pcomercial}:${pagina}`,
-    signal => apiPropostas({ q: f.pq, estado: f.pestado, comercial: f.pcomercial, pagina }, { signal }),
+    `crm:propostas:${f.pq}:${f.pestado}:${f.pcomercial}:${pagina}:${porPagina}`,
+    signal => apiPropostas({ q: f.pq, estado: f.pestado, comercial: f.pcomercial, pagina, porPagina }, { signal }),
+    { manterAnterior: true },
   );
   const comerciais = useOpcoes("comerciais");
   const primeiro = dados?.linhas[0]?.id ?? null;
@@ -75,7 +77,8 @@ export function TabPropostas({ selecionado, onSelecionar, onPrimeiro, onAbrir, o
         onLinha={p => onSelecionar(p.id)}
         aCarregar={aCarregar && !dados}
         vazio={f.pq || f.pestado || f.pcomercial ? "Nenhuma proposta com estes filtros." : "Ainda sem propostas. Crie a primeira com «Nova proposta»."}
-        rodape={dados && dados.total > dados.porPagina ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ ppag: String(p) })} /> : null}
+        rodape={dados && dados.total > 0 ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ ppag: String(p) })}
+          onPorPagina={n => setF({ ppor: String(n), ppag: "1" })} /> : null}
       />
     </>
   );

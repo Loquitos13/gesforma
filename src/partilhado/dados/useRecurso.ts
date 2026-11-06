@@ -53,12 +53,17 @@ export function invalidar(prefixo: string) {
 export function useRecurso<T>(
   chave: string | null,
   carregar: (signal: AbortSignal) => Promise<T>,
-  opcoes: { validadeMs?: number } = {},
+  /**
+   * `manterAnterior`: listas paginadas e filtradas no servidor. Ao mudar de página ou de filtro, continua a mostrar a
+   * resposta anterior (com `aAtualizar`) até chegar a nova, em vez de esvaziar a tabela.
+   */
+  opcoes: { validadeMs?: number; manterAnterior?: boolean } = {},
 ): { dados: T | undefined; erro: unknown; aCarregar: boolean; aAtualizar: boolean; recarregar: () => void } {
   const carregarRef = useRef(carregar);
   carregarRef.current = carregar;
   const validade = opcoes.validadeMs ?? VALIDADE_MS;
   const [, forcar] = useState(0);
+  const anterior = useRef<unknown>(undefined);
 
   const pedir = useCallback((k: string, forcado: boolean) => {
     const atual = cache.get(k);
@@ -99,6 +104,10 @@ export function useRecurso<T>(
   const recarregar = useCallback(() => { if (chave) pedir(chave, true); }, [chave, pedir]);
   const e = chave ? cache.get(chave) : undefined;
   const emCurso = Boolean(e?.promessa);
+  if (e?.dados !== undefined) anterior.current = e.dados;
+  else if (opcoes.manterAnterior && chave && anterior.current !== undefined && (emCurso || !e)) {
+    return { dados: anterior.current as T, erro: undefined, aCarregar: false, aAtualizar: true, recarregar };
+  }
   return {
     dados: e?.dados as T | undefined,
     erro: e?.dados === undefined ? e?.erro : undefined,

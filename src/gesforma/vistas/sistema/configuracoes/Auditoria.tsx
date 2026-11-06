@@ -5,11 +5,13 @@ import { useRecurso } from "../../../../partilhado/dados/useRecurso";
 import { Botao, Cartao, ErroCarregar, Filtros, Modal, Paginacao, Tabela, Vazio, dataHora, useFiltrosUrl, type Coluna } from "../../../../partilhado/ui";
 
 export function SeccaoAuditoria() {
-  const [f, setF, limpar] = useFiltrosUrl({ aEntidade: "", aUtilizador: "", aQ: "", aDe: "", aAte: "", aPagina: "1" });
+  const [f, setF, limpar] = useFiltrosUrl({ aEntidade: "", aUtilizador: "", aQ: "", aDe: "", aAte: "", aPagina: "1", aPor: "30" });
   const pagina = Number(f.aPagina) || 1;
+  const porPagina = Number(f.aPor) || 30;
   const { dados, erro, aCarregar, recarregar } = useRecurso(
-    `configuracoes:auditoria:${f.aEntidade}:${f.aUtilizador}:${f.aQ}:${f.aDe}:${f.aAte}:${pagina}`,
-    signal => apiAuditoria({ entidade: f.aEntidade, utilizador: f.aUtilizador, q: f.aQ, de: f.aDe, ate: f.aAte, pagina, porPagina: 30 }, signal),
+    `configuracoes:auditoria:${f.aEntidade}:${f.aUtilizador}:${f.aQ}:${f.aDe}:${f.aAte}:${pagina}:${porPagina}`,
+    signal => apiAuditoria({ entidade: f.aEntidade, utilizador: f.aUtilizador, q: f.aQ, de: f.aDe, ate: f.aAte, pagina, porPagina }, signal),
+    { manterAnterior: true },
   );
   const { dados: opcoes } = useRecurso("configuracoes:auditoria:opcoes", apiOpcoesAuditoria);
   const [aberta, setAberta] = useState<LinhaAuditoria | null>(null);
@@ -46,7 +48,8 @@ export function SeccaoAuditoria() {
           aCarregar={aCarregar && !dados}
           vazio={<Vazio titulo="Sem registos com estes filtros" acao={ativos ? <Botao tamanho="sm" onClick={limpar}>Limpar filtros</Botao> : undefined} />}
         />
-        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ aPagina: String(p) })} />}
+        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ aPagina: String(p) })}
+          onPorPagina={n => setF({ aPor: String(n), aPagina: "1" })} />}
       </Cartao>
       <Modal aberto={Boolean(aberta)} onFechar={() => setAberta(null)} titulo={aberta?.accao ?? ""} rodape={<Botao onClick={() => setAberta(null)}>Fechar</Botao>}>
         {aberta && (

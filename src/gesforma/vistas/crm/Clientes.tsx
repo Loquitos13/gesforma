@@ -16,10 +16,12 @@ const ORDENS = [{ valor: "", rotulo: "Ordenar: nome" }, { valor: "-recente", rot
 const FILTRO = "h-9 rounded-lg border border-linha-forte bg-white px-2.5 text-[13px] text-tinta";
 
 export default function Clientes({ view, navigate }: VistaProps) {
-  const [f, setF] = useFiltrosUrl({ q: "", estado: "", tipo: "", de: "", ate: "", ordem: "", pagina: "1", cliente: "" });
+  const [f, setF] = useFiltrosUrl({ q: "", estado: "", tipo: "", de: "", ate: "", ordem: "", pagina: "1", porPagina: "25", cliente: "" });
   const pagina = Number(f.pagina) || 1;
-  const { dados, erro, aCarregar, recarregar } = useRecurso(`crm:clientes:${f.q}:${f.estado}:${f.tipo}:${f.de}:${f.ate}:${f.ordem}:${pagina}`, signal =>
-    apiClientes({ q: f.q, estado: f.estado, tipo: f.tipo || undefined, de: f.de || undefined, ate: f.ate || undefined, ordem: f.ordem, pagina }, { signal }));
+  const porPagina = Number(f.porPagina) || 25;
+  const { dados, erro, aCarregar, recarregar } = useRecurso(`crm:clientes:${f.q}:${f.estado}:${f.tipo}:${f.de}:${f.ate}:${f.ordem}:${pagina}:${porPagina}`, signal =>
+    apiClientes({ q: f.q, estado: f.estado, tipo: f.tipo || undefined, de: f.de || undefined, ate: f.ate || undefined, ordem: f.ordem, pagina, porPagina }, { signal }),
+  { manterAnterior: true });
   const [novo, setNovo] = useState(false);
   const selecionado = f.cliente ? Number(f.cliente) : dados?.linhas[0]?.id ?? null;
   const criar = useAccao(apiCriarCliente, { ok: "Cliente criado.", invalidar: ["crm:clientes"] });
@@ -97,7 +99,8 @@ export default function Clientes({ view, navigate }: VistaProps) {
         onLinha={c => setF({ cliente: String(c.id), pagina: f.pagina })}
         aCarregar={aCarregar && !dados}
         vazio={f.q || f.estado || f.tipo ? "Nenhum cliente com estes filtros." : "Ainda sem clientes. Registe as empresas que compram formação ou pedem propostas."}
-        rodape={dados && dados.total > dados.porPagina ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p), cliente: f.cliente })} /> : null}
+        rodape={dados && dados.total > 0 ? <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p), cliente: f.cliente })}
+          onPorPagina={n => setF({ porPagina: String(n) })} /> : null}
       />
       <FormCliente
         aberto={novo}

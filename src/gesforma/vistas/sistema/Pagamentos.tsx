@@ -30,11 +30,12 @@ const SEPARADORES: { id: "" | SituacaoPagamento; rotulo: string }[] = [
 export default function Pagamentos({ navigate }: VistaProps) {
   const pode = usePode();
   const confirmar = pode("pagamentos.confirmar");
-  const [f, setF, limpar] = useFiltrosUrl({ situacao: "", curso: "", metodo: "", fatura: "", de: "", ate: "", q: "", ordem: "", pagina: "1", sel: "" });
+  const [f, setF, limpar] = useFiltrosUrl({ situacao: "", curso: "", metodo: "", fatura: "", de: "", ate: "", q: "", ordem: "", pagina: "1", porPagina: "25", sel: "" });
   const pagina = Number(f.pagina) || 1;
-  const chave = `pagamentos:${f.situacao}:${f.curso}:${f.metodo}:${f.fatura}:${f.de}:${f.ate}:${f.q}:${f.ordem}:${pagina}`;
+  const porPagina = Number(f.porPagina) || 25;
+  const chave = `pagamentos:${f.situacao}:${f.curso}:${f.metodo}:${f.fatura}:${f.de}:${f.ate}:${f.q}:${f.ordem}:${pagina}:${porPagina}`;
   const { dados, erro, aCarregar, recarregar } = useRecurso(chave, signal =>
-    apiPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, fatura: f.fatura, de: f.de, ate: f.ate, q: f.q, ordem: f.ordem, pagina, porPagina: 25 }, signal));
+    apiPagamentos({ situacao: f.situacao, curso: f.curso, metodo: f.metodo, fatura: f.fatura, de: f.de, ate: f.ate, q: f.q, ordem: f.ordem, pagina, porPagina }, signal), { manterAnterior: true });
   const cursos = useOpcoes("cursos", { regime: "gold" });
   const [registar, setRegistar] = useState(false);
   /** Pagamento acabado de registar como recebido: abre-se com a janela da fatura. */
@@ -152,7 +153,8 @@ export default function Pagamentos({ navigate }: VistaProps) {
               />
             )}
           />
-          {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })} />}
+          {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+            onPorPagina={n => setF({ porPagina: String(n) })} />}
         </Cartao>
 
         <Cartao titulo="Métodos de pagamento" subtitulo={f.de || f.ate ? "Pagamentos confirmados no período" : "Todos os pagamentos confirmados"}>

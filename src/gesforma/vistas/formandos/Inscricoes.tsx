@@ -34,10 +34,10 @@ function Pontos({ docs }: { docs: Record<string, boolean> }) {
 export default function Inscricoes({ navigate }: VistaProps) {
   const pode = usePode();
   const podeEditar = pode("formandosFin.gerir");
-  const [f, setF, limpar] = useFiltrosUrl({ estado: "", q: "", curso: "", turma: "", docs: "", pagina: "1", ordem: "" });
+  const [f, setF, limpar] = useFiltrosUrl({ estado: "", q: "", curso: "", turma: "", docs: "", pagina: "1", porPagina: "25", ordem: "" });
   const [painel, setPainel] = useState<LinhaInscricaoFin | "nova" | null>(null);
-  const filtros = { ...f, pagina: Number(f.pagina) || 1, porPagina: 25 };
-  const { dados, erro, aCarregar, recarregar } = useRecurso(`formandos:inscricoes:${JSON.stringify(filtros)}`, s => apiListarInscricoesFin(filtros, s));
+  const filtros = { ...f, pagina: Number(f.pagina) || 1, porPagina: Number(f.porPagina) || 25 };
+  const { dados, erro, aCarregar, recarregar } = useRecurso(`formandos:inscricoes:${JSON.stringify(filtros)}`, s => apiListarInscricoesFin(filtros, s), { manterAnterior: true });
   const cursos = useOpcoes("cursos", { regime: "fin" });
   const turmas = useOpcoes("turmas", { regime: "fin", todos: true });
   const ativos = ["q", "curso", "turma", "docs"].filter(k => (f as Record<string, string>)[k]).length;
@@ -137,7 +137,8 @@ export default function Inscricoes({ navigate }: VistaProps) {
             />
           )}
         />
-        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })} />}
+        {dados && <Paginacao pagina={dados.pagina} porPagina={dados.porPagina} total={dados.total} onMudar={p => setF({ pagina: String(p) })}
+          onPorPagina={n => setF({ porPagina: String(n) })} />}
       </Cartao>
       <p className="m-0 text-xs text-tinta-suave">
         Documentos: {DOCS_INSCRICAO.map(d => `${d.curto} ${d.rotulo.toLowerCase()}`).join(" · ")}. Sem documentos completos a turma não arranca.

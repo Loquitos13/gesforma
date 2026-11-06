@@ -8,7 +8,7 @@ import { somarPorPerfil } from "../permissoes/personalizado.js";
 import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
-import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
+import { avisarComprovativoRecusado, avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
 import { abrirAlerta, definirEstadoDoc, dispensarAlerta, documentosUrl, ensureDocsToken, firePreinscricaoEmail, listarAlertasAbertas, listarDocsLead, syncLigacao } from "../docsLink.js";
 import { enviarModelo } from "../emailModelo.js";
 import { isEmail, normalizeEmail } from "../security.js";
@@ -234,14 +234,18 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!ok) return reply.code(404).send({ error: "documento inexistente" });
     await logLeadEvent(db, id, req.actor!.id, "campo", "Documento recusado", observacao);
     await audit(db, req.actor!.id, "crm.doc_recusado", "preinscricao", String(id), req.ip, { docId });
-    // A pessoa recebe logo o pedido de reenvio (recusas seguidas agrupam-se num só email).
-    // O comprovativo de uma prestação seguinte é tratado pela equipa: a pessoa não recebe pedido de reenvio.
-    const aviso = doc?.tipo && doc.tipo !== "comprovativo" && eComprovativo(doc.tipo) ? null : await avisarRecusasLead(db, id, { actorId: req.actor!.id }).catch(err => {
+    // A pessoa recebe logo o pedido de reenvio (recusas seguidas agrupam-se num só email). O comprovativo de pagamento
+    // (o 1.º ou o de uma prestação seguinte) tem email próprio, com o motivo e a ligação no passo do pagamento, onde a
+    // pessoa anexa outro.
+    const aviso = await (doc?.tipo && eComprovativo(doc.tipo)
+      ? avisarComprovativoRecusado(db, id, { id: docId, tipo: doc.tipo, observacao }, req.actor!.id)
+      : avisarRecusasLead(db, id, { actorId: req.actor!.id })
+    ).catch(err => {
       req.log.error({ err }, "aviso da recusa falhou");
       return null;
     });
     const dossie = await getLeadDossier(db, id, req.actor!);
-    return dossie && { ...dossie, avisoRecusa: { enviado: Boolean(aviso?.enviado), adiado: Boolean(aviso?.adiado) } };
+    return dossie && { ...dossie, avisoRecusa: { enviado: Boolean(aviso?.enviado), adiado: Boolean(aviso?.adiado), ...(aviso?.erro ? { erro: aviso.erro } : {}) } };
   });
 
   /** «Reenviar pedido agora»: documentos recusados (com o motivo) ou em falta, com a ligação pessoal. */

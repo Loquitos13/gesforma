@@ -215,6 +215,18 @@ export async function preinscricaoDoFormando(c: Consulta, regime: Regime, email:
   );
 }
 
+/** A ficha Gold que veio desta pré-inscrição (mesmo email e curso) está «sem emails de documentos nem de pagamento». */
+export async function formandoGoldSemEmails(c: Consulta, email: string, curso: string) {
+  if (!email) return false;
+  const r = await one<{ sem: boolean }>(
+    c,
+    `SELECT true AS sem FROM formandos_gold
+      WHERE sem_emails_docs_pagamento AND lower(email) = lower($1) AND lower(trim(curso)) = lower(trim($2)) LIMIT 1`,
+    [email, curso],
+  );
+  return Boolean(r?.sem);
+}
+
 export async function certificadoDoFormando(c: Consulta, regime: Regime, turmaId: number, formandoId: number) {
   return one<{ emitido: boolean; nota: unknown; emitido_em: string | Date | null; ficheiro_url: string; ficheiro_nome: string }>(
     c,

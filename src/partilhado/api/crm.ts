@@ -234,7 +234,7 @@ export const apiLembretePrestacao = (id: number) => enviar.post<DossieLead>(`/v1
 export const apiEntregarDoc = (id: number, tipo: string, ficheiro: File) =>
   enviarFicheiro<DossieLead>(`/v1/crm/leads/${id}/documentos/entregar/${encodeURIComponent(tipo)}`, ficheiro);
 export const apiRecusarDoc = (id: number, docId: number, observacao: string) =>
-  enviar.post<DossieLead & { avisoRecusa?: { enviado: boolean; adiado: boolean } }>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { observacao });
+  enviar.post<DossieLead & { avisoRecusa?: { enviado: boolean; adiado: boolean; erro?: string } }>(`/v1/crm/leads/${id}/documentos/${docId}/recusar`, { observacao });
 /** «Reenviar pedido agora»: documentos recusados (com o motivo) ou em falta, com a ligação pessoal. */
 export const apiReenviarPedidoDocs = (id: number) =>
   enviar.post<{ ok: boolean; documentos: string[]; dossie: DossieLead | null }>(`/v1/crm/leads/${id}/documentos/reenviar-pedido`, {});

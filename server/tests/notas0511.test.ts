@@ -367,3 +367,58 @@ describe("modelo do lembrete da prestação", () => {
     expect(m.text).toMatch(/3\.ª prestação \(de 4\).*€ 40,00/);
   });
 });
+
+describe("recusar o comprovativo de uma prestação na ficha do formando", () => {
+  it("só com o motivo e a permissão; fica «Recusado» com o motivo, a pessoa recebe o email e pode anexar outro", async () => {
+    const ctx = await arrancar();
+    const id = 910000 + Math.floor(Math.random() * 9000);
+    const email = `frec.${id}@exemplo.pt`;
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em)
+       VALUES ($1, '2031-01-01 10:00', 'Rec', 'T', $2, '912000000', 'Formação de Formadores - CCP', 130, 'Pré-inscrição', 'gold', now())`, [id, email]);
+    await pedido(ctx, "secretaria", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [65, 65] });
+    const r1 = await entregar(ctx, "secretaria", id, "comprovativo");
+    const doc1 = (r1.json().documentos as { id: number; tipo: string }[]).find(x => x.tipo === "comprovativo")!;
+    await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/validar`);
+    await ctx.db.query("UPDATE preinscricoes SET validada_em = now(), estado = 'Formando' WHERE id = $1", [id]);
+    const f = await pedido(ctx, "admin", "POST", "/v1/formandos-gold", { nome: "Rec", apelido: "T", email, curso: "Formação de Formadores - CCP", valor: 130 });
+    expect(f.statusCode, f.body).toBe(200);
+    const fid = f.json().formando.id as number;
+    expect((await entregar(ctx, "secretaria", id, "comprovativo-2")).statusCode).toBe(200);
+    let ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
+    const c2 = ficha.pagamento.comprovativos[1] as { estado: string; docId: number };
+    expect(c2.estado).toBe("pendente");
+    const url = `/v1/crm/leads/${id}/documentos/${c2.docId}/recusar`;
+
+    // Sem motivo: não recusa. Sem a permissão de validar comprovativos (formador): 403.
+    expect((await pedido(ctx, "secretaria", "POST", url, { observacao: "  " })).statusCode).toBe(400);
+    expect((await pedido(ctx, "formador", "POST", url, { observacao: "Ilegível" })).statusCode).toBe(403);
+
+    const r = await pedido(ctx, "secretaria", "POST", url, { observacao: "O comprovativo está ilegível." });
+    expect(r.statusCode, r.body).toBe(200);
+    // A pessoa anexa os comprovativos na ligação pessoal: recebe o pedido de um novo, no passo do pagamento.
+    expect(r.json().avisoRecusa, JSON.stringify(r.json().avisoRecusa)).toMatchObject({ enviado: true });
+    const contacto = (await ctx.db.query<{ nota: string }>(
+      "SELECT nota FROM preinscricao_contactos WHERE preinscricao_id = $1 ORDER BY id DESC LIMIT 1", [id])).rows[0];
+    expect(contacto?.nota).toMatch(/2\.ª prestação recusado: O comprovativo está ilegível\./);
+    const doc = (await ctx.db.query<{ recusa_avisada_em: Date | null }>("SELECT recusa_avisada_em FROM preinscricao_docs WHERE id = $1", [c2.docId])).rows[0]!;
+    expect(doc.recusa_avisada_em).not.toBeNull();
+
+    ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
+    expect(ficha.pagamento.comprovativos[1]).toMatchObject({ estado: "recusado", observacao: "O comprovativo está ilegível." });
+    // Já recusado: volta a poder anexar-se outro, que fica por validar.
+    expect((await entregar(ctx, "secretaria", id, "comprovativo-2")).statusCode).toBe(200);
+    ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
+    expect(ficha.pagamento.comprovativos[1]).toMatchObject({ estado: "pendente", observacao: "" });
+
+    // O 1.º, já validado (pagamento confirmado), não se recusa.
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/recusar`, { observacao: "x" })).statusCode).toBe(409);
+
+    // Ficha «sem emails de documentos nem de pagamento»: recusa sem email à pessoa.
+    await ctx.db.query("UPDATE formandos_gold SET sem_emails_docs_pagamento = true WHERE id = $1", [fid]);
+    const c2b = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha.pagamento.comprovativos[1] as { docId: number };
+    const rs = await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${c2b.docId}/recusar`, { observacao: "Valor errado." });
+    expect(rs.statusCode, rs.body).toBe(200);
+    expect(rs.json().avisoRecusa).toMatchObject({ enviado: false, erro: expect.stringMatching(/sem emails/i) });
+  });
+});

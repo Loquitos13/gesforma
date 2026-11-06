@@ -88,6 +88,8 @@ export type FichaFormando = {
     comprovativos?: {
       n: number; tipo: string; valor: number; total: number;
       estado: "validado" | "pendente" | "recusado" | "em_falta"; docId: number | null; nome: string; url: string;
+      /** Motivo da recusa. */
+      observacao?: string;
     }[];
   };
   resultado: null | {

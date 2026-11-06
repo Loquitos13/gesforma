@@ -206,6 +206,8 @@ async function comprovativosDaOrigem(db: Db, leadId: number | null) {
       n: l.n, tipo: l.tipo, valor: l.valor, total: Math.max(1, prest.length),
       estado: (l.doc ? (l.doc.estado === "validado" ? "validado" : l.doc.estado === "recusado" ? "recusado" : "pendente") : "em_falta") as "validado" | "pendente" | "recusado" | "em_falta",
       docId: l.doc?.id ?? null, nome: l.doc?.nome ?? "", url: l.doc?.drive_url ?? "",
+      /** Motivo da recusa (o que a pessoa tem de corrigir). */
+      observacao: l.doc?.estado === "recusado" ? String(l.doc.observacao ?? "") : "",
     })),
   };
 }

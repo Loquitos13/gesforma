@@ -4,8 +4,8 @@ import {
   apiAcessoFormando, apiPedirPagamentoFormando, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
-import { apiEntregarDoc, apiLembretePrestacao, apiValidarDoc } from "../../../partilhado/api/crm";
-import { Aviso, Botao, Caixa, Cartao, Detalhes, Estado, data, dataHora, eur } from "../../../partilhado/ui";
+import { apiEntregarDoc, apiLembretePrestacao, apiRecusarDoc, apiValidarDoc } from "../../../partilhado/api/crm";
+import { Aviso, Botao, Caixa, Cartao, Detalhes, Entrada, Estado, data, dataHora, eur } from "../../../partilhado/ui";
 import { RegistarPagamento } from "./fichaDialogos";
 import { ReciboPagamento } from "../sistema/pagamentos/ReciboPagamento";
 import { PAGAMENTO } from "./partes";
@@ -187,8 +187,9 @@ const ESTADO_COMPROVATIVO = {
 };
 
 /**
- * Comprovativos de pagamento (o do 1.º pagamento e os das prestações seguintes), com abrir, validar e anexar, e o
- * lembrete à pessoa da prestação seguinte (email com a ligação no passo do pagamento).
+ * Comprovativos de pagamento (o do 1.º pagamento e os das prestações seguintes), com abrir, validar, recusar (com o
+ * motivo, que segue por email à pessoa com a ligação no passo do pagamento) e anexar, e o lembrete à pessoa da
+ * prestação seguinte (email com a ligação no passo do pagamento).
  */
 function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; podeEditar: boolean }) {
   const pode = usePode();
@@ -199,6 +200,20 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   const [alvo, setAlvo] = useState<string | null>(null);
   const anexar = useAccao((tipo: string, f: File) => apiEntregarDoc(leadId!, tipo, f), { invalidar: INVALIDAR, ok: "Comprovativo anexado. Fica por validar." });
   const validar = useAccao((docId: number) => apiValidarDoc(leadId!, docId), { invalidar: [...INVALIDAR, "pagamentos:"], ok: "Comprovativo validado." });
+  // Recusa: o motivo é obrigatório; a linha passa a «Recusado» e volta a poder anexar-se outro.
+  const [aRecusar, setARecusar] = useState<number | null>(null);
+  const [motivo, setMotivo] = useState("");
+  const recusar = useAccao((docId: number, obs: string) => apiRecusarDoc(leadId!, docId, obs), {
+    invalidar: [...INVALIDAR, "pagamentos:", "crm:"],
+    ok: r => r.avisoRecusa?.enviado
+      ? "Comprovativo recusado. A pessoa recebeu um email com o motivo e a ligação para anexar outro."
+      : `Comprovativo recusado.${r.avisoRecusa?.erro ? ` Sem email à pessoa: ${r.avisoRecusa.erro}` : ""}`,
+  });
+  async function confirmarRecusa(docId: number) {
+    const obs = motivo.trim();
+    if (!obs) return;
+    if (await recusar.correr(docId, obs)) { setARecusar(null); setMotivo(""); }
+  }
   const lembrete = useAccao(() => apiLembretePrestacao(leadId!), { invalidar: INVALIDAR, ok: "Lembrete enviado por email, com a ligação no passo do pagamento." });
   if (!leadId || !lista.length) return null;
   const proxima = lista.find(c => c.estado === "em_falta" || c.estado === "recusado");
@@ -211,16 +226,37 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
       <ul className="m-0 mt-1 p-0 list-none divide-y divide-linha-suave text-[13px]">
         {lista.map(c => {
           const e = ESTADO_COMPROVATIVO[c.estado];
+          const podeDecidir = podeEditar && c.estado === "pendente" && c.docId != null && pode("pagamentos.validarComprovativo");
+          const formRecusa = podeDecidir && aRecusar === c.docId;
           return (
             <li key={c.tipo} className="py-2 flex flex-wrap items-center gap-2">
               <span className="flex-1 min-w-0 truncate">Comprovativo do {c.n}.º pagamento · <span className="num font-semibold">{eur(c.valor, true)}</span></span>
               <Estado tom={e.tom}>{e.rotulo}</Estado>
               {c.url && <a className="text-[13px] font-semibold text-ligacao" href={c.url} target="_blank" rel="noreferrer">Abrir</a>}
-              {podeEditar && c.estado === "pendente" && c.docId != null && pode("pagamentos.validarComprovativo") && (
-                <Botao tamanho="sm" variante="primario" aCarregar={validar.aCorrer} onClick={() => void validar.correr(c.docId!)}>Validar</Botao>
+              {podeDecidir && !formRecusa && (
+                <>
+                  <Botao tamanho="sm" variante="secundario" onClick={() => { setARecusar(c.docId); setMotivo(""); }}>Recusar</Botao>
+                  <Botao tamanho="sm" variante="primario" aCarregar={validar.aCorrer} onClick={() => void validar.correr(c.docId!)}>Validar</Botao>
+                </>
               )}
               {podeEditar && (c.estado === "em_falta" || c.estado === "recusado") && (
                 <Botao tamanho="sm" variante="secundario" aCarregar={anexar.aCorrer && alvo === c.tipo} onClick={() => { setAlvo(c.tipo); escolha.current?.click(); }}>Anexar</Botao>
+              )}
+              {c.estado === "recusado" && c.observacao && <p className="m-0 w-full text-xs text-perigo">Motivo: {c.observacao}</p>}
+              {formRecusa && (
+                <form className="w-full flex flex-wrap items-center gap-2" onSubmit={ev => { ev.preventDefault(); void confirmarRecusa(c.docId!); }}>
+                  <Entrada
+                    autoFocus
+                    aria-label={`Motivo da recusa do comprovativo do ${c.n}.º pagamento`}
+                    placeholder={ficha.semEmails ? "O que está incorrecto" : "O que está incorrecto (segue por email à pessoa)"}
+                    className="h-8 flex-1 min-w-[180px] text-xs"
+                    maxLength={500}
+                    value={motivo}
+                    onChange={ev => setMotivo(ev.target.value)}
+                  />
+                  <Botao tamanho="sm" variante="ligacao" type="button" disabled={recusar.aCorrer} onClick={() => { setARecusar(null); setMotivo(""); }}>Cancelar</Botao>
+                  <Botao tamanho="sm" variante="perigo" type="submit" aCarregar={recusar.aCorrer} disabled={!motivo.trim()}>Recusar</Botao>
+                </form>
               )}
             </li>
           );

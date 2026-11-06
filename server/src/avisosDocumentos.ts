@@ -13,17 +13,20 @@ import { enviarComprovativosPendentes } from "./comprovativoContabilidade.js";
 import { config } from "./config.js";
 import { logLeadEvent } from "./crmDossier.js";
 import type { Db } from "./db/pool.js";
+import { prestacoesDoLead } from "./docsCurso.js";
 import { documentosUrl, ensureDocsToken } from "./docsLink.js";
 import { buildCtaVars } from "./emailCta.js";
 import { renderAutomaticEmail } from "./emailHtml.js";
+import { enviarModelo as enviarModeloEmail } from "./emailModelo.js";
 import { vistaDocumentosFormandoFin } from "./formandoFinDocs.js";
 import { enviarLembretesPreinscricao, lerLembretePre } from "./lembretePre.js";
-import { motivoFecho } from "./ligacaoPessoal.js";
+import { fechoDaLigacao, motivoFecho } from "./ligacaoPessoal.js";
 import { sendMail } from "./mailer.js";
 import { itemRecusa, pendenciaDocsLead } from "./pendenciaDocs.js";
 import * as repo from "./repos/avisosDocumentos.js";
 import { modeloEmail } from "./repos/emails.js";
 import { notaDoSistemaFin } from "./repos/finPipeline.js";
+import { formandoGoldSemEmails } from "./repos/formandos.js";
 import { semEmailsDocsPagamento } from "./repos/formandosDocs.js";
 import * as leads from "./repos/leads.js";
 import { isEmail, normalizeEmail } from "./security.js";
@@ -120,6 +123,62 @@ export async function avisarRecusasLead(db: Db, leadId: number, opts: { forcar?:
   await leads.inserirContacto(db, { leadId, actorId: opts.actorId ?? null, nota, meio: "Email" });
   await logLeadEvent(db, leadId, opts.actorId, "contacto", opts.forcar ? "Pedido reenviado · documentos recusados" : "Documento recusado · pedido de reenvio", nota);
   return { enviado: true, url: href, documentos: p.recusados.map(d => d.label) };
+}
+
+/**
+ * Comprovativo de pagamento recusado (o do 1.º pagamento ou o de uma prestação seguinte): a pessoa recebe o email
+ * «comprovativo_recusado», com o motivo e a ligação pessoal no passo do pagamento, onde anexa outro. Não sai para a
+ * ficha de formando «sem emails de documentos nem de pagamento» (inscrição tratada pela equipa).
+ */
+export async function avisarComprovativoRecusado(
+  db: Db, leadId: number, doc: { id: number; tipo: string; observacao: string }, actorId?: string,
+): Promise<ResultadoAviso | null> {
+  const lead = await leads.lead(db, leadId);
+  if (!lead) return null;
+  const marcar = () => repo.marcarRecusasAvisadasLead(db, leadId, [doc.id]);
+  // Com prestações por pagar, a ligação continua aberta (só com o passo do pagamento) mesmo validada ou já formando.
+  const fecho = await fechoDaLigacao(db, lead);
+  if (fecho && fecho !== "expirada") {
+    await marcar();
+    return { enviado: false, erro: "A pré-inscrição está encerrada: a ligação pessoal fechou." };
+  }
+  const email = normalizeEmail(String(lead.email ?? ""));
+  const curso = String(lead.curso ?? "");
+  if (!isEmail(email)) {
+    await marcar();
+    return { enviado: false, erro: "A ficha não tem email." };
+  }
+  if (await formandoGoldSemEmails(db, email, curso)) {
+    await marcar();
+    return { enviado: false, erro: "Ficha sem emails de pagamento (inscrição tratada pela equipa)." };
+  }
+  const n = doc.tipo === "comprovativo" ? 1 : Number(doc.tipo.split("-")[1]);
+  const total = prestacoesDoLead(lead as Record<string, unknown>).length;
+  const qual = total > 1 ? `comprovativo da ${n}.ª prestação` : "comprovativo de pagamento";
+  const href = `${documentosUrl(await ensureDocsToken(db, leadId))}?passo=pagamento`;
+  const motivo = total > 1 ? `${doc.observacao} (${qual})` : doc.observacao;
+  try {
+    await enviarModeloEmail(db, {
+      tipo: "comprovativo_recusado", area: "gold", para: email, nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(), link: href,
+      vars: { curso: curso || "a sua inscrição", motivo, comprovativo_url: href },
+      reserva: {
+        assunto: "Comprovativo de pagamento · {{curso}}",
+        linhas: [
+          "Não conseguimos confirmar o comprovativo de pagamento de {{curso}}.",
+          "Motivo: {{motivo}}",
+          "Pode anexar um novo comprovativo na sua ligação pessoal, no passo «Pagamento».",
+        ],
+        cta: "Anexar novo comprovativo",
+      },
+    });
+  } catch (err) {
+    return { enviado: false, erro: err instanceof Error ? err.message.slice(0, 200) : "Falha no envio do email." };
+  }
+  await marcar();
+  const nota = `Pedido de novo comprovativo · ${qual} recusado: ${doc.observacao}`.slice(0, 1000);
+  await leads.inserirContacto(db, { leadId, actorId: actorId ?? null, nota, meio: "Email" });
+  await logLeadEvent(db, leadId, actorId, "contacto", "Comprovativo recusado · pedido de novo comprovativo", nota);
+  return { enviado: true, url: href, documentos: [qual] };
 }
 
 /** «Reenviar pedido agora»: recusados → email da recusa; só em falta → lembrete. Não conta para o máximo de lembretes. */

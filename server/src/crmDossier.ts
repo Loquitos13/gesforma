@@ -2,7 +2,7 @@ import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
 import type { AtorCrm, Consulta } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
-import { faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
+import { comprovativoPelaEquipa, faltaPedirPagamento, faltaValidarPreinscricao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { GENEROS_FIN, mascararFim, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
@@ -114,8 +114,10 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const { ok, emFalta } = docsCompletos(pedidos, ficheiros.map(f => f.tipo));
   // Documentos que a equipa pode entregar pela pessoa (os do curso e, se se pede, o comprovativo), menos os já validados.
   const validados = new Set(ficheiros.filter(f => f.estado === "validado").map(f => f.tipo));
+  const obrig = pedidos.filter(p => p.required);
+  const todosValidados = obrig.length > 0 && obrig.every(p => validados.has(p.id));
   const entregaveis = [...pedidos.map(p => ({ id: p.id, label: p.label })),
-    ...((await situacaoPagamento(db, row).catch(() => null))?.pedeComprovativo ? [{ id: "comprovativo", label: "Comprovativo de pagamento" }] : [])]
+    ...((await comprovativoPelaEquipa(db, row, todosValidados).catch(() => false)) ? [{ id: "comprovativo", label: "Comprovativo de pagamento" }] : [])]
     .filter(p => !validados.has(p.id));
   let docsUrl = "";
   try { docsUrl = documentosUrl(await ensureDocsToken(db, id)); } catch { docsUrl = ""; }

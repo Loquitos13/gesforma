@@ -47,7 +47,9 @@ const COMPROVATIVO_POR_VALIDAR = `COALESCE((SELECT d.estado = 'pendente' FROM pr
 const DOCS_POR_VALIDAR = `${FECHADOS} AND EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id
   AND d.tipo <> 'comprovativo' AND d.estado = 'pendente')`;
 const PAGAMENTO_POR_VALIDAR = `${FECHADOS} AND ${COMPROVATIVO_POR_VALIDAR}`;
-const AGUARDA_PAGAMENTO = `${FECHADOS} AND COALESCE(regime, 'gold') = 'gold' AND preco > 0 AND pagamento_pedido_em IS NOT NULL
+// Aguarda pagamento: pedido, ou (sem o pedir) com os documentos obrigatórios todos validados.
+const AGUARDA_PAGAMENTO = `${FECHADOS} AND COALESCE(regime, 'gold') = 'gold' AND preco > 0
+  AND (pagamento_pedido_em IS NOT NULL OR docs_validados_em IS NOT NULL) AND validada_em IS NULL
   AND NOT ${COMPROVATIVO_POR_VALIDAR}
   AND NOT EXISTS (SELECT 1 FROM pagamentos pg WHERE pg.id = preinscricoes.pagamento_id AND lower(pg.estado) = 'pago')`;
 

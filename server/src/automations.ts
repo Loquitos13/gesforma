@@ -281,6 +281,8 @@ export async function processDueJobs(db: Db, fim = 0) {
   await enviarRegrasComPrazo(db, fim).catch(err => console.error("[emails] regras com prazo:", err));
   const interrompidos = await libertarReservasPresas(db, RESERVA_PRESA_MIN).catch(() => []);
   await enviarAvisosAdiados(db).catch(err => console.error("[emails] avisos adiados:", err));
+  // docsLink importa este ficheiro: import dinâmico.
+  await import("./docsLink.js").then(m => m.verificarDocsValidados(db)).catch(err => console.error("[crm] documentos validados:", err));
   const resta = fim - Date.now();
   const r = !fim ? await flushQueuedJobs(db, 20)
     : resta > 0 ? await flushQueuedJobs(db, 10, resta)

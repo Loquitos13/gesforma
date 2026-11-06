@@ -106,7 +106,23 @@ export async function syncLigacao(db: Db, leadId: number) {
   const required = pedidos.filter(d => d.required);
   const ficheiros = await listarDocsLead(db, leadId);
   const byTipo = new Map(ficheiros.map(f => [f.tipo, f]));
-  return required.length > 0 && required.every(d => byTipo.get(d.id)?.estado === "validado");
+  const ok = required.length > 0 && required.every(d => byTipo.get(d.id)?.estado === "validado");
+  // Guarda-se na pré-inscrição: o próximo passo, a fila «Aguarda pagamento» e o comprovativo entregue pela equipa usam-no.
+  await db.query(
+    `UPDATE preinscricoes SET docs_verificados = true,
+            docs_validados_em = CASE WHEN $2 THEN COALESCE(docs_validados_em, now()) ELSE NULL END
+      WHERE id = $1`, [leadId, ok]);
+  return ok;
+}
+
+/** Pré-inscrições ainda não verificadas (anteriores a esta marca): calcula-se aos poucos, no tick da fila de emails. */
+export async function verificarDocsValidados(db: Db, limite = 50) {
+  const ids = (await db.query<{ id: number }>(
+    `SELECT id FROM preinscricoes WHERE NOT docs_verificados AND estado NOT IN ('Formando','Desistiu')
+       AND EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id AND d.estado = 'validado')
+     ORDER BY id DESC LIMIT $1`, [limite])).rows;
+  for (const { id } of ids) await syncLigacao(db, id).catch(() => undefined);
+  return ids.length;
 }
 
 export async function definirEstadoDoc(
@@ -208,5 +224,6 @@ export async function herdarDocsValidados(db: Db, leadId: number) {
     const rotulo = pedidos.find(p => p.id === h.tipo)?.label ?? h.tipo;
     await logLeadEvent(db, leadId, undefined, "campo", `Documento já validado · ${rotulo}`, `Guardado a partir da pré-inscrição #${h.preinscricao_id}.`);
   }
+  if (herdados.length) await syncLigacao(db, leadId);
   return herdados.length;
 }

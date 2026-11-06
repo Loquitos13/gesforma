@@ -57,6 +57,19 @@ export async function situacaoPagamento(
   return { estado, pago: estado === "pago", pedeComprovativo: estado === "pedido" };
 }
 
+/**
+ * A equipa pode entregar o comprovativo pela pessoa: com o pagamento pedido ou, sem o pedir, com os documentos
+ * obrigatórios todos validados (curso Gold pago, ainda por pagar).
+ */
+export async function comprovativoPelaEquipa(
+  db: Db,
+  lead: { regime?: unknown; preco?: unknown; pagamento_id?: unknown; pagamento_pedido_em?: unknown },
+  docsValidados: boolean,
+) {
+  const s = await situacaoPagamento(db, lead);
+  return s.pedeComprovativo || (s.estado === "por_pedir" && docsValidados);
+}
+
 export type DocExtraPreinscricao = { id: string; label: string; required: boolean };
 
 export type DocsPreinscricaoCfg = {

@@ -56,6 +56,8 @@ export type Lead = {
   pagamentoPedido?: boolean;
   /** Enviou o comprovativo de pagamento e ainda ninguém o validou. */
   comprovativoPorValidar?: boolean;
+  /** Os documentos obrigatórios do curso estão todos validados. */
+  docsTodosValidados?: boolean;
   consentimento?: boolean;
 };
 

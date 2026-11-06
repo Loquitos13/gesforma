@@ -19,7 +19,7 @@ function entregar(ctx: Ctx, role: "comercial" | "contabilidade" | "financiada" |
 }
 
 describe("documentos entregues pela equipa na ficha da pré-inscrição", () => {
-  it("a coordenação entrega um documento do curso: fica por validar; os validados e os de fora do curso não", async () => {
+  it("a coordenação entrega um documento do curso: fica validado; os validados e os de fora do curso não", async () => {
     const ctx = await arrancar();
     const id = 970000 + Math.floor(Math.random() * 9000);
     const c = (await ctx.db.query<{ nome_comercial: string; ufcd: string }>("SELECT nome_comercial, ufcd FROM cursos_fin ORDER BY id LIMIT 1")).rows[0]!;
@@ -37,10 +37,8 @@ describe("documentos entregues pela equipa na ficha da pré-inscrição", () => 
     const r = await entregar(ctx, "financiada", id, tipo);
     expect(r.statusCode, r.body).toBe(200);
     const doc = (r.json().documentos as { id: number; tipo: string; estado: string }[]).find(d => d.tipo === tipo)!;
-    expect(doc.estado).toBe("pendente");
-
-    // Validado: deixa de se poder entregar.
-    expect((await pedido(ctx, "admin", "POST", `/v1/crm/leads/${id}/documentos/${doc.id}/validar`)).statusCode).toBe(200);
+    // Entregue pela coordenação (quem valida): fica logo validado e deixa de se poder entregar.
+    expect(doc.estado).toBe("validado");
     expect((await entregar(ctx, "financiada", id, tipo)).statusCode).toBe(409);
     const depois = (await pedido(ctx, "financiada", "GET", `/v1/crm/leads/${id}`)).json() as { docsParaEntregar: { id: string }[] };
     expect(depois.docsParaEntregar.some(d => d.id === tipo)).toBe(false);
@@ -173,5 +171,63 @@ describe("comprovativo entregue pela equipa quando aguarda pagamento", () => {
       expect(await fila("aguarda_pagamento")).toEqual([]);
       expect(await fila("pagamento_validar")).toEqual([id]);
     }
+  });
+});
+
+describe("disponibilidade editada pelo próprio formador", () => {
+  it("o formador grava a sua disponibilidade (blocos por dia, datas e horas), mas não a de outro nem outros campos", async () => {
+    const ctx = await arrancar();
+    const r = await pedido(ctx, "admin", "POST", "/v1/formadores", { nome: `Formador Disp ${Date.now()}`, email: "", regimes: ["gold"] });
+    expect(r.statusCode, r.body).toBe(200);
+    const id = r.json().formador.id as number;
+    await ctx.db.query("UPDATE formadores SET user_id = $2 WHERE id = $1", [id, ctx.userId.formador]);
+    const disp = ["laboral@1", "laboral@3", "sabado-manha", "fora:2026-12-10", "fora:2026-12-11@14:00-16:00", "livre:2026-12-12@09:00-13:00"];
+    const g = await pedido(ctx, "formador", "PATCH", `/v1/formadores/${id}`, { disponibilidade: disp });
+    expect(g.statusCode, g.body).toBe(200);
+    const ficha = (await pedido(ctx, "formador", "GET", `/v1/formadores/${id}`)).json();
+    expect([...(ficha.formador.disponibilidade as string[])].sort()).toEqual([...disp].sort());
+    // Outro formador: recusado.
+    const outro = (await pedido(ctx, "admin", "POST", "/v1/formadores", { nome: `Outro ${Date.now()}`, email: "", regimes: ["gold"] })).json().formador.id as number;
+    expect((await pedido(ctx, "formador", "PATCH", `/v1/formadores/${outro}`, { disponibilidade: disp })).statusCode).toBe(403);
+    // Só a disponibilidade: o nome não muda.
+    await pedido(ctx, "formador", "PATCH", `/v1/formadores/${id}`, { disponibilidade: disp, nome: "Mudado" });
+    expect((await pedido(ctx, "formador", "GET", `/v1/formadores/${id}`)).json().formador.nome).not.toBe("Mudado");
+  });
+});
+
+describe("documentos todos validados: aguarda pagamento sem o pedir", () => {
+  it("a coordenação entrega e valida; o comprovativo fica disponível sem pedir o pagamento; o comercial entrega-o", async () => {
+    const ctx = await arrancar();
+    const cid = 980000 + Math.floor(Math.random() * 9000);
+    const curso = `Curso Docs ${cid}`;
+    await ctx.db.query("INSERT INTO cursos_gold (id, nome, categoria, tipo, preco, regime, horas, estado) VALUES ($1, $2, 'CCP', 'Pré-inscrição', 130, 'b-learning', 10, 'Ativo')", [cid, curso]);
+    const base = (await pedido(ctx, "admin", "GET", `/v1/formandos/gold/docs-do-curso?curso=${encodeURIComponent(curso)}`)).json().documentos as { id: string }[];
+    expect((await pedido(ctx, "admin", "PUT", `/v1/cursos/gold/${cid}/docs-preinscricao`, {
+      ocultos: base.map(d => d.id), extra: [{ label: "Cartão de Cidadão", required: true }], condicoes: {},
+    })).statusCode).toBe(200);
+    const id = cid;
+    const marca = `Val${id}`;
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime)
+       VALUES ($1, '2031-01-01 10:00', $2, 'T', $3, '912000000', $4, 130, '1º Contacto', 'gold')`, [id, marca, `val.${id}@exemplo.pt`, curso]);
+    let d = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json() as { docsParaEntregar: { id: string }[] };
+    expect(d.docsParaEntregar.map(x => x.id)).not.toContain("comprovativo");
+    const doc = d.docsParaEntregar[0]!.id;
+    // A coordenação entrega o documento: fica validado.
+    const r = await entregar(ctx, "secretaria", id, doc);
+    expect(r.statusCode, r.body).toBe(200);
+    expect((r.json().documentos as { tipo: string; estado: string }[]).find(x => x.tipo === doc)?.estado).toBe("validado");
+    const lista = async (fila = "") => (await pedido(ctx, "comercial", "GET", `/v1/crm/leads?regime=gold&q=${marca}${fila ? `&fila=${fila}` : ""}`)).json().items as { id: number; docsTodosValidados: boolean }[];
+    expect((await lista())[0]!.docsTodosValidados).toBe(true);
+    expect((await lista("aguarda_pagamento")).map(l => l.id)).toEqual([id]);
+    // Sem pedir o pagamento, o comprovativo já se pode entregar.
+    d = (await pedido(ctx, "comercial", "GET", `/v1/crm/leads/${id}`)).json();
+    expect(d.docsParaEntregar.map(x => x.id)).toContain("comprovativo");
+    const c = await entregar(ctx, "comercial", id, "comprovativo");
+    expect(c.statusCode, c.body).toBe(200);
+    const row = (await ctx.db.query<{ pagamento_id: string | null; pagamento_pedido_em: string | null }>("SELECT pagamento_id, pagamento_pedido_em FROM preinscricoes WHERE id = $1", [id])).rows[0]!;
+    expect(row.pagamento_id).toBeTruthy();
+    expect(row.pagamento_pedido_em).toBeTruthy();
+    expect((await lista("pagamento_validar")).map(l => l.id)).toEqual([id]);
   });
 });

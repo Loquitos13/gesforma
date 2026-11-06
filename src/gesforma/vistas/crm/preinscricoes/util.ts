@@ -81,14 +81,14 @@ export function proximoPasso(l: Lead): { texto: string; tom: Tom } {
   if ((l.docsRecusados ?? 0) > 0) return { texto: "Aguarda correcção de documentos", tom: "perigo" };
   // Pagamento confirmado (comprovativo validado): falta inserir na turma (on demand, comercial ou coordenação).
   if (l.estado === "Pago" && l.regime === "gold") return { texto: "Inserir na turma", tom: "acao" };
-  if (l.pagamentoPedido) return { texto: "Aguarda o comprovativo de pagamento", tom: "info" };
-  // Documentos todos validados: o passo seguinte é pedir o pagamento (curso pago) ou validar a pré-inscrição.
+  const pago = l.regime === "gold" && Number(l.preco) > 0;
+  // Pagamento pedido, ou documentos obrigatórios todos validados (não é preciso pedir): aguarda o comprovativo.
+  if (pago && (l.pagamentoPedido || l.docsTodosValidados)) return { texto: "Aguarda pagamento", tom: "info" };
+  if (l.docsTodosValidados) return { texto: "Validar pré-inscrição", tom: "acao" };
+  // Documentos entregues (pela pessoa ou pela equipa) ainda por validar.
   const env = l.docsEnviados ?? 0;
-  if (l.percursoConcluido && env > 0 && (l.docsValidados ?? 0) >= env) {
-    return l.regime === "gold" && Number(l.preco) > 0 ? { texto: "Pedir pagamento", tom: "acao" } : { texto: "Validar pré-inscrição", tom: "acao" };
-  }
-  if (l.percursoConcluido) return { texto: "Validar documentos", tom: "acao" };
-  if ((l.docsEnviados ?? 0) > 0) return { texto: "A enviar documentos", tom: "info" };
+  if (env > (l.docsValidados ?? 0) + (l.docsRecusados ?? 0) || l.percursoConcluido) return { texto: "Validar documentos", tom: "acao" };
+  if (env > 0) return { texto: "A enviar documentos", tom: "info" };
   if (l.estado === "Pré-inscrição") return { texto: "Aguarda documentos na ligação pessoal", tom: "info" };
   return { texto: "Seguimento comercial", tom: "neutro" };
 }

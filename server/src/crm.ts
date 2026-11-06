@@ -25,6 +25,7 @@ function itemLista(r: Record<string, unknown>) {
     validada: Boolean(r.validada_em),
     pagamentoPedido: Boolean(r.pagamento_pedido_em),
     comprovativoPorValidar: Boolean(r.comprovativo_pendente),
+    docsTodosValidados: Boolean(r.docs_validados_em),
     consentimento: Boolean(r.consentimento_em),
   };
 }

@@ -11,6 +11,8 @@ import { staffValida } from "../crmLeadsServico.js";
 import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
 import { abrirAlerta, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas, syncLigacao } from "../docsLink.js";
 import { guardarDocDaPreinscricao, tiposDoLead } from "../docsPreinscricao.js";
+import { ensurePagamentoPendente } from "../pagamentoPedido.js";
+import * as pagsLead from "../repos/pagamentosLead.js";
 import { ficheiroDeDocumentoDaEquipa } from "../ficheirosValidacao.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
 import { concluirInscricaoPaga } from "../inscricaoPaga.js";
@@ -88,13 +90,26 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!doc) return reply.code(400).send({ error: "Este documento não faz parte do curso desta pré-inscrição." });
     if (doc.validado) return reply.code(409).send({ error: "Este documento já está validado." });
     const por = req.actor!.name || req.actor!.email || "Equipa";
+    // Comprovativo sem o pagamento pedido (documentos todos validados): o pagamento fica registado como pendente, como
+    // se tivesse sido pedido, mas sem email à pessoa.
+    if (tipo === "comprovativo" && !lead.pagamento_pedido_em) {
+      const pag = await ensurePagamentoPendente(db, { ...(lead as never as Parameters<typeof ensurePagamentoPendente>[1]), preco: Number(lead.preco) || 0 });
+      await pagsLead.definirMetodoPendente(db, String(pag.id), "Transferência bancária");
+      await pagsLead.marcarPagamentoPedido(db, id);
+    }
+    let guardado: { id: string; name: string };
     try {
-      await guardarDocDaPreinscricao(db, lead as Record<string, unknown>, tipo, { ...up, name: ficheiro.nome, mime: ficheiro.mime }, {
+      guardado = await guardarDocDaPreinscricao(db, (await leads.lead(db, id)) as Record<string, unknown>, tipo, { ...up, name: ficheiro.nome, mime: ficheiro.mime }, {
         pedidos, ja, actorId: req.actor!.id, origem: `entregue pela equipa, por ${por}`,
       });
     } catch (err) {
       req.log.warn({ err }, "documento da pré-inscrição não guardado");
       return reply.code(502).send({ error: "Não foi possível guardar o documento (Drive). Tente outra vez." });
+    }
+    // Documento do curso entregue pela coordenação (quem os valida): fica logo validado. O do comercial fica por validar.
+    if (tipo !== "comprovativo" && pode(req.actor!.role, "crm.validarDocumentos")) {
+      const doc = (await docs.docsDoLead(db, id)).find(d => d.tipo === tipo && d.drive_file_id === guardado.id);
+      if (doc) await definirEstadoDoc(db, id, doc.id, "validado", "", req.actor!.id);
     }
     await syncLigacao(db, id);
     await abrirAlerta(db, id);

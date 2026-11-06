@@ -256,10 +256,11 @@ describe("pagamento em prestações", () => {
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/validar`)).statusCode).toBe(200);
     const pag = (await ctx.db.query<{ estado: string }>("SELECT pg.estado FROM preinscricoes p JOIN pagamentos pg ON pg.id = p.pagamento_id WHERE p.id = $1", [id])).rows[0];
     expect(pag?.estado).toBe("Pago");
-    // Validada (ligação fechada): a 2.ª prestação continua por entregar.
+    // Validada (já formando): a pré-inscrição já não mostra nada para entregar (trata-se na ficha do formando), mas a
+    // 2.ª prestação continua a poder ser anexada.
     await ctx.db.query("UPDATE preinscricoes SET validada_em = now() WHERE id = $1", [id]);
     d = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json();
-    expect(d.docsParaEntregar.map(x => x.id)).toEqual(["comprovativo-2"]);
+    expect(d.docsParaEntregar).toEqual([]);
     // Menos prestações do que as que já têm comprovativo: recusado (a 1.ª tem). Não se pode ficar com 0.
     const r2 = await entregar(ctx, "secretaria", id, "comprovativo-2");
     expect(r2.statusCode, r2.body).toBe(200);
@@ -320,5 +321,33 @@ describe("prestações na ligação pessoal", () => {
     vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
     expect(vista.encerrada).toBe(true);
     expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/lembrete-prestacao`)).statusCode).toBe(409);
+  });
+});
+
+describe("comprovativos na ficha do formando", () => {
+  it("a ficha do formando mostra o comprovativo de cada prestação, da pré-inscrição de origem", async () => {
+    const ctx = await arrancar();
+    const id = 920000 + Math.floor(Math.random() * 9000);
+    const email = `fform.${id}@exemplo.pt`;
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em)
+       VALUES ($1, '2031-01-01 10:00', 'Form', 'T', $2, '912000000', 'Formação de Formadores - CCP', 130, 'Pré-inscrição', 'gold', now())`, [id, email]);
+    await pedido(ctx, "secretaria", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [80, 50] });
+    const r1 = await entregar(ctx, "secretaria", id, "comprovativo");
+    const doc1 = (r1.json().documentos as { id: number; tipo: string }[]).find(x => x.tipo === "comprovativo")!;
+    await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/validar`);
+    await ctx.db.query("UPDATE preinscricoes SET validada_em = now(), estado = 'Formando' WHERE id = $1", [id]);
+    const f = await pedido(ctx, "admin", "POST", "/v1/formandos-gold", { nome: "Form", apelido: "T", email, curso: "Formação de Formadores - CCP", valor: 130, semEmails: true });
+    expect(f.statusCode, f.body).toBe(200);
+    const fid = f.json().formando.id as number;
+    let ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
+    expect(ficha.pagamento.preinscricaoId).toBe(id);
+    expect(ficha.pagamento.comprovativos.map((c: { n: number; valor: number; estado: string }) => [c.n, c.valor, c.estado])).toEqual([[1, 80, "validado"], [2, 50, "em_falta"]]);
+    // A pré-inscrição validada já não mostra nada para entregar: trata-se na ficha do formando.
+    expect((await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json().docsParaEntregar).toEqual([]);
+    // Anexar o 2.º a partir da ficha do formando (rota da pré-inscrição de origem).
+    expect((await entregar(ctx, "secretaria", id, "comprovativo-2")).statusCode).toBe(200);
+    ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
+    expect(ficha.pagamento.comprovativos[1].estado).toBe("pendente");
   });
 });

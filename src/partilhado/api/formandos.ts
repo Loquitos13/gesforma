@@ -82,6 +82,13 @@ export type FichaFormando = {
   pagamento: null | {
     valor: number; metodo: string; pago: boolean; situacao: SituacaoPagamento; pedidoEm: string | null; temIban: boolean;
     movimentos: { id: string; valor: number; metodo: string; estado: string; data: string; pagoEm: string | null }[];
+    /** Pré-inscrição de origem (validar, anexar e lembrete dos comprovativos). */
+    preinscricaoId?: number | null;
+    /** Comprovativos de pagamento, um por prestação (o 1.º, o 2.º, …). */
+    comprovativos?: {
+      n: number; tipo: string; valor: number; total: number;
+      estado: "validado" | "pendente" | "recusado" | "em_falta"; docId: number | null; nome: string; url: string;
+    }[];
   };
   resultado: null | {
     assiduidade: { pct: number | null; horasPrevistas: number; horasPresente: number; minimo: number };

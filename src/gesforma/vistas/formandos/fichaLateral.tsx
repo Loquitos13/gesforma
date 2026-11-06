@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
 import {
   apiAcessoFormando, apiPedirPagamentoFormando, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
+import { apiEntregarDoc, apiLembretePrestacao, apiValidarDoc } from "../../../partilhado/api/crm";
 import { Aviso, Botao, Caixa, Cartao, Detalhes, Estado, data, dataHora, eur } from "../../../partilhado/ui";
 import { RegistarPagamento } from "./fichaDialogos";
 import { ReciboPagamento } from "../sistema/pagamentos/ReciboPagamento";
@@ -101,6 +102,7 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
           ))}
         </ul>
       )}
+      <ComprovativosPagamento ficha={ficha} podeEditar={podeEditar} />
       {podeEditar && porPagar && (
         <div className="mt-3 flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
@@ -169,5 +171,61 @@ export function CartaoTurma({ ficha, onAbrir }: { ficha: FichaFormando; onAbrir:
         <p className="m-0 text-[13px] text-tinta-suave">{ficha.regime === "gold" ? "Sem turma: formando avulso (e-learning ou venda individual)." : "Ainda não colocado numa turma."}</p>
       )}
     </Cartao>
+  );
+}
+
+const ESTADO_COMPROVATIVO = {
+  validado: { rotulo: "Pago", tom: "sucesso" as const },
+  pendente: { rotulo: "Por validar", tom: "aviso" as const },
+  recusado: { rotulo: "Recusado", tom: "perigo" as const },
+  em_falta: { rotulo: "Por pagar", tom: "neutro" as const },
+};
+
+/**
+ * Comprovativos de pagamento (o do 1.º pagamento e os das prestações seguintes), com abrir, validar e anexar, e o
+ * lembrete à pessoa da prestação seguinte (email com a ligação no passo do pagamento).
+ */
+function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; podeEditar: boolean }) {
+  const pode = usePode();
+  const p = ficha.pagamento;
+  const leadId = p?.preinscricaoId ?? null;
+  const lista = p?.comprovativos ?? [];
+  const escolha = useRef<HTMLInputElement>(null);
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const anexar = useAccao((tipo: string, f: File) => apiEntregarDoc(leadId!, tipo, f), { invalidar: INVALIDAR, ok: "Comprovativo anexado. Fica por validar." });
+  const validar = useAccao((docId: number) => apiValidarDoc(leadId!, docId), { invalidar: [...INVALIDAR, "pagamentos:"], ok: "Comprovativo validado." });
+  const lembrete = useAccao(() => apiLembretePrestacao(leadId!), { invalidar: INVALIDAR, ok: "Lembrete enviado por email, com a ligação no passo do pagamento." });
+  if (!leadId || !lista.length) return null;
+  const proxima = lista.find(c => c.estado === "em_falta" || c.estado === "recusado");
+  const varias = lista[0]!.total > 1;
+  return (
+    <div className="mt-3">
+      <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">{varias ? `Comprovativos · ${lista[0]!.total} prestações` : "Comprovativo"}</p>
+      <input ref={escolha} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
+        onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && alvo) void anexar.correr(alvo, f); }} />
+      <ul className="m-0 mt-1 p-0 list-none divide-y divide-linha-suave text-[13px]">
+        {lista.map(c => {
+          const e = ESTADO_COMPROVATIVO[c.estado];
+          return (
+            <li key={c.tipo} className="py-2 flex flex-wrap items-center gap-2">
+              <span className="flex-1 min-w-0 truncate">{varias ? `${c.n}.ª prestação` : "Pagamento"} · <span className="num">{eur(c.valor, true)}</span></span>
+              <Estado tom={e.tom}>{e.rotulo}</Estado>
+              {c.url && <a className="text-[13px] font-semibold text-ligacao" href={c.url} target="_blank" rel="noreferrer">Abrir</a>}
+              {podeEditar && c.estado === "pendente" && c.docId != null && pode("pagamentos.validarComprovativo") && (
+                <Botao tamanho="sm" variante="primario" aCarregar={validar.aCorrer} onClick={() => void validar.correr(c.docId!)}>Validar</Botao>
+              )}
+              {podeEditar && (c.estado === "em_falta" || c.estado === "recusado") && (
+                <Botao tamanho="sm" variante="secundario" aCarregar={anexar.aCorrer && alvo === c.tipo} onClick={() => { setAlvo(c.tipo); escolha.current?.click(); }}>Anexar</Botao>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+      {podeEditar && varias && proxima && (
+        <Botao className="mt-1" tamanho="sm" variante="secundario" aCarregar={lembrete.aCorrer} disabled={!ficha.email} onClick={() => void lembrete.correr()}>
+          Enviar lembrete da {proxima.n}.ª prestação
+        </Botao>
+      )}
+    </div>
   );
 }

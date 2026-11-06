@@ -116,9 +116,9 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
   const validados = new Set(ficheiros.filter(f => f.estado === "validado").map(f => f.tipo));
   const obrig = pedidos.filter(p => p.required);
   const todosValidados = obrig.length > 0 && obrig.every(p => validados.has(p.id));
-  // Validada (ligação fechada): já só os comprovativos das prestações em falta.
-  const comprovativos = await comprovativosPelaEquipa(db, row, ficheiros, todosValidados).catch(() => []);
-  const entregaveis = [...(row.validada_em ? [] : pedidos.map(p => ({ id: p.id, label: p.label }))), ...comprovativos]
+  // Validada (já formando): nada a entregar aqui; os comprovativos das prestações tratam-se na ficha do formando.
+  const comprovativos = row.validada_em ? [] : await comprovativosPelaEquipa(db, row, ficheiros, todosValidados).catch(() => []);
+  const entregaveis = row.validada_em ? [] : [...pedidos.map(p => ({ id: p.id, label: p.label })), ...comprovativos]
     .filter(p => !validados.has(p.id));
   for (const c of comprovativos) labels.set(c.id, c.label);
   for (const f of ficheiros) if (/^comprovativo(-\d+)?$/.test(f.tipo)) labels.set(f.tipo, rotuloPrestacao(f.tipo === "comprovativo" ? 1 : Number(f.tipo.split("-")[1]), prestacoesDoLead(row)));

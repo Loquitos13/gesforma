@@ -11,6 +11,9 @@ import {
   preinscricaoDoFormando, turmaDoFormando,
 } from "../../repos/formandos.js";
 import type { Regime } from "../../repos/sql.js";
+import * as leadsRepo from "../../repos/leads.js";
+import { listarDocsLead } from "../../docsLink.js";
+import { estadoPrestacoes } from "../../docsCurso.js";
 
 function iso(v: unknown) {
   if (!v) return null;
@@ -127,6 +130,9 @@ export async function montarFicha(db: Db, regime: Regime, id: number) {
       movimentos: movimentos.map(m => ({
         id: m.id, valor: Number(m.valor ?? 0), metodo: m.metodo, estado: m.estado, data: m.data, pagoEm: iso(m.pago_em),
       })),
+      // Comprovativos da pré-inscrição de origem: o do 1.º pagamento e os das prestações seguintes (que continuam a
+      // chegar depois de a pessoa estar na turma). Validar, anexar e o lembrete usam a pré-inscrição (`preinscricaoId`).
+      ...(await comprovativosDaOrigem(db, origem?.id ?? null)),
     };
   }
 
@@ -182,3 +188,24 @@ export async function montarFicha(db: Db, regime: Regime, id: number) {
 }
 
 export type FichaFormando = NonNullable<Awaited<ReturnType<typeof montarFicha>>>;
+
+/** Comprovativos de pagamento da pré-inscrição de origem, um por prestação (ou o único, se pagou de uma vez). */
+async function comprovativosDaOrigem(db: Db, leadId: number | null) {
+  if (!leadId) return { preinscricaoId: null, comprovativos: [] };
+  const lead = await leadsRepo.lead(db, leadId);
+  if (!lead) return { preinscricaoId: null, comprovativos: [] };
+  const docs = await listarDocsLead(db, leadId);
+  const prest = estadoPrestacoes(lead as Record<string, unknown>, docs);
+  const ultimo = (tipo: string) => [...docs].reverse().find(d => d.tipo === tipo) ?? null;
+  const linhas = prest.length
+    ? prest.map(p => ({ n: p.n, tipo: p.tipo, valor: p.valor, estado: p.estado, doc: ultimo(p.tipo) }))
+    : ultimo("comprovativo") ? [{ n: 1, tipo: "comprovativo", valor: Number(lead.preco) || 0, estado: "", doc: ultimo("comprovativo") }] : [];
+  return {
+    preinscricaoId: leadId,
+    comprovativos: linhas.map(l => ({
+      n: l.n, tipo: l.tipo, valor: l.valor, total: Math.max(1, prest.length),
+      estado: (l.doc ? (l.doc.estado === "validado" ? "validado" : l.doc.estado === "recusado" ? "recusado" : "pendente") : "em_falta") as "validado" | "pendente" | "recusado" | "em_falta",
+      docId: l.doc?.id ?? null, nome: l.doc?.nome ?? "", url: l.doc?.drive_url ?? "",
+    })),
+  };
+}

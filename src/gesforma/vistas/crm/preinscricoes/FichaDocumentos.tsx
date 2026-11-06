@@ -181,7 +181,7 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
           )}
         </section>
       )}
-      {estadoPrest.length > 1 && (
+      {estadoPrest.length > 1 && !d.docsFechado && (
         <section aria-label="Prestações" className="rounded-cartao border border-linha p-3 text-[13px]">
           <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Prestações</p>
           <ul className="m-0 mt-1 list-none space-y-0.5 p-0">

@@ -156,4 +156,22 @@ describe("perfil personalizado", () => {
       "INSERT INTO users (id, name, email, password_hash, role, active, perfis) VALUES ($1, 'X', $2, 'x', 'personalizado', true, '{}')",
       [randomUUID(), `vazio.${randomUUID().slice(0, 6)}@exemplo.pt`])).rejects.toThrow();
   });
+
+  it("comercial + coordenação Gold: abre a ficha do formando e trata dos comprovativos e do lembrete das prestações", async () => {
+    const pessoa = await criar(["comercial", "secretaria"]);
+    const id = 910000 + Math.floor(Math.random() * 9000);
+    const email = `pc.${id}@exemplo.pt`;
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em, prestacoes, validada_em)
+       VALUES ($1, '2031-01-01 10:00', 'PC', 'T', $2, '912000000', 'Formação de Formadores - CCP', 130, 'Formando', 'gold', now(), '[80, 50]'::jsonb, now())`, [id, email]);
+    const f = await pedido(ctx, "admin", "POST", "/v1/formandos-gold", { nome: "PC", apelido: "T", email, curso: "Formação de Formadores - CCP", valor: 130, semEmails: true });
+    const fid = f.json().formando.id as number;
+    const ficha = await pessoa("GET", `/v1/formandos/gold/${fid}`);
+    expect(ficha.statusCode, ficha.body).toBe(200);
+    expect(ficha.json().ficha.pagamento.preinscricaoId).toBe(id);
+    expect((await pessoa("GET", "/v1/formandos?regime=gold")).statusCode).toBe(200);
+    expect((await pessoa("POST", `/v1/crm/leads/${id}/lembrete-prestacao`, {})).statusCode).toBe(200);
+    // Só comercial: não abre a ficha do formando.
+    expect((await pedido(ctx, "comercial", "GET", `/v1/formandos/gold/${fid}`)).statusCode).toBe(403);
+  });
 });

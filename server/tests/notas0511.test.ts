@@ -349,6 +349,10 @@ describe("comprovativos na ficha do formando", () => {
     expect((await entregar(ctx, "secretaria", id, "comprovativo-2")).statusCode).toBe(200);
     ficha = (await pedido(ctx, "secretaria", "GET", `/v1/formandos/gold/${fid}`)).json().ficha;
     expect(ficha.pagamento.comprovativos[1].estado).toBe("pendente");
+    // A pré-inscrição validada não diz «encerrada»: a ligação continua aberta para as prestações. Nome do ficheiro limpo.
+    const dl = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json() as { ligacaoSoPagamento: boolean; documentos: { tipo: string; nome: string }[] };
+    expect(dl.ligacaoSoPagamento).toBe(true);
+    expect(dl.documentos.find(x => x.tipo === "comprovativo-2")!.nome).toMatch(/^Comprovativo de pagamento 2 de 2 - Form T\.pdf$/);
   });
 });
 

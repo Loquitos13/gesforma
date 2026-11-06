@@ -77,11 +77,17 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
 
   return (
     <div className="flex flex-col gap-4">
-      {d.docsFechado ? (
+      {d.docsFechado && !d.ligacaoSoPagamento ? (
         <Aviso tom="sucesso" titulo="Ligação pessoal encerrada">A secretaria validou a pré-inscrição.</Aviso>
       ) : d.docsUrl ? (
         <section aria-label="Ligação pessoal" className="rounded-cartao border border-linha p-3">
           <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Ligação pessoal</p>
+          {d.ligacaoSoPagamento && (
+            <p className="m-0 mt-1 text-xs text-tinta-suave">
+              Pré-inscrição validada: a ligação continua aberta só para a pessoa anexar os comprovativos das prestações por pagar
+              (os comprovativos e o lembrete estão na ficha do formando).
+            </p>
+          )}
           <Entrada readOnly value={d.docsUrl} className="mt-1 text-xs" aria-label="Ligação pessoal" onFocus={e => e.currentTarget.select()} />
           <div className="mt-2 flex flex-wrap gap-2">
             <Botao tamanho="sm" variante="secundario" onClick={() => void copiar()}>Copiar</Botao>

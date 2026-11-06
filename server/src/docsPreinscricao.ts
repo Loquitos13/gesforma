@@ -37,7 +37,11 @@ export async function guardarDocDaPreinscricao(
   const rotulo = comprovativo || prestacao
     ? rotuloPrestacao(prestacao ? Number(tipo.split("-")[1]) : 1, prestacoesDoLead(lead))
     : ctx.pedidos.find(p => p.id === tipo)?.label ?? tipo;
-  const nome = nomeIdentificado(up.name, rotulo, `${lead.nome ?? ""} ${lead.apelido ?? ""}`);
+  // Nome do ficheiro sem «ª», «·» nem «€» (saíam como «_»): «Comprovativo de pagamento 2 de 3 - Ana Silva.pdf».
+  const nPrest = prestacao ? Number(tipo.split("-")[1]) : 1;
+  const totalPrest = prestacoesDoLead(lead).length;
+  const rotuloFicheiro = (comprovativo || prestacao) && totalPrest > 1 ? `${COMPROVATIVO.label} ${nPrest} de ${totalPrest}` : comprovativo || prestacao ? COMPROVATIVO.label : rotulo;
+  const nome = nomeIdentificado(up.name, rotuloFicheiro, `${lead.nome ?? ""} ${lead.apelido ?? ""}`);
   const file = await storeDriveFile(db, undefined, { name: nome, mime: up.mime, bytes: up.bytes }, {
     kind: comprovativo || prestacao ? "comprovativo-pagamento" : "preinscricao-doc",
     regime,

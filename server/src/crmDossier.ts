@@ -190,6 +190,8 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
       observacao: f.observacao || "",
     })),
     docsFechado: Boolean(row.validada_em),
+    /** Validada, mas a ligação pessoal continua aberta só para os comprovativos das prestações por pagar. */
+    ligacaoSoPagamento: Boolean(row.validada_em) && estadoPrestacoes(row, ficheiros).some(p => p.estado !== "validado"),
     pagamento,
     /** Turmas activas do mesmo curso, com vagas (validação e inscrição). */
     turmasDestino: lead.curso ? await turmasParaValidacao(db, regime, lead.curso) : [],

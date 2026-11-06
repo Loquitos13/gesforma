@@ -148,6 +148,7 @@ export type DossieLead = {
   docsParaEntregar?: { id: string; label: string }[];
   /** Valores das prestações confirmados pela equipa (vazio = ainda não confirmado). */
   prestacoes?: number[];
+  ligacaoSoPagamento?: boolean;
   estadoPrestacoes?: { n: number; tipo: string; valor: number; estado: "validado" | "pendente" | "recusado" | "em_falta" }[];
   documentos: DocumentoLead[];
   docsFechado: boolean;

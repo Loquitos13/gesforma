@@ -88,6 +88,7 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   return (
     <Cartao titulo="Pagamento" acoes={<Estado tom={s.tom} ponto>{s.rotulo}</Estado>}>
       <p className="num m-0 text-2xl font-semibold text-tinta">{eur(p.valor, true)}</p>
+      <ComprovativosPagamento ficha={ficha} podeEditar={podeEditar} />
       <p className="m-0 mt-1 text-[13px] text-tinta-suave">
         {p.situacao === "oferta" ? "Inscrição oferecida pela ENA." : p.pago ? `Pago${p.metodo && p.metodo !== "-" ? ` · ${p.metodo}` : ""}.` : p.pedidoEm ? `Pedido por email a ${data(p.pedidoEm)}.` : "Ainda não foi pedido."}
       </p>
@@ -102,7 +103,6 @@ export function CartaoPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
           ))}
         </ul>
       )}
-      <ComprovativosPagamento ficha={ficha} podeEditar={podeEditar} />
       {podeEditar && porPagar && (
         <div className="mt-3 flex flex-col gap-2">
           <div className="flex gap-2 flex-wrap">
@@ -200,7 +200,7 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   const varias = lista[0]!.total > 1;
   return (
     <div className="mt-3">
-      <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">{varias ? `Comprovativos · ${lista[0]!.total} prestações` : "Comprovativo"}</p>
+      <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">{varias ? `Comprovativos · pagamento em ${lista[0]!.total} prestações` : "Comprovativo"}</p>
       <input ref={escolha} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
         onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f && alvo) void anexar.correr(alvo, f); }} />
       <ul className="m-0 mt-1 p-0 list-none divide-y divide-linha-suave text-[13px]">
@@ -208,7 +208,7 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
           const e = ESTADO_COMPROVATIVO[c.estado];
           return (
             <li key={c.tipo} className="py-2 flex flex-wrap items-center gap-2">
-              <span className="flex-1 min-w-0 truncate">{varias ? `${c.n}.ª prestação` : "Pagamento"} · <span className="num">{eur(c.valor, true)}</span></span>
+              <span className="flex-1 min-w-0 truncate">Comprovativo do {c.n}.º pagamento · <span className="num font-semibold">{eur(c.valor, true)}</span></span>
               <Estado tom={e.tom}>{e.rotulo}</Estado>
               {c.url && <a className="text-[13px] font-semibold text-ligacao" href={c.url} target="_blank" rel="noreferrer">Abrir</a>}
               {podeEditar && c.estado === "pendente" && c.docId != null && pode("pagamentos.validarComprovativo") && (
@@ -223,7 +223,7 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
       </ul>
       {podeEditar && varias && proxima && (
         <Botao className="mt-1" tamanho="sm" variante="secundario" aCarregar={lembrete.aCorrer} disabled={!ficha.email} onClick={() => void lembrete.correr()}>
-          Enviar lembrete da {proxima.n}.ª prestação
+          Enviar lembrete do {proxima.n}.º pagamento ({eur(proxima.valor, true)})
         </Botao>
       )}
     </div>

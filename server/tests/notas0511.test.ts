@@ -351,3 +351,19 @@ describe("comprovativos na ficha do formando", () => {
     expect(ficha.pagamento.comprovativos[1].estado).toBe("pendente");
   });
 });
+
+describe("modelo do lembrete da prestação", () => {
+  it("existe nos modelos (Gold) e sai com o número certo da prestação e o valor", async () => {
+    const ctx = await arrancar();
+    const modelos = (await pedido(ctx, "secretaria", "GET", "/v1/email/templates")).json().templates as { tipo: string; area: string }[];
+    expect(modelos.some(m => m.tipo === "lembrete_prestacao" && m.area === "gold")).toBe(true);
+    const { montarModelo } = await import("../src/emailModelo.js");
+    const m = await montarModelo(ctx.db, {
+      tipo: "lembrete_prestacao", area: "gold", nome: "Ana", link: "https://x/documentos/t?passo=pagamento",
+      vars: { curso: "CCP", prestacao: "3.ª", total_prestacoes: "4", valor: "40,00" },
+      reserva: { assunto: "x", linhas: ["x"] },
+    } as never);
+    expect(m.subject).toBe("Pagamento da 3.ª prestação · CCP");
+    expect(m.text).toMatch(/3\.ª prestação \(de 4\).*€ 40,00/);
+  });
+});

@@ -108,14 +108,14 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     if (!isEmail(email)) return reply.code(400).send({ error: "A pré-inscrição não tem um email válido." });
     const link = `${documentosUrl(await ensureDocsToken(db, id))}?passo=pagamento`;
     const valor = proxima.valor.toFixed(2).replace(".", ",");
-    const prestacao = `${proxima.n}.ª de ${prest.length}`;
+    const prestacao = `${proxima.n}.ª`;
     await enviarModelo(db, {
       tipo: "lembrete_prestacao", area: "gold", para: email, nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(), link,
-      vars: { curso: String(lead.curso ?? ""), valor, prestacao, comprovativo_url: link },
+      vars: { curso: String(lead.curso ?? ""), valor, prestacao, total_prestacoes: String(prest.length), comprovativo_url: link },
       reserva: {
-        assunto: "Pagamento da prestação de {{curso}}",
+        assunto: "Pagamento da {{prestacao}} prestação · {{curso}}",
         linhas: [
-          "Lembramos que está na altura de pagar a prestação {{prestacao}} da sua inscrição em {{curso}}: € {{valor}}.",
+          "Lembramos que está na altura de pagar a {{prestacao}} prestação (de {{total_prestacoes}}) da sua inscrição em {{curso}}: € {{valor}}.",
           "Depois de fazer a transferência, anexe o comprovativo na sua página de pagamento.",
         ],
         cta: "Anexar o comprovativo",

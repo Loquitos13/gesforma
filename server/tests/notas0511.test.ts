@@ -6,7 +6,7 @@ import { arrancar, pedido, type Ctx } from "./helpers.js";
 
 const PDF = Buffer.from("%PDF-1.4\n1 0 obj<<>>endobj\ntrailer<<>>\n%%EOF\n");
 
-function entregar(ctx: Ctx, role: "comercial" | "contabilidade" | "financiada", id: number, tipo: string, bytes = PDF, nome = "doc.pdf") {
+function entregar(ctx: Ctx, role: "comercial" | "contabilidade" | "financiada" | "secretaria", id: number, tipo: string, bytes = PDF, nome = "doc.pdf") {
   const boundary = "----doc";
   const body = Buffer.concat([
     Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${nome}"\r\nContent-Type: application/pdf\r\n\r\n`),
@@ -149,5 +149,29 @@ describe("listas paginadas no servidor", () => {
     const leads = await pedido(ctx, "admin", "GET", "/v1/crm/leads?regime=gold&perPage=200");
     expect(leads.statusCode, leads.body).toBe(200);
     expect(leads.json().perPage).toBe(200);
+  });
+});
+
+describe("comprovativo entregue pela equipa quando aguarda pagamento", () => {
+  it("o comercial e a coordenação Gold veem o comprovativo para entregar e entregam-no; fica «Pagamento por validar»", async () => {
+    const ctx = await arrancar();
+    for (const role of ["comercial", "secretaria"] as const) {
+      const id = 950000 + Math.floor(Math.random() * 9000);
+      const marca = `Comp${id}`;
+      await ctx.db.query(
+        `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em, comercial_id)
+         VALUES ($1, '2031-01-01 10:00', $2, 'T', $3, '912000000', 'Formação de Formadores - CCP', 125, 'Pré-inscrição', 'gold', now(), $4)`,
+        [id, marca, `comp.${id}@exemplo.pt`, ctx.userId.comercial]);
+      const fila = async (f: string) => ((await pedido(ctx, role, "GET", `/v1/crm/leads?regime=gold&q=${marca}&fila=${f}`)).json().items as { id: number }[]).map(l => l.id);
+      expect(await fila("aguarda_pagamento")).toEqual([id]);
+      const d = (await pedido(ctx, role, "GET", `/v1/crm/leads/${id}`)).json() as { docsFechado: boolean; docsParaEntregar: { id: string }[] };
+      expect(d.docsFechado).toBe(false);
+      expect(d.docsParaEntregar.map(x => x.id)).toContain("comprovativo");
+      const r = await entregar(ctx, role, id, "comprovativo");
+      expect(r.statusCode, r.body).toBe(200);
+      expect((r.json().documentos as { tipo: string; estado: string }[]).find(x => x.tipo === "comprovativo")?.estado).toBe("pendente");
+      expect(await fila("aguarda_pagamento")).toEqual([]);
+      expect(await fila("pagamento_validar")).toEqual([id]);
+    }
   });
 });

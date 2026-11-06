@@ -136,10 +136,9 @@ export type DocsPreinscricaoCfg = {
 
 const CFG_VAZIA: DocsPreinscricaoCfg = { ocultos: [], extra: [], condicoes: {} };
 
-export function cursoPedeDocsPreinscricao(regime: "gold" | "fin", tipo: string) {
-  if (regime === "fin") return true;
-  const t = tipo.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-  return t.includes("pre-inscr") || t.includes("preinscr");
+/** Todos os cursos têm a lista de documentos (também os de acesso direto: a equipa anexa-os na ficha do formando). */
+export function cursoPedeDocsPreinscricao(_regime: "gold" | "fin", _tipo: string) {
+  return true;
 }
 
 export function docsBase(regime: "gold" | "fin"): DocPedido[] {

@@ -136,10 +136,9 @@ function GatilhoEditor({ valor, opcoes, busy, gold, onGravar }: {
   );
 }
 
-function pedePreinscricao(regime: Regime, tipo: string) {
-  if (regime === "fin") return true;
-  const t = tipo.normalize("NFD").replace(/\p{Diacritic}/gu, "").toLowerCase();
-  return t.includes("pre-inscr") || t.includes("preinscr");
+/** Todos os cursos têm a lista de documentos (também os de acesso direto). */
+function pedePreinscricao(_regime: Regime, _tipo: string) {
+  return true;
 }
 
 export function CursoDocumentos({ accent, cursoId, tipo = "" }: { accent: Regime; cursoId?: number; tipo?: string }) {

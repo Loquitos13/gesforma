@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 import { usePode } from "../../../partilhado/AuthGate";
 import {
-  apiAcessoFormando, apiPedirPagamentoFormando, type FichaFormando,
+  apiAcessoFormando, apiAnexarOutroDocFormando, apiPedirPagamentoFormando, type FichaFormando,
 } from "../../../partilhado/api/formandos";
 import { useAccao } from "../../../partilhado/dados/useAccao";
 import { apiEntregarDoc, apiLembretePrestacao, apiValidarDoc } from "../../../partilhado/api/crm";
@@ -200,9 +200,45 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
   const anexar = useAccao((tipo: string, f: File) => apiEntregarDoc(leadId!, tipo, f), { invalidar: INVALIDAR, ok: "Comprovativo anexado. Fica por validar." });
   const validar = useAccao((docId: number) => apiValidarDoc(leadId!, docId), { invalidar: [...INVALIDAR, "pagamentos:"], ok: "Comprovativo validado." });
   const lembrete = useAccao(() => apiLembretePrestacao(leadId!), { invalidar: INVALIDAR, ok: "Lembrete enviado por email, com a ligação no passo do pagamento." });
-  if (!leadId || !lista.length) return null;
+  // Comprovativos anexados na própria ficha (ex.: acesso direto, sem pré-inscrição): «outros documentos» com este nome.
+  const daFicha = ficha.documentos.filter(d => d.id.startsWith("outro-") && /^comprovativo de pagamento/i.test(d.label));
+  const anexarFicha = useAccao((f: File) => apiAnexarOutroDocFormando(ficha.regime, ficha.id, f, `Comprovativo de pagamento${lista.length + daFicha.length ? ` ${lista.length + daFicha.length + 1}` : ""}`),
+    { invalidar: INVALIDAR, ok: "Comprovativo anexado (fica na pasta do formando na Drive)." });
+  const escolhaFicha = useRef<HTMLInputElement>(null);
   const proxima = lista.find(c => c.estado === "em_falta" || c.estado === "recusado");
-  const varias = lista[0]!.total > 1;
+  const varias = (lista[0]?.total ?? 0) > 1;
+  const blocoFicha = (
+    <>
+      {daFicha.length > 0 && (
+        <ul className="m-0 mt-1 p-0 list-none divide-y divide-linha-suave text-[13px]">
+          {daFicha.map(d => (
+            <li key={d.id} className="py-2 flex items-center gap-2">
+              <span className="flex-1 min-w-0 truncate">{d.label}</span>
+              {d.driveUrl && <a className="text-[13px] font-semibold text-ligacao" href={d.driveUrl} target="_blank" rel="noreferrer">Abrir</a>}
+            </li>
+          ))}
+        </ul>
+      )}
+      {podeEditar && (
+        <>
+          <input ref={escolhaFicha} type="file" accept="application/pdf,image/*,.pdf,.jpg,.jpeg,.jfif,.png,.webp" className="sr-only" tabIndex={-1} aria-hidden="true"
+            onChange={e => { const f = e.target.files?.[0]; e.target.value = ""; if (f) void anexarFicha.correr(f); }} />
+          <Botao className="mt-1" tamanho="sm" variante="fantasma" aCarregar={anexarFicha.aCorrer} onClick={() => escolhaFicha.current?.click()}>
+            Anexar comprovativo de pagamento
+          </Botao>
+        </>
+      )}
+    </>
+  );
+  if (!leadId || !lista.length) {
+    if (!daFicha.length && !podeEditar) return null;
+    return (
+      <div className="mt-3">
+        <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Comprovativos de pagamento</p>
+        {blocoFicha}
+      </div>
+    );
+  }
   return (
     <div className="mt-3">
       <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">{varias ? `Comprovativos · pagamento em ${lista[0]!.total} prestações` : "Comprovativo"}</p>
@@ -226,6 +262,7 @@ function ComprovativosPagamento({ ficha, podeEditar }: { ficha: FichaFormando; p
           );
         })}
       </ul>
+      {daFicha.length > 0 && blocoFicha}
       {podeEditar && varias && proxima && (
         <Botao className="mt-1" tamanho="sm" variante="secundario" aCarregar={lembrete.aCorrer} disabled={!ficha.email} onClick={() => void lembrete.correr()}>
           Enviar lembrete do {proxima.n}.º pagamento ({eur(proxima.valor, true)})

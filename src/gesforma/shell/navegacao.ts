@@ -56,6 +56,7 @@ export const MENU: GrupoMenu[] = [
     { label: "Inquéritos", view: "fin-inqueritos", icon: "doc" },
   ] },
   { group: "Gestão", items: [
+    { label: "Calendário", view: "calendario", icon: "calendario" },
     { label: "Blog", icon: "blog", children: [{ label: "Posts", view: "blog-posts" }, { label: "Temáticas", view: "blog-tematicas" }] },
     { label: "Empresas / Business", view: "empresas-servicos", icon: "site" },
     { label: "Listas de opções", view: "listas-opcoes", icon: "lista" },

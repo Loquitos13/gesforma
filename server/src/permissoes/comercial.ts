@@ -18,6 +18,7 @@ export const COMERCIAL_PERMITIDO: [Metodo, string][] = [
   ["*", "/v1/campanhas*"],
   ["GET", "/v1/painel/gold"],
   ["GET", "/v1/cronogramas/gold"],
+  ["GET", "/v1/calendario"],
   ["GET", "/v1/search"],
   ["*", "/v1/notificacoes*"],
   ["POST", "/v1/events"],

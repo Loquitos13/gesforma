@@ -280,6 +280,9 @@ export async function montarArea(db: Db, user: Actor) {
         titulo: s.modulos[0] || "Sessão",
         curso: ins.curso || "Formação",
         horas: horas(s.horaInicio, s.horaFim),
+        inicio: s.horaInicio,
+        fim: s.horaFim,
+        modulos: s.modulos,
         futura: s.data >= hoje,
       });
     }

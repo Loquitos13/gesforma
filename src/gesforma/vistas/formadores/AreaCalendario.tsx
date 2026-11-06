@@ -1,9 +1,11 @@
 // Área do formador: o meu calendário e a disponibilidade.
+import { useState } from "react";
 import { ApiError } from "../../../partilhado/api/cliente";
+import { apiCalendario } from "../../../partilhado/api/calendario";
+import { CalendarioEventos } from "../../../partilhado/CalendarioEventos";
 import { apiAlterarFormador, apiFichaFormador } from "../../../partilhado/api/formadores";
 import { invalidar, useRecurso } from "../../../partilhado/dados/useRecurso";
 import { DisponibilidadeEditor } from "../../../partilhado/DisponibilidadeEditor";
-import { FormadorCalendario } from "../../../partilhado/FormadorCalendario";
 import { persist, toastOk } from "../../../partilhado/toastBus";
 import { Cartao, ErroCarregar, Esqueleto, PageHeader } from "../../../partilhado/ui";
 import type { VistaProps } from "../../shell/tipos";
@@ -13,6 +15,8 @@ export default function AreaCalendario(_props: VistaProps) {
   const eu = useMeuFormador();
   const id = eu.dados?.id;
   const ficha = useRecurso(id ? `formador:${id}` : null, s => apiFichaFormador(id!, s));
+  const [periodo, setPeriodo] = useState<[string, string] | null>(null);
+  const sessoes = useRecurso(id && periodo ? `calendario:${periodo[0]}:${periodo[1]}` : null, s => apiCalendario(periodo![0], periodo![1], s), { manterAnterior: true });
 
   if (eu.erro instanceof ApiError && eu.erro.status === 404) return <SemFicha />;
   const erro = eu.erro ?? ficha.erro;
@@ -33,14 +37,10 @@ export default function AreaCalendario(_props: VistaProps) {
               nota="Laboral 9h a 13h, pós-laboral 16h30 a 23h, sábado de manhã 9h a 13h e sábado à tarde 14h a 19h."
             />
           </Cartao>
-          <FormadorCalendario
-            nome={d.formador.nome}
-            slots={d.formador.disponibilidade}
-            eventos={d.sessoes.map(s => ({
-              id: `${s.regime}:${s.turmaId}:${s.data}:${s.horaInicio}`, data: s.data, titulo: s.turma, turma: s.turma,
-              inicio: s.horaInicio, fim: s.horaFim, hora: [s.horaInicio, s.horaFim].filter(Boolean).join(" a "),
-            }))}
-          />
+          <Cartao titulo="As minhas sessões">
+            <CalendarioEventos eventos={sessoes.dados?.eventos ?? []} aCarregar={sessoes.aCarregar}
+              onPeriodo={(de, ate) => setPeriodo([de, ate])} vazio="Sem sessões atribuídas neste período." />
+          </Cartao>
         </>
       )}
     </div>

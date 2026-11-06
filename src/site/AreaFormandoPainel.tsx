@@ -2,6 +2,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { fmtDataDDMMAAAA } from "../partilhado/horaLisboa";
 import { ApiError, apiAreaFormando, apiLogout, apiMe, apiPatchAreaFormando, apiReporPalavraPasse, type AreaFormandoDados, type SessionUser } from "../partilhado/api";
+import { CalendarioEventos } from "../partilhado/CalendarioEventos";
 import { mensagemPalavraPasse } from "../partilhado/passwordPolicy";
 import { PilulaOpiniao } from "./AreaFormandoOpiniao";
 import { DocumentosFinArea, Icon, descarregar, primeiroNome, iniciais, irPosLogin, LoginFormando, Sala } from "./AreaFormando";
@@ -101,6 +102,12 @@ export function Painel({ dados, onDados, onSair, avisar, opcoes = OPCOES_PAINEL 
                   )}
                 </article>
               ))}
+            </div>
+          )}
+          {tab === "agenda" && dados.agenda.length > 0 && (
+            <div className="mt-7 text-[var(--c-primaria,#1C3350)]">
+              <CalendarioEventos vazio="Não há sessões neste período."
+                eventos={dados.agenda.map(s => ({ id: s.id, tipo: "sessao", data: s.data, inicio: s.inicio ?? "", fim: s.fim ?? "", titulo: s.modulos?.length ? s.modulos.join(" · ") : s.titulo, curso: s.curso, turma: s.curso, modulos: s.modulos }))} />
             </div>
           )}
           {tab === "agenda" && (

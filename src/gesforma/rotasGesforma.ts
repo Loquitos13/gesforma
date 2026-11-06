@@ -9,7 +9,7 @@ export type Vista =
   | "fin-inscricoes" | "fin-formandos" | "fin-cursos" | "fin-curso-ficha" | "fin-turmas" | "fin-formadores" | "fin-presencas" | "fin-dtp" | "fin-cockpit-turma" | "fin-inqueritos"
   | "fin-modulos" | "fin-conteudos" | "fin-datas" | "fin-locais" | "fin-programas" | "fin-areas-tematicas"
   | "formadores" | "blog-posts" | "blog-tematicas" | "empresas-servicos"
-  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site";
+  | "emails" | "pagamentos" | "configuracoes" | "utilizadores" | "equipa" | "notificacoes" | "listas-opcoes" | "site" | "calendario";
 
 export type Separador = "overview" | "cronograma" | "sessoes" | "avaliacao" | "subsidio" | "documentos" | "dtp" | "certificados" | "despesas";
 
@@ -97,6 +97,7 @@ const CAMINHOS: Record<Vista, string> = {
   site: "/gesforma/sistema/site",
   configuracoes: "/gesforma/sistema/configuracoes",
   notificacoes: "/gesforma/notificacoes",
+  calendario: "/gesforma/calendario",
 };
 
 /** Fichas com o id no caminho: não entram no mapa caminho → vista. */

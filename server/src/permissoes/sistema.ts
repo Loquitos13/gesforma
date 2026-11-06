@@ -6,6 +6,8 @@ export const regras: Regra[] = [
   ["*", "/v1/drive/disconnect", ADMIN],
   ["GET", "/v1/drive/oauth/start", ADMIN],
   ["DELETE", "/v1/drive/files/:id", SECRETARIA],
+  // Calendário: a equipa e o formador (cada um vê o seu; a rota filtra).
+  ["GET", "/v1/calendario", [...EQUIPA, "formador"]],
   ["*", "/v1/crm/whatsapp/config", ADMIN],
   ["*", "/v1/crm/whatsapp/desligar", ADMIN],
   ["*", "/v1/crm/whatsapp/simular", ADMIN],

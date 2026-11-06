@@ -14,6 +14,7 @@ export const VISTAS_COMERCIAL = [
   "gold-campanhas",
   "gold-cronogramas",
   "notificacoes",
+  "calendario",
   "emails",
 ] as const;
 

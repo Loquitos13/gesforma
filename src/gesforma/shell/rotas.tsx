@@ -49,6 +49,7 @@ const Site = carregavel(() => import("../vistas/sistema/Site"));
 const ServicosEmpresas = carregavel(() => import("../vistas/empresas/Servicos"));
 const Configuracoes = carregavel(() => import("../vistas/sistema/Configuracoes"));
 const Notificacoes = carregavel(() => import("./Notificacoes"));
+const Calendario = carregavel(() => import("../vistas/calendario/Calendario"));
 
 /** Vista → ecrã. Vistas Gold e Financiada partilham o ecrã; o ecrã lê `view` para saber o regime. */
 export const ROTAS: Record<Vista, Ecra> = {
@@ -117,6 +118,7 @@ export const ROTAS: Record<Vista, Ecra> = {
   site: Site,
   configuracoes: Configuracoes,
   notificacoes: Notificacoes,
+  calendario: Calendario,
 };
 
 /** Descarrega antecipadamente o código de uma vista (ex.: hover no menu). */

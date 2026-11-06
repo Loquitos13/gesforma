@@ -11,6 +11,7 @@ import { registar as formandos } from "./formandos.js";
 import { registar as areaFormando } from "./areaFormando.js";
 import { registar as turmas } from "./turmas.js";
 import { registar as cronogramas } from "./cronogramas.js";
+import { registar as calendario } from "./calendario.js";
 import { registar as formadores } from "./formadores.js";
 import { registar as pedagogia } from "./pedagogia/index.js";
 import { registar as dtp } from "./dtp.js";
@@ -58,6 +59,7 @@ const MODULOS: Record<string, ModuloRotas> = {
   areaFormando,
   turmas,
   cronogramas,
+  calendario,
   formadores,
   pedagogia,
   dtp,

@@ -2,7 +2,7 @@
 import { BASE, api, enviar, enviarFicheiro, qs } from "./cliente";
 
 export type RegimeCrm = "gold" | "fin";
-export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
+export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas" | "docs_validar" | "pagamento_validar" | "aguarda_pagamento";
 export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
 export type CrmDir = "asc" | "desc";
 
@@ -83,6 +83,7 @@ export type ContagensCrm = {
   total: number; abertos: number; porContactar: number; conversa: number; pagos: number; formando: number;
   atrasados: number; hoje: number; marcadosHoje: number; converter: number; valorAberto: number;
   preinscricoes: number; manuais: number; filaPre: number; filaSec: number; desistiu: number; semContacto2d: number;
+  docsValidar?: number; pagamentoValidar?: number; aguardaPagamento?: number;
 };
 
 export type ListaCrm = {

@@ -103,3 +103,35 @@ describe("conta sem acesso ao CRM", () => {
     expect((await pedido(ctx, "financiada", "GET", "/v1/crm/leads?regime=fin")).statusCode).toBe(200);
   });
 });
+
+describe("filas das pré-inscrições: documentos e pagamento", () => {
+  it("documentos por validar, pagamento por validar e aguarda pagamento", async () => {
+    const ctx = await arrancar();
+    const base = 960000 + Math.floor(Math.random() * 9000);
+    const marca = `Fila${base}`;
+    const ins = (id: number, extra = "", valores: unknown[] = []) => ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime${extra ? `, ${extra}` : ""})
+       VALUES ($1, '2031-01-01 10:00', $2, 'T', $3, '912000000', 'Formação de Formadores - CCP', 125, 'Pré-inscrição', 'gold'${valores.map((_, i) => `, $${i + 4}`).join("")})`,
+      [id, marca, `fila.${id}@exemplo.pt`, ...valores]);
+    // 1: documento por validar; 2: comprovativo por validar; 3: pagamento pedido, sem comprovativo; 4: pagamento pedido e pago.
+    await ins(base);
+    await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, 'cc', 'cc.pdf', 'pendente')", [base]);
+    await ins(base + 1, "pagamento_pedido_em", [new Date().toISOString()]);
+    await ctx.db.query("INSERT INTO preinscricao_docs (preinscricao_id, tipo, nome, estado) VALUES ($1, 'comprovativo', 'c.pdf', 'pendente')", [base + 1]);
+    await ins(base + 2, "pagamento_pedido_em", [new Date().toISOString()]);
+    const pag = `PF-${base}`;
+    await ctx.db.query("INSERT INTO pagamentos (id, nome, valor, metodo, curso, data, estado, email) VALUES ($1, 'X', 125, 'Transferência bancária', 'CCP', '2031-01-01', 'Pago', 'x@exemplo.pt')", [pag]);
+    await ins(base + 3, "pagamento_pedido_em, pagamento_id", [new Date().toISOString(), pag]);
+    const lista = async (fila: string) => {
+      const r = (await pedido(ctx, "admin", "GET", `/v1/crm/leads?regime=gold&q=${marca}&fila=${fila}`)).json() as { items: { id: number }[] };
+      return r.items.map(l => l.id).sort();
+    };
+    expect(await lista("docs_validar")).toEqual([base]);
+    expect(await lista("pagamento_validar")).toEqual([base + 1]);
+    expect(await lista("aguarda_pagamento")).toEqual([base + 2]);
+    const c = (await pedido(ctx, "admin", "GET", "/v1/crm/leads?regime=gold")).json().counts as Record<string, number>;
+    expect(c.docsValidar).toBeGreaterThanOrEqual(1);
+    expect(c.pagamentoValidar).toBeGreaterThanOrEqual(1);
+    expect(c.aguardaPagamento).toBeGreaterThanOrEqual(1);
+  });
+});

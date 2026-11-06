@@ -88,6 +88,12 @@ export default function Preinscricoes({ view, params, limpar }: VistaProps) {
     { id: "atrasados", rotulo: "Contacto atrasado", contagem: c?.atrasados },
     { id: "preinscricao", rotulo: "Completar NIF e morada", contagem: c?.filaPre },
     { id: "secretaria", rotulo: "Na secretaria", contagem: c?.filaSec },
+    { id: "docs_validar", rotulo: "Documentos por validar", contagem: c?.docsValidar },
+    // Só a Gold tem pagamento.
+    ...(regime === "gold" ? [
+      { id: "pagamento_validar" as const, rotulo: "Pagamento por validar", contagem: c?.pagamentoValidar },
+      { id: "aguarda_pagamento" as const, rotulo: "Aguarda pagamento", contagem: c?.aguardaPagamento },
+    ] : []),
     { id: "converter", rotulo: "Pagos por inscrever", contagem: c?.pagos },
     { id: "minhas", rotulo: "As minhas" },
   ];

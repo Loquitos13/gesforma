@@ -25,7 +25,7 @@ import * as leads from "../repos/leads.js";
 import { DadosFinErro, gravarPerfilFin } from "../percursoDadosFin.js";
 import type { Deps } from "./tipos.js";
 
-const fila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas"]);
+const fila = z.enum(["contactar", "atrasados", "hoje", "agenda", "converter", "abertos", "secretaria", "preinscricao", "minhas", "docs_validar", "pagamento_validar", "aguarda_pagamento"]);
 const sort = z.enum(["inscrito", "proximo", "valor", "nome", "actividade", "comercial", "origem", "meio", "etiqueta", "curso", "turma", "estado"]);
 const dataIso = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const vazioUndef = (v: unknown) => (v === "" ? undefined : v);

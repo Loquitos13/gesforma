@@ -4,7 +4,7 @@
  */
 import { Filtros, many, padraoPesquisa, valor, type AtorCrm, type Consulta } from "./sql.js";
 
-export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas";
+export type CrmFila = "contactar" | "atrasados" | "hoje" | "agenda" | "converter" | "abertos" | "secretaria" | "preinscricao" | "minhas" | "docs_validar" | "pagamento_validar" | "aguarda_pagamento";
 export type CrmSort = "inscrito" | "proximo" | "valor" | "nome" | "actividade" | "comercial" | "origem" | "meio" | "etiqueta" | "curso" | "turma" | "estado";
 export type CrmDir = "asc" | "desc";
 
@@ -40,6 +40,17 @@ END)`;
 
 const FECHADOS = "estado NOT IN ('Formando','Desistiu')";
 
+// Filas da validação (sobre `preinscricoes`, sem alias): documentos enviados por validar (sem o comprovativo);
+// o último comprovativo de pagamento por validar; e o pagamento pedido (Gold) ainda sem comprovativo nem confirmação.
+const COMPROVATIVO_POR_VALIDAR = `COALESCE((SELECT d.estado = 'pendente' FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id
+  AND d.tipo = 'comprovativo' ORDER BY d.created_at DESC, d.id DESC LIMIT 1), false)`;
+const DOCS_POR_VALIDAR = `${FECHADOS} AND EXISTS (SELECT 1 FROM preinscricao_docs d WHERE d.preinscricao_id = preinscricoes.id
+  AND d.tipo <> 'comprovativo' AND d.estado = 'pendente')`;
+const PAGAMENTO_POR_VALIDAR = `${FECHADOS} AND ${COMPROVATIVO_POR_VALIDAR}`;
+const AGUARDA_PAGAMENTO = `${FECHADOS} AND COALESCE(regime, 'gold') = 'gold' AND preco > 0 AND pagamento_pedido_em IS NOT NULL
+  AND NOT ${COMPROVATIVO_POR_VALIDAR}
+  AND NOT EXISTS (SELECT 1 FROM pagamentos pg WHERE pg.id = preinscricoes.pagamento_id AND lower(pg.estado) = 'pago')`;
+
 function filtros(f: CrmFiltros, hoje: string, semEstado = false) {
   const w = new Filtros();
   const q = (f.q ?? "").trim().slice(0, 80);
@@ -73,6 +84,9 @@ function filtros(f: CrmFiltros, hoje: string, semEstado = false) {
   if (f.fila === "preinscricao") w.sempre("estado = 'Pré-inscrição' AND secretaria_em IS NULL");
   if (f.fila === "secretaria") w.sempre("estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL");
   if (f.fila === "abertos") w.sempre(FECHADOS);
+  if (f.fila === "docs_validar") w.sempre(DOCS_POR_VALIDAR);
+  if (f.fila === "pagamento_validar") w.sempre(PAGAMENTO_POR_VALIDAR);
+  if (f.fila === "aguarda_pagamento") w.sempre(AGUARDA_PAGAMENTO);
   if (f.regime === "gold" || f.regime === "fin") w.add("regime = ?", f.regime);
   w.preinscricoesVisiveisPara(f.ator);
   if (f.de && /^\d{4}-\d{2}-\d{2}$/.test(f.de)) w.add(`${DIA_INSCRITO} >= ?::date`, f.de);
@@ -169,6 +183,9 @@ export async function contagens(c: Consulta, hoje: string, regime: "gold" | "fin
       count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NULL)::int AS fila_pre,
       count(*) FILTER (WHERE estado = 'Pré-inscrição' AND secretaria_em IS NOT NULL)::int AS fila_sec,
       count(*) FILTER (WHERE estado = 'Desistiu')::int AS desistiu,
+      count(*) FILTER (WHERE ${DOCS_POR_VALIDAR})::int AS docs_validar,
+      count(*) FILTER (WHERE ${PAGAMENTO_POR_VALIDAR})::int AS pagamento_validar,
+      count(*) FILTER (WHERE ${AGUARDA_PAGAMENTO})::int AS aguarda_pagamento,
       count(*) FILTER (WHERE estado = 'Não contactado' AND created_at < now() - interval '2 days')::int AS sem_contacto_2d
      FROM preinscricoes ${w.where}`,
     w.params);

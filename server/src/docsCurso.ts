@@ -89,6 +89,19 @@ export async function comprovativoPelaEquipa(
   return s.pedeComprovativo || (s.estado === "por_pedir" && docsValidados);
 }
 
+/** Estado de cada prestação (pagamento em mais do que uma vez): o comprovativo mais recente de cada uma. */
+export function estadoPrestacoes(lead: { prestacoes?: unknown }, docs: { tipo: string; estado: string; observacao?: string | null; nome?: string; id?: number }[]) {
+  const valores = prestacoesDoLead(lead);
+  if (valores.length < 2) return [];
+  return valores.map((valor, i) => {
+    const n = i + 1;
+    const tipo = tipoPrestacao(n);
+    const doc = [...docs].reverse().find(d => d.tipo === tipo) ?? null;
+    const estado = doc ? (doc.estado === "validado" ? "validado" : doc.estado === "recusado" ? "recusado" : "pendente") : "em_falta";
+    return { n, tipo, valor, estado: estado as "validado" | "pendente" | "recusado" | "em_falta", observacao: doc?.observacao ?? "", nome: doc?.nome ?? "", docId: doc?.id ?? null };
+  });
+}
+
 /**
  * Comprovativos que a equipa pode entregar pela pessoa (ainda por validar): o 1.º, nas condições de
  * `comprovativoPelaEquipa`; os das prestações seguintes, depois disso ou com o pagamento já confirmado (também com a

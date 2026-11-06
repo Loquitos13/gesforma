@@ -148,6 +148,7 @@ export type DossieLead = {
   docsParaEntregar?: { id: string; label: string }[];
   /** Valores das prestações confirmados pela equipa (vazio = ainda não confirmado). */
   prestacoes?: number[];
+  estadoPrestacoes?: { n: number; tipo: string; valor: number; estado: "validado" | "pendente" | "recusado" | "em_falta" }[];
   documentos: DocumentoLead[];
   docsFechado: boolean;
   pagamento: { id: string; valor: number; estado: string; metodo: string } | null;
@@ -228,6 +229,8 @@ export const apiValidarDoc = (id: number, docId: number) => enviar.post<DossieLe
 /** A equipa entrega um documento pela pessoa (fica por validar, como se ela o tivesse enviado). */
 /** Em quantas vezes é o pagamento e o valor de cada prestação (confirmado pela equipa). */
 export const apiPrestacoes = (id: number, valores: number[]) => enviar.put<DossieLead>(`/v1/crm/leads/${id}/prestacoes`, { valores });
+/** Email à pessoa com a ligação no passo do pagamento, para a prestação seguinte. */
+export const apiLembretePrestacao = (id: number) => enviar.post<DossieLead>(`/v1/crm/leads/${id}/lembrete-prestacao`, {});
 export const apiEntregarDoc = (id: number, tipo: string, ficheiro: File) =>
   enviarFicheiro<DossieLead>(`/v1/crm/leads/${id}/documentos/entregar/${encodeURIComponent(tipo)}`, ficheiro);
 export const apiRecusarDoc = (id: number, docId: number, observacao: string) =>

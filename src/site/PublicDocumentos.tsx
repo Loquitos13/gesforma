@@ -57,6 +57,8 @@ export function PublicDocumentos({ token }: { token: string }) {
   const [pedeCronograma, setPedeCronograma] = useState(true);
   /** Passo de pagamento: só com o pagamento pedido pela secretaria e ainda por confirmar. */
   const [pagamento, setPagamento] = useState<PagamentoPercurso | null>(null);
+  /** Documentos validados: a ligação só continua aberta para os comprovativos das prestações. */
+  const [soPagamento, setSoPagamento] = useState(false);
   const [correcao, setCorrecao] = useState(false);
   const [foco, setFoco] = useState<string | null>(null);
   const [ficheiro, setFicheiro] = useState<File | null>(null);
@@ -94,6 +96,7 @@ export function PublicDocumentos({ token }: { token: string }) {
     const comTurma = manterPasso ? pedeCronograma : escolhe && (!r.turmaEscolhida || Boolean(r.turmaCheia));
     if (!manterPasso) setPedeCronograma(comTurma);
     setPagamento(r.precisaPagamento && r.pagamento ? r.pagamento : null);
+    setSoPagamento(Boolean(r.soPagamento));
     setCorrecao(Boolean(r.correcao));
     setTurmas(r.turmas ?? []);
     setRecomendadas(r.recomendadas ?? []);
@@ -255,12 +258,12 @@ export function PublicDocumentos({ token }: { token: string }) {
     }
   }
 
-  async function enviarComprovativo(f: File) {
+  async function enviarComprovativo(f: File, tipo = "comprovativo") {
     setBusy(true);
     setError("");
     setOk("");
     try {
-      await apiPublicDocumentoUpload(token, f, "comprovativo");
+      await apiPublicDocumentoUpload(token, f, tipo);
       setOk(pagamento?.faturacao?.confirmado ? "Comprovativo recebido." : "Comprovativo recebido. Falta confirmar os dados de faturação, aqui em baixo.");
       await recarregar(true);
     } catch (err) {
@@ -324,7 +327,7 @@ export function PublicDocumentos({ token }: { token: string }) {
         )}
 
         {pagar && pagamento && (
-          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo} onFaturacao={gravarFaturacao}
+          <PassoPagamento nome={nome} curso={curso} pagamento={pagamento} busy={busy} error={error} ok={ok} onEnviar={enviarComprovativo} onFaturacao={gravarFaturacao} soPagamento={soPagamento}
             textos={{ intro: txt("ligPagamentoTexto"), ajuda: txt("ligComprovativoAjuda"), botao: txt("ligBotaoComprovativo") }} />
         )}
 

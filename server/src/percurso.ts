@@ -1,6 +1,6 @@
 import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
-import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento, eComprovativo } from "./docsCurso.js";
+import { COMPROVATIVO, docsCompletos, docsDoCurso, ficheiroModelo, situacaoPagamento, eComprovativo, estadoPrestacoes } from "./docsCurso.js";
 import { lerEntidade } from "./regrasConfig.js";
 import { faturacaoDoPercurso } from "./faturacao.js";
 import { avisarDocumentosEmFalta, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
@@ -336,7 +336,11 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     valor: number; estado: string; iban: string; titular: string; comprovativo: Ficheiro | null;
     /** Dados de faturação (passo a seguir ao comprovativo): os confirmados, ou os da ficha para confirmar. */
     faturacao: Awaited<ReturnType<typeof faturacaoDoPercurso>>;
+    /** Pagamento em prestações: o estado de cada uma (a pessoa anexa o comprovativo de cada). Vazio = de uma vez. */
+    prestacoes: ReturnType<typeof estadoPrestacoes>;
   } | null = null;
+  const prestacoes = estadoPrestacoes(lead, docs);
+  const prestacoesEmFalta = prestacoes.some(p => p.estado !== "validado");
   if ((pag.estado === "pedido" || pag.estado === "pago") && lead.pagamento_id) {
     const r = await repo.valorEstadoPagamento(db, String(lead.pagamento_id));
     const ent = await lerEntidade(db);
@@ -347,6 +351,7 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
       titular: ent.titularConta || ent.nome,
       comprovativo: docs.find(d => d.tipo === COMPROVATIVO.id) ?? null,
       faturacao: await faturacaoDoPercurso(db, lead),
+      prestacoes,
     };
   }
   const turmaId = Number(lead.turma_escolhida_id || 0);
@@ -366,7 +371,9 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     : null;
   const turmaEscolhida = turmaBruta && recusadas.has(turmaBruta.id) ? null : turmaBruta;
   const recusados = docs.filter(d => d.estado === "recusado" && !eComprovativo(d.tipo));
-  const encerrada = Boolean(lead.validada_em);
+  // Validada ou já na turma, mas com prestações por pagar: a ligação fica aberta só com o passo do pagamento.
+  const soPagamento = Boolean(lead.validada_em) || /^formando$/i.test(String(lead.estado ?? ""));
+  const encerrada = Boolean(lead.validada_em) && !(soPagamento && prestacoesEmFalta);
   const percursoConcluido = Boolean(lead.percurso_concluido_em) && (Boolean(turmaEscolhida) || !escolheTurma) && recusados.length === 0;
   return {
     nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(),
@@ -381,7 +388,9 @@ export async function vistaDocumentosPublica(db: Db, lead: Record<string, unknow
     emFalta: emFalta.map(d => d.label),
     pagamento,
     /** Passo de pagamento aberto: a secretaria pediu o pagamento e ainda não está confirmado. */
-    precisaPagamento: pag.estado === "pedido",
+    precisaPagamento: pag.estado === "pedido" || (pagamento != null && prestacoesEmFalta),
+    /** Só falta pagar as prestações seguintes (documentos validados, já inserida ou a inserir na turma). */
+    soPagamento: soPagamento && prestacoesEmFalta,
     pago: pag.pago,
     encerrada,
     correcao: !encerrada && recusados.length > 0,

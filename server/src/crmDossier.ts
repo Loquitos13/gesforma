@@ -2,7 +2,7 @@ import type { DadosGatilho } from "../../src/partilhado/gatilhosDocs.js";
 import type { Db } from "./db/pool.js";
 import type { AtorCrm, Consulta } from "./repos/sql.js";
 import { documentosUrl, docsDoCurso, docsCompletos, ensureDocsToken, herdarDocsValidados, listarDocsLead } from "./docsLink.js";
-import { comprovativosPelaEquipa, faltaPedirPagamento, faltaValidarPreinscricao, prestacoesDoLead, rotuloPrestacao, situacaoPagamento } from "./docsCurso.js";
+import { comprovativosPelaEquipa, estadoPrestacoes, faltaPedirPagamento, faltaValidarPreinscricao, prestacoesDoLead, rotuloPrestacao, situacaoPagamento } from "./docsCurso.js";
 import { mapPagamento, mapPreinscricao } from "./ops.js";
 import { readPreinscricaoPii } from "./pii.js";
 import { GENEROS_FIN, mascararFim, rotuloPais } from "../../src/partilhado/dadosPessoaisFin.js";
@@ -177,6 +177,8 @@ export async function getLeadDossier(db: Db, id: number, ator?: AtorCrm) {
     docsParaEntregar: entregaveis,
     /** Valores das prestações confirmados pela equipa (vazio = ainda não confirmado; 1 valor = pagamento de uma vez). */
     prestacoes,
+    /** Estado de cada prestação (pagamento em mais do que uma vez). */
+    estadoPrestacoes: estadoPrestacoes(row, ficheiros).map(({ n, tipo, valor, estado }) => ({ n, tipo, valor, estado })),
     documentos: ficheiros.map(f => ({
       id: f.id,
       tipo: f.tipo,

@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 import { Aviso, Botao, ConfirmarPerigo, Entrada, Estado, Vazio, dataHora, eur } from "../../../../partilhado/ui";
-import { apiEntregarDoc, apiEnviarLigacao, apiNovaLigacao, apiPrestacoes, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
+import { apiEntregarDoc, apiEnviarLigacao, apiLembretePrestacao, apiNovaLigacao, apiPrestacoes, apiRecusarDoc, apiReenviarPedidoDocs, apiValidarDoc, type DossieLead } from "../../../../partilhado/api/crm";
 import { useAccao } from "../../../../partilhado/dados/useAccao";
 import { usePode } from "../../../../partilhado/AuthGate";
 import { toastError, toastOk } from "../../../../partilhado/toastBus";
@@ -40,6 +40,9 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
   // O servidor decide o que se pode entregar (validada, já só os comprovativos das prestações em falta).
   const paraEntregar = !pode("crm.escrever") ? [] : d.docsParaEntregar ?? [];
   const prestacoes = d.prestacoes ?? [];
+  const estadoPrest = d.estadoPrestacoes ?? [];
+  const proximaPrest = estadoPrest.find(p => p.estado === "em_falta" || p.estado === "recusado");
+  const lembrete = useAccao(() => apiLembretePrestacao(id), { ok: "Lembrete enviado por email, com a ligação no passo do pagamento." });
   const eComprovativo = (t: string) => /^comprovativo(-\d+)?$/.test(t);
   // Comprovativo sem as prestações confirmadas: primeiro «em quantas vezes» (com o ficheiro); «Alterar» sem ficheiro.
   const [janela, setJanela] = useState<{ tipo: string | null; rotulo?: string } | null>(null);
@@ -175,6 +178,26 @@ export function FichaDocumentos({ d, onMudou }: { d: DossieLead; role: string; o
               {resumoPrestacoes(prestacoes)}
               <Botao tamanho="sm" variante="fantasma" onClick={() => setJanela({ tipo: null })}>Alterar</Botao>
             </p>
+          )}
+        </section>
+      )}
+      {estadoPrest.length > 1 && (
+        <section aria-label="Prestações" className="rounded-cartao border border-linha p-3 text-[13px]">
+          <p className="m-0 text-xs font-semibold uppercase tracking-wide text-tinta-suave">Prestações</p>
+          <ul className="m-0 mt-1 list-none space-y-0.5 p-0">
+            {estadoPrest.map(p => (
+              <li key={p.tipo} className="flex justify-between gap-2">
+                <span>{p.n}.ª · {eur(p.valor, true)}</span>
+                <span className={p.estado === "validado" ? "text-sucesso" : p.estado === "recusado" ? "text-perigo" : "text-tinta-suave"}>
+                  {{ validado: "Paga", pendente: "Comprovativo por validar", recusado: "Comprovativo recusado", em_falta: "Por pagar" }[p.estado]}
+                </span>
+              </li>
+            ))}
+          </ul>
+          {proximaPrest && pode("crm.escrever") && (
+            <Botao className="mt-2" tamanho="sm" variante="secundario" aCarregar={lembrete.aCorrer} onClick={() => void lembrete.correr().then(r => r && onMudou())}>
+              Enviar lembrete da {proximaPrest.n}.ª prestação
+            </Botao>
           )}
         </section>
       )}

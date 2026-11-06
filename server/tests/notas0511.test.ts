@@ -274,3 +274,51 @@ describe("pagamento em prestações", () => {
     if (ev.length) expect(ev).toEqual(expect.arrayContaining(["Pagamento em 2 prestações", "Prestação 2 paga"]));
   });
 });
+
+describe("prestações na ligação pessoal", () => {
+  it("validada com prestações por pagar: a ligação fica aberta só com o pagamento; a pessoa envia o 2.º; fecha quando todas pagas", async () => {
+    const ctx = await arrancar();
+    const id = 930000 + Math.floor(Math.random() * 9000);
+    await ctx.db.query(
+      `INSERT INTO preinscricoes (id, inscrito, nome, apelido, email, telf, curso, preco, estado, regime, pagamento_pedido_em)
+       VALUES ($1, '2031-01-01 10:00', 'Lig', 'T', $2, '912000000', 'Formação de Formadores - CCP', 130, 'Pré-inscrição', 'gold', now())`,
+      [id, `lig.${id}@exemplo.pt`]);
+    await pedido(ctx, "secretaria", "PUT", `/v1/crm/leads/${id}/prestacoes`, { valores: [65, 65] });
+    const r1 = await entregar(ctx, "secretaria", id, "comprovativo");
+    const doc1 = (r1.json().documentos as { id: number; tipo: string }[]).find(x => x.tipo === "comprovativo")!;
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc1.id}/validar`)).statusCode).toBe(200);
+    await ctx.db.query("UPDATE preinscricoes SET validada_em = now(), estado = 'Formando' WHERE id = $1", [id]);
+    const token = (await pedido(ctx, "secretaria", "GET", `/v1/crm/leads/${id}`)).json().docsUrl.split("/").pop().split("?")[0] as string;
+
+    // Lembrete à mão, da 2.ª prestação.
+    const lem = await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/lembrete-prestacao`);
+    expect(lem.statusCode, lem.body).toBe(200);
+
+    let vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.encerrada).toBe(false);
+    expect(vista.soPagamento).toBe(true);
+    expect(vista.precisaPagamento).toBe(true);
+    expect(vista.pagamento.prestacoes.map((p: { estado: string }) => p.estado)).toEqual(["validado", "em_falta"]);
+
+    const up = (tipo: string) => {
+      const b = "----g";
+      const body = Buffer.concat([
+        Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="tipo"\r\n\r\n${tipo}\r\n`),
+        Buffer.from(`--${b}\r\nContent-Disposition: form-data; name="ficheiro"; filename="c.pdf"\r\nContent-Type: application/pdf\r\n\r\n`), PDF, Buffer.from(`\r\n--${b}--\r\n`),
+      ]);
+      return ctx.app.inject({ method: "POST", url: `/v1/public/documentos/${token}`, payload: body, headers: { "content-type": `multipart/form-data; boundary=${b}` } });
+    };
+    expect((await up("cc")).statusCode).not.toBe(200);
+    const r2 = await up("comprovativo-2");
+    expect(r2.statusCode, r2.body).toBe(200);
+    vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.pagamento.prestacoes[1].estado).toBe("pendente");
+
+    // A equipa valida a 2.ª: tudo pago, a ligação fecha.
+    const doc2 = (await ctx.db.query<{ id: number }>("SELECT id FROM preinscricao_docs WHERE preinscricao_id = $1 AND tipo = 'comprovativo-2'", [id])).rows[0]!;
+    expect((await pedido(ctx, "secretaria", "POST", `/v1/crm/leads/${id}/documentos/${doc2.id}/validar`)).statusCode).toBe(200);
+    vista = (await ctx.app.inject({ method: "GET", url: `/v1/public/documentos/${token}` })).json();
+    expect(vista.encerrada).toBe(true);
+    expect((await pedido(ctx, "comercial", "POST", `/v1/crm/leads/${id}/lembrete-prestacao`)).statusCode).toBe(409);
+  });
+});

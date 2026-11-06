@@ -85,6 +85,7 @@ export const CTA_BY_TIPO: Record<string, CtaDestino> = {
   pedido_pagamento: { ambito: "contacto", href: "{{link}}", funcao: "Página de pagamento da ligação pessoal" },
   pedido_pagamento_formando: { ambito: "contacto", href: "{{link}}", funcao: "Área do formando" },
   comprovativo_recusado: { ambito: "contacto", href: "{{link}}", funcao: "Página de pagamento da ligação pessoal" },
+  lembrete_prestacao: { ambito: "contacto", href: "{{link}}", funcao: "Página de pagamento da ligação pessoal" },
   turma_cheia: { ambito: "contacto", href: "{{link}}", funcao: "Passo do cronograma da ligação pessoal" },
   documentos_em_falta: { ambito: "contacto", href: "{{link}}", funcao: "Passo dos documentos da ligação pessoal" },
   lembrete_turma: { ambito: "contacto", href: "{{link}}", funcao: "Passo do cronograma da ligação pessoal" },

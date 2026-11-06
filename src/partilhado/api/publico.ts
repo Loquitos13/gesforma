@@ -88,6 +88,8 @@ export type PagamentoPercurso = {
   comprovativo: { id: number; tipo: string; nome: string; estado?: string; observacao?: string } | null;
   /** Dados de faturação (passo a seguir ao comprovativo): os confirmados, ou os da ficha para confirmar. */
   faturacao?: { dados: DadosFaturacao; confirmado: boolean };
+  /** Pagamento em prestações: o estado de cada uma (vazio = de uma vez). */
+  prestacoes?: { n: number; tipo: string; valor: number; estado: "validado" | "pendente" | "recusado" | "em_falta"; observacao: string; nome: string }[];
 };
 
 export type TurmaPercurso = {
@@ -111,6 +113,8 @@ export const apiPublicDocumentos = (token: string) =>
     emFalta?: string[];
     /** Passo de pagamento aberto: a secretaria pediu o pagamento e ainda não está confirmado. */
     precisaPagamento?: boolean;
+    /** Documentos validados: falta só o comprovativo das prestações seguintes. */
+    soPagamento?: boolean;
     pago?: boolean;
     pagamento?: PagamentoPercurso | null;
     encerrada?: boolean;

@@ -9,10 +9,12 @@ import { z } from "zod";
 import { getLeadDossier, logLeadEvent } from "../crmDossier.js";
 import { staffValida } from "../crmLeadsServico.js";
 import { avisarRecusasLead, reenviarPedidoLead } from "../avisosDocumentos.js";
-import { abrirAlerta, definirEstadoDoc, dispensarAlerta, firePreinscricaoEmail, listarAlertasAbertas, syncLigacao } from "../docsLink.js";
+import { abrirAlerta, definirEstadoDoc, dispensarAlerta, documentosUrl, ensureDocsToken, firePreinscricaoEmail, listarAlertasAbertas, listarDocsLead, syncLigacao } from "../docsLink.js";
+import { enviarModelo } from "../emailModelo.js";
+import { isEmail, normalizeEmail } from "../security.js";
 import { guardarDocDaPreinscricao, tiposDoLead } from "../docsPreinscricao.js";
 import { ensurePagamentoPendente } from "../pagamentoPedido.js";
-import { eComprovativo, prestacoesDoLead } from "../docsCurso.js";
+import { eComprovativo, estadoPrestacoes, prestacoesDoLead } from "../docsCurso.js";
 import * as pagsLead from "../repos/pagamentosLead.js";
 import { ficheiroDeDocumentoDaEquipa } from "../ficheirosValidacao.js";
 import { linhaVisivel } from "../repos/crmVisivel.js";
@@ -88,6 +90,39 @@ export async function registarDocumentosCrm(app: FastifyInstance, deps: Deps) {
     await logLeadEvent(db, id, req.actor!.id, "seguimento", valores.length === 1 ? "Pagamento de uma vez" : `Pagamento em ${valores.length} prestações`,
       `${valores.map(fmt).join(" + ")} = ${fmt(total)}`);
     await audit(db, req.actor!.id, "crm.prestacoes", "preinscricao", String(id), req.ip, { valores });
+    return getLeadDossier(db, id, req.actor!);
+  });
+
+  // Lembrete à pessoa para pagar a prestação seguinte (só à mão, na ficha): a ligação pessoal abre no passo do pagamento.
+  app.post("/v1/crm/leads/:id/lembrete-prestacao", async (req, reply) => {
+    if (!requireAuth(req, reply)) return;
+    const v = validar(reply, { params: idParam }, req);
+    if (!v) return;
+    const { id } = v.params;
+    const lead = await leads.lead(db, id);
+    if (!lead || !(await linhaVisivel(db, "preinscricoes", id, req.actor!))) return reply.code(404).send({ error: "pré-inscrição inexistente" });
+    const prest = estadoPrestacoes(lead as Record<string, unknown>, await listarDocsLead(db, id));
+    const proxima = prest.find(p => p.estado === "em_falta" || p.estado === "recusado");
+    if (!proxima) return reply.code(409).send({ error: "Não há prestações à espera de comprovativo." });
+    const email = normalizeEmail(String(lead.email ?? ""));
+    if (!isEmail(email)) return reply.code(400).send({ error: "A pré-inscrição não tem um email válido." });
+    const link = `${documentosUrl(await ensureDocsToken(db, id))}?passo=pagamento`;
+    const valor = proxima.valor.toFixed(2).replace(".", ",");
+    const prestacao = `${proxima.n}.ª de ${prest.length}`;
+    await enviarModelo(db, {
+      tipo: "lembrete_prestacao", area: "gold", para: email, nome: `${lead.nome ?? ""} ${lead.apelido ?? ""}`.trim(), link,
+      vars: { curso: String(lead.curso ?? ""), valor, prestacao, comprovativo_url: link },
+      reserva: {
+        assunto: "Pagamento da prestação de {{curso}}",
+        linhas: [
+          "Lembramos que está na altura de pagar a prestação {{prestacao}} da sua inscrição em {{curso}}: € {{valor}}.",
+          "Depois de fazer a transferência, anexe o comprovativo na sua página de pagamento.",
+        ],
+        cta: "Anexar o comprovativo",
+      },
+    });
+    await logLeadEvent(db, id, req.actor!.id, "seguimento", `Lembrete da prestação ${proxima.n}`, `€ ${valor} · enviado para ${email}`);
+    await audit(db, req.actor!.id, "crm.lembrete_prestacao", "preinscricao", String(id), req.ip, { n: proxima.n });
     return getLeadDossier(db, id, req.actor!);
   });
 

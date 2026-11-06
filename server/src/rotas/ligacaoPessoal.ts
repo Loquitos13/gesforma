@@ -7,7 +7,7 @@
 import type { DadosGatilho } from "../../../src/partilhado/gatilhosDocs.js";
 import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
 import { z } from "zod";
-import { ficheiroModelo, situacaoPagamento } from "../docsCurso.js";
+import { eComprovativo, estadoPrestacoes, ficheiroModelo, situacaoPagamento } from "../docsCurso.js";
 import { faturacaoConfirmada } from "../comprovativoContabilidade.js";
 import { dadosFaturacaoSchema, faturacaoDoPercurso, gravarFaturacaoDoPercurso } from "../faturacao.js";
 import { COMPROVATIVO, abrirAlerta, docsDoCurso, listarDocsLead, syncLigacao } from "../docsLink.js";
@@ -222,12 +222,19 @@ export async function registar(app: FastifyInstance, deps: Deps) {
     const leadId = Number(lead.id);
     const regime = String(lead.regime ?? "gold") === "fin" ? "fin" : "gold";
     const pedidos = await docsDoCurso(db, String(lead.curso ?? ""), regime, lead as DadosGatilho);
-    const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id]);
+    // Pagamento em prestações: o comprovativo de cada uma (comprovativo-2, …), depois de o pagamento estar pedido.
+    const prestacoes = estadoPrestacoes(lead, await listarDocsLead(db, leadId));
+    const permitido = new Set([...pedidos.map(p => p.id), COMPROVATIVO.id, ...prestacoes.map(p => p.tipo)]);
     if (!permitido.has(tipo)) return reply.code(400).send({ error: "Este tipo de documento não faz parte do curso." });
     // O comprovativo só entra com o passo de pagamento aberto (pagamento pedido pela secretaria).
-    const comprovativo = tipo === COMPROVATIVO.id;
-    if (comprovativo && (await situacaoPagamento(db, lead)).estado !== "pedido") {
+    const comprovativo = eComprovativo(tipo);
+    const estadoPag = (await situacaoPagamento(db, lead)).estado;
+    if (comprovativo && !(estadoPag === "pedido" || (tipo !== COMPROVATIVO.id && estadoPag === "pago"))) {
       return reply.code(409).send({ error: "O pagamento ainda não foi pedido pela secretaria." });
+    }
+    // Ligação aberta só pelas prestações (já validada): não aceita outros documentos.
+    if (!comprovativo && (lead.validada_em || /^formando$/i.test(String(lead.estado ?? "")))) {
+      return reply.code(409).send({ error: "Os documentos já foram validados. Falta só o comprovativo das prestações." });
     }
     const ja = await listarDocsLead(db, leadId);
     const recusados = ja.filter(d => d.estado === "recusado").map(d => d.tipo);

@@ -71,6 +71,7 @@ export const VARIAVEIS_DOS_MODELOS: Record<string, Record<string, string>> = {
   acesso_formando: { palavra_passe: "Palavra-passe temporária: Ab12cd34 (vai ser pedida uma nova no primeiro acesso).", link: "/area-formando" },
   pedido_pagamento: { valor: "125,00", link: "(página de pagamento)" },
   pedido_pagamento_formando: { valor: "125,00", iban: "PT50 0000 0000 0000 0000 0000 0", titular: "ENA", link: "/area-formando" },
+  lembrete_prestacao: { prestacao: "2.ª de 3", valor: "65,00", link: "(página de pagamento)" },
   comprovativo_recusado: { motivo: "O comprovativo não está legível.", link: "(página de pagamento)" },
   turma_cheia: { local: "V.N.Gaia", horario: "Pós-laboral", turmas_itens: "CCP-VNG-PL · Pós-laboral · início 02-12-2026 · 4 vagas", sem_turmas: "", link: "(ligação pessoal)" },
   documentos_em_falta: { link: "(ligação pessoal)" },

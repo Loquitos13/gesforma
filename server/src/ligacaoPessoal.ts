@@ -1,6 +1,7 @@
 import { randomBytes } from "node:crypto";
 import type { Db } from "./db/pool.js";
 import { pendenciaDocsLead } from "./pendenciaDocs.js";
+import { estadoPrestacoes, prestacoesDoLead } from "./docsCurso.js";
 import * as leads from "./repos/leads.js";
 
 /**
@@ -49,9 +50,20 @@ export async function fechoDaLigacao(
   agora = new Date(),
 ): Promise<MotivoFecho | null> {
   const motivo = motivoFecho(lead, agora);
+  // Pagamento em prestações: validada ou já formando, a ligação fica aberta (só com o passo do pagamento) até haver
+  // comprovativo validado de todas. Quem paga de uma vez fecha como sempre.
+  if ((motivo === "validada" || motivo === "formando") && lead.id && await prestacoesPorPagar(db, lead)) return null;
   if (motivo !== "expirada" || !lead.id) return motivo;
   const p = await pendenciaDocsLead(db, { id: Number(lead.id), curso: lead.curso, regime: lead.regime });
   return p.pendente ? null : motivo;
+}
+
+/** Há prestações sem comprovativo validado (só com o pagamento em mais do que uma vez). */
+export async function prestacoesPorPagar(db: Db, lead: { id?: unknown; prestacoes?: unknown }) {
+  if (prestacoesDoLead(lead).length < 2) return false;
+  const docs = (await db.query<{ tipo: string; estado: string }>(
+    "SELECT tipo, COALESCE(estado, 'pendente') AS estado FROM preinscricao_docs WHERE preinscricao_id = $1 ORDER BY created_at, id", [Number(lead.id)])).rows;
+  return estadoPrestacoes(lead, docs).some(p => p.estado !== "validado");
 }
 
 const TEXTO: Record<MotivoFecho, string> = {

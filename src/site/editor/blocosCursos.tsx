@@ -230,7 +230,7 @@ export function CartaoCurso({ curso, e, extra, ordem }: { curso: Course; e: Esti
   );
 }
 
-function Grelha({ cursos, e, vazio, extras }: { cursos: Course[]; e: EstiloCartao; vazio: string; extras?: (ExtraCartao | undefined)[] }) {
+function Grelha({ cursos, e, vazio, extras, destaque }: { cursos: Course[]; e: EstiloCartao; vazio: string; extras?: (ExtraCartao | undefined)[]; destaque?: boolean }) {
   const lista = e.formato === "lista";
   const diagonal = !!e.disposicao && cursos.length > 1;
   // Numa coluna a diagonal desloca para o lado; em várias colunas desloca para baixo.
@@ -253,7 +253,7 @@ function Grelha({ cursos, e, vazio, extras }: { cursos: Course[]; e: EstiloCarta
   } as CSSProperties;
   if (!cursos.length) return <p className="py-12 text-center text-[#3E5168]">{vazio}</p>;
   return (
-    <div className={juntar("ena-grelha", diagonal && `ena-diagonal-${eixo}`)} style={style}>
+    <div className={juntar("ena-grelha", destaque && "ena-cursos-destaque", diagonal && `ena-diagonal-${eixo}`)} style={style}>
       {cursos.map((c, i) => <CartaoCurso key={`${c.id}-${i}`} curso={c} e={e} extra={extras?.[i]} ordem={posicao(i)} />)}
     </div>
   );
@@ -357,7 +357,7 @@ export const CursosDestaque: ComponentConfig<DestaqueProps> = {
     return (
       <div ref={puck?.dragRef ?? undefined} className={c.className} style={c.style}>
         {estado === "pronto"
-          ? <Grelha cursos={lista} extras={extras} e={cartao} vazio={modo === "automatico" ? "Ainda não há cursos publicados." : "Escolha os cursos em destaque no painel."} />
+          ? <Grelha destaque cursos={lista} extras={extras} e={cartao} vazio={modo === "automatico" ? "Ainda não há cursos publicados." : "Escolha os cursos em destaque no painel."} />
           : <Estado estado={estado} recarregar={recarregar} />}
       </div>
     );

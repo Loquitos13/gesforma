@@ -63,10 +63,10 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
     <header ref={el => { raiz.current = el; p.refRaiz?.(el); }} className={juntar(p.fixo && !p.editar && "sticky top-0", "z-40")} style={vars}>
       <div className={c.className} style={c.style}>
         <div className="mx-auto flex items-center justify-between gap-6" style={{ maxWidth: "var(--largura)" }}>
-          <a href={ligacaoSegura(p.logoLigacao ?? "") || "/"} className="flex items-center gap-3" aria-label={p.logoAlt?.trim() ? undefined : "Página inicial"}>
+          <a href={ligacaoSegura(p.logoLigacao ?? "") || "/"} className="flex shrink-0 items-center gap-3" aria-label={p.logoAlt?.trim() ? undefined : "Página inicial"}>
             {p.logo && <img src={p.logo} alt={p.logoAlt ?? ""} style={{ height: `${p.alturaLogo ?? 40}px` }} className="w-auto" />}
             {(p.linha1 || p.linha2) && (
-              <span className={juntar("text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em]", p.linhasNoTelemovel ? "block" : "hidden sm:block")}>{p.linha1}{p.linha2 && <><br />{p.linha2}</>}</span>
+              <span className={juntar("text-left text-[10px] font-bold uppercase leading-tight tracking-[0.12em]", p.linhasNoTelemovel ? "block" : "hidden sm:block", "lg:hidden xl:block")}>{p.linha1}{p.linha2 && <><br />{p.linha2}</>}</span>
             )}
           </a>
           <nav className={juntar("hidden items-center gap-6 whitespace-nowrap lg:flex xl:gap-8", t.className)} style={t.style} aria-label="Navegação principal">
@@ -74,8 +74,9 @@ export function CabecalhoSite(p: CabecalhoProps & { editar?: boolean; refRaiz?: 
           </nav>
           <div className="flex shrink-0 items-center gap-3">
             {botao && <a href={botaoHref} {...novaJanela(p.botaoNovaJanela)} className="hidden bg-[var(--cab-botao)] px-5 py-3 text-sm font-bold text-white transition hover:brightness-110 lg:inline-flex">{botao}</a>}
-            {/* À direita do botão de entrada. Sem lista própria: as redes de Sistema › Site › SEO. */}
-            <LigacoesRedes redes={p.redes} pequeno className="hidden gap-1 xl:flex" />
+            {/* À direita do botão de entrada. Sem lista própria: as redes de Sistema › Site › SEO. Só com espaço para não
+                chocar com o menu (nos portáteis pequenos ficam no menu do telemóvel e no rodapé). */}
+            <LigacoesRedes redes={p.redes} pequeno className="hidden gap-1 min-[1360px]:flex" />
           </div>
           <button type="button" onClick={() => setAberto(!aberto)} className="p-2 lg:hidden" aria-expanded={aberto} aria-label={aberto ? "Fechar menu" : "Abrir menu"}>
             <svg aria-hidden="true" className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.8">{aberto ? <path d="M6 6l12 12M18 6 6 18" /> : <path d="M4 7h16M4 12h16M4 17h16" />}</svg>

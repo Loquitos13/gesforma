@@ -18,6 +18,7 @@ const AssinarContrato = lazy(() => import("./site/AssinarContrato").then(m => ({
 const VerificarAssinatura = lazy(() => import("./site/VerificarAssinatura").then(m => ({ default: m.VerificarAssinatura })));
 const SiteLanding = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.SiteLanding })));
 const PaginaDoSite = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaDoSite })));
+const BannerCookies = lazy(() => import("./site/BannerCookies"));
 const PaginaLivreOuInicio = lazy(() => import("./site/SiteLandingRodape").then(m => ({ default: m.PaginaLivreOuInicio })));
 
 const path = window.location.pathname.replace(/\/+$/, "") || "/";
@@ -91,6 +92,8 @@ createRoot(document.getElementById("root")!).render(
       ) : (
         <SiteLanding />
       )}
+      {/* Só onde o GTM carrega (public/consentimento.js). */}
+      {(window as unknown as { __enaGtm?: boolean }).__enaGtm && <BannerCookies />}
     </Suspense>
   </StrictMode>,
 );

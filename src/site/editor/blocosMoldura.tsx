@@ -235,7 +235,11 @@ export function RodapeSite(p: RodapeProps & { refRaiz?: ((el: Element | null) =>
           </div>
         )}
         <div className="flex flex-col justify-between gap-3 pt-6 text-xs opacity-75 sm:flex-row">
-          <span>{p.direitos.replace(/\{ano\}/g, ano)}</span>
+          <span>
+            {p.direitos.replace(/\{ano\}/g, ano)}
+            {" · "}<a href="/politica-de-cookies" className="underline-offset-2 hover:underline">Política de cookies</a>
+            {" · "}<button type="button" onClick={() => window.dispatchEvent(new Event("ena:definicoes-cookies"))} className="underline-offset-2 hover:underline">Definições de cookies</button>
+          </span>
           <span>{p.lema}</span>
         </div>
       </div>

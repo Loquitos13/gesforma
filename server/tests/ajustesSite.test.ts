@@ -63,7 +63,7 @@ describe("ajustes ao conteúdo do site", () => {
     const { aplicarAjustesSite, criarPaginasSite } = await import("../src/db/ajustesSite.js");
     const { redirecionamentoAntigo } = await import("../src/seoRedirecionamentos.js");
     await ctx.db.query("DELETE FROM ajustes_site");
-    await ctx.db.query("DELETE FROM site_paginas WHERE pagina IN ('moldura', 'inicio', 'livre-politica-de-privacidade', 'livre-termos-e-condicoes')");
+    await ctx.db.query("DELETE FROM site_paginas WHERE pagina IN ('moldura', 'inicio', 'livre-politica-de-privacidade', 'livre-termos-e-condicoes', 'livre-politica-de-cookies')");
     expect(await redirecionamentoAntigo(ctx.db, "/termos-e-condicoes")).toMatchObject({ estado: 302 });
     const ligacoes = "Notícias e artigos | /noticias\nPolítica de privacidade | https://ena.pt/politica-de-privacidade\nLivro de reclamações | https://www.livroreclamacoes.pt";
     await ctx.db.query("INSERT INTO site_paginas (pagina, rascunho, publicado) VALUES ('moldura', $1::jsonb, $1::jsonb)", [JSON.stringify({
@@ -106,6 +106,11 @@ describe("ajustes ao conteúdo do site", () => {
     expect(termos).toContain('"ligacao":"/politica-de-privacidade"');
     // Com a página publicada, o endereço deixa de ir para o site antigo.
     expect(await redirecionamentoAntigo(ctx.db, "/termos-e-condicoes")).toBeNull();
+    // Política de Cookies (banner de cookies), sem a nota interna do documento.
+    const cookies = JSON.stringify((await publica("politica-de-cookies")).dados);
+    expect(cookies).toContain("ena_consentimento");
+    expect(cookies).toContain("Consent Mode");
+    expect(cookies).not.toMatch(/nota interna|\[cookie da CMP/i);
 
     const moldura = (await ctx.db.query<{ publicado: { content: { props: { colunas: { titulo: string; linhas: string }[] } }[] } }>(
       "SELECT publicado FROM site_paginas WHERE pagina = 'moldura'")).rows[0]!.publicado;

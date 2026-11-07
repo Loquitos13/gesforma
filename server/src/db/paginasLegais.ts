@@ -194,4 +194,49 @@ const TERMOS: PaginaLegal = {
   ],
 };
 
-export const PAGINAS_LEGAIS: PaginaLegal[] = [POLITICA, TERMOS];
+/** «Política de Cookies» enviada pela Mariana Falcão (11-2026), com o cookie real do banner na lista. */
+const COOKIES: PaginaLegal = {
+  id: "2026-11-pagina-politica-de-cookies",
+  endereco: "politica-de-cookies",
+  titulo: "Política de Cookies",
+  partes: [
+    ["titulo", "1. Quem somos"],
+    ["texto", "Esta Política de Cookies explica como o website www.ena.pt utiliza cookies e tecnologias semelhantes, e como pode gerir as suas preferências. Complementa a nossa Política de Privacidade."],
+    ["texto", "O responsável pelo tratamento é VIVERAPRENDER - Escola de Negócios e Administração, Lda., NIPC 505654296, doravante designada por “ENA” ou “nós”, com sede na Rua do Conselheiro Veloso da Cruz, 524, 4400-092 Vila Nova de Gaia."],
+    ["lista", ["Email geral: geral@ena.pt", "Telefone: 223 781 100"]],
+    ["titulo", "2. O que são cookies"],
+    ["texto", "Cookies são pequenos ficheiros de texto guardados no seu dispositivo quando visita um website. Permitem, por exemplo, que o site funcione corretamente, recorde as suas preferências ou meça a forma como é utilizado."],
+    ["texto", "Esta política aplica-se também a tecnologias semelhantes, como pixels, tags e armazenamento local do navegador. Para simplificar, chamamos-lhes a todos \"cookies\"."],
+    ["lista", [
+      "Cookies próprios: definidos pela ENA.",
+      "Cookies de terceiros: definidos por outras entidades (por exemplo, Google ou Meta) através do nosso site.",
+      "Cookies de sessão: apagados quando fecha o navegador.",
+      "Cookies persistentes: ficam no dispositivo durante o prazo indicado na secção 4, ou até os apagar.",
+    ]],
+    ["titulo", "3. Categorias de cookies que utilizamos"],
+    ["texto", "Só os cookies necessários são usados sem o seu consentimento. As restantes categorias ficam desativadas até as aceitar no banner de cookies."],
+    ["subtitulo", "Necessários"],
+    ["texto", "Garantir o funcionamento do site: navegação, segurança, formulários de inscrição e registo das suas preferências de cookies. Base legal: interesse legítimo; isentos de consentimento (art. 5.º, n.º 2, da Lei n.º 41/2004)."],
+    ["subtitulo", "Análise"],
+    ["texto", "Medir visitas, páginas consultadas e inscrições, de forma agregada, para melhorar o site e a oferta formativa. Base legal: consentimento."],
+    ["subtitulo", "Marketing"],
+    ["texto", "Medir a eficácia das nossas campanhas e mostrar anúncios relevantes noutras plataformas (Google, Meta e outras). Base legal: consentimento."],
+    ["titulo", "4. Lista de cookies"],
+    ["lista", [
+      "ena_consentimento — ENA — Necessários — Guarda as suas escolhas de consentimento (armazenamento local do navegador) — 12 meses",
+      "_ga — Google (Analytics) — Análise — Distingue visitantes únicos — 2 anos",
+      "_ga_[ID] — Google (Analytics) — Análise — Mantém o estado da sessão — 2 anos",
+      "_gcl_au — Google (Ads) — Marketing — Mede conversões de anúncios Google — 90 dias",
+      "_fbp — Meta — Marketing — Mede conversões e permite anúncios no Facebook e Instagram — 90 dias",
+      "_fbc — Meta — Marketing — Guarda o identificador do clique num anúncio Meta — 90 dias",
+    ]],
+    ["titulo", "5. Consentimento"],
+    ["texto", "Na primeira visita, mostramos um banner onde pode aceitar todos os cookies, rejeitá-los ou escolher por categoria. Rejeitar é tão simples como aceitar, e a sua escolha não afeta o acesso aos conteúdos do site. Pode alterar a sua escolha a qualquer momento na ligação «Definições de cookies», no rodapé do site."],
+    ["texto", "Utilizamos o Modo de Consentimento da Google (Consent Mode). Enquanto não der consentimento, os serviços da Google não guardam nem leem cookies de análise ou marketing no seu dispositivo. Podem, no entanto, enviar sinais sem cookies e sem identificadores pessoais (por exemplo, que ocorreu uma visita ou uma inscrição), usados de forma agregada para medição estatística."],
+    ["texto", "Guardamos a sua escolha durante 12 meses. Findo esse prazo, voltamos a pedir o seu consentimento."],
+    ["titulo", "Política de Privacidade"],
+    ["ligacao", "Consulte a nossa Política de Privacidade", "/politica-de-privacidade"],
+  ],
+};
+
+export const PAGINAS_LEGAIS: PaginaLegal[] = [POLITICA, TERMOS, COOKIES];

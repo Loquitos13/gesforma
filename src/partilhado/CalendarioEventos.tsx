@@ -16,6 +16,7 @@ export type EventoCal = {
   modulos?: string[];
   formadores?: string[];
   local?: string;
+  modalidade?: string;
 };
 
 type Vista = "mes" | "semana" | "lista";
@@ -28,6 +29,9 @@ const somar = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDa
 const segunda = (d: Date) => somar(d, -((d.getDay() + 6) % 7));
 const dataPt = (s: string) => `${s.slice(8, 10)}-${s.slice(5, 7)}-${s.slice(0, 4)}`;
 const horas = (e: EventoCal) => (e.inicio ? `${e.inicio}${e.fim ? `–${e.fim}` : ""}` : "");
+const MODALIDADE: Record<string, string> = { presencial: "Presencial", sincrona: "Síncrona (à distância)", avaliacao: "Avaliação" };
+/** Por hora de início; os do dia todo primeiro. */
+const porHora = (a: EventoCal, b: EventoCal) => (a.inicio || "").localeCompare(b.inicio || "") || a.titulo.localeCompare(b.titulo);
 
 /** Período à vista: do primeiro ao último dia da grelha. */
 function periodo(vista: Vista, cursor: Date): [string, string] {
@@ -58,11 +62,22 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
 }) {
   const [vista, setVista] = useState<Vista>("mes");
   const [cursor, setCursor] = useState(() => new Date());
+  // Barra lateral: o dia aberto e, dentro dele, o evento com os detalhes.
+  const [dia, setDia] = useState<string | null>(null);
+  const [sel, setSel] = useState<EventoCal | null>(null);
+  const abrirDia = (k: string, e: EventoCal | null = null) => { setDia(k); setSel(e); };
+  useEffect(() => {
+    if (!dia) return;
+    const tecla = (ev: KeyboardEvent) => { if (ev.key === "Escape") setDia(null); };
+    window.addEventListener("keydown", tecla);
+    return () => window.removeEventListener("keydown", tecla);
+  }, [dia]);
   const [de, ate] = periodo(vista, cursor);
   useEffect(() => { onPeriodo?.(de, ate); }, [de, ate]); // eslint-disable-line react-hooks/exhaustive-deps
   const porDia = useMemo(() => {
     const m = new Map<string, EventoCal[]>();
     for (const e of eventos) m.set(e.data, [...(m.get(e.data) ?? []), e]);
+    for (const l of m.values()) l.sort(porHora);
     return m;
   }, [eventos]);
   const hoje = iso(new Date());
@@ -77,10 +92,11 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
     : `${dataPt(de)} a ${dataPt(ate)}`;
 
   const Chip = ({ e, compacto }: { e: EventoCal; compacto?: boolean }) => (
-    <button type="button" onClick={() => onAbrir?.(e)} title={detalhe(e)}
-      className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight ${COR[e.tipo]} ${onAbrir ? "cursor-pointer hover:brightness-95" : "cursor-default"}`}>
+    <button type="button" onClick={ev => { ev.stopPropagation(); abrirDia(e.data, e); }} title={detalhe(e)}
+      className={`block w-full truncate rounded border px-1.5 py-0.5 text-left text-[11px] leading-tight hover:brightness-95 ${COR[e.tipo]}`}>
       {horas(e) && <span className="font-semibold tabular-nums">{e.inicio} </span>}
       {compacto ? (e.turma || e.titulo) : e.titulo}
+      {!compacto && e.formadores?.length ? <span className="block truncate opacity-75">{e.formadores.join(", ")}</span> : null}
     </button>
   );
 
@@ -109,17 +125,17 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
           </div>
           <div className="grid grid-cols-7">
             {Array.from({ length: 42 }, (_, i) => {
-              const dia = somar(deIso(de), i);
-              const k = iso(dia);
-              const doMes = dia.getMonth() === cursor.getMonth();
+              const d = somar(deIso(de), i);
+              const k = iso(d);
+              const doMes = d.getMonth() === cursor.getMonth();
               const lista = porDia.get(k) ?? [];
               return (
-                <div key={k} className={`min-h-[92px] border-b border-r border-slate-100 p-1 ${doMes ? "" : "bg-slate-50/60"}`}>
-                  <p className={`m-0 mb-1 text-right text-[11px] tabular-nums ${k === hoje ? "font-bold text-sky-700" : doMes ? "text-slate-600" : "text-slate-300"}`}>{dia.getDate()}</p>
+                <div key={k} onClick={() => abrirDia(k)} className={`min-h-[92px] cursor-pointer border-b border-r border-slate-100 p-1 hover:bg-sky-50/40 ${doMes ? "" : "bg-slate-50/60"} ${k === dia ? "ring-2 ring-inset ring-sky-300" : ""}`}>
+                  <p className={`m-0 mb-1 text-right text-[11px] tabular-nums ${k === hoje ? "font-bold text-sky-700" : doMes ? "text-slate-600" : "text-slate-300"}`}>{d.getDate()}</p>
                   <div className="space-y-0.5">
                     {lista.slice(0, 3).map(e => <Chip key={e.id} e={e} compacto />)}
                     {lista.length > 3 && (
-                      <button type="button" className="text-[11px] font-semibold text-slate-500" onClick={() => { setCursor(dia); setVista("lista"); }}>
+                      <button type="button" className="text-[11px] font-semibold text-slate-500" onClick={ev => { ev.stopPropagation(); abrirDia(k); }}>
                         +{lista.length - 3} mais
                       </button>
                     )}
@@ -137,7 +153,7 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
             const k = iso(somar(deIso(de), i));
             const lista = porDia.get(k) ?? [];
             return (
-              <div key={k} className={`rounded-lg border bg-white p-2 ${k === hoje ? "border-sky-300" : "border-slate-200"}`}>
+              <div key={k} onClick={() => abrirDia(k)} className={`cursor-pointer rounded-lg border bg-white p-2 ${k === hoje ? "border-sky-300" : "border-slate-200"}`}>
                 <p className="m-0 mb-2 text-xs font-semibold text-slate-600">{DIAS[i]} · {dataPt(k).slice(0, 5)}</p>
                 <div className="space-y-1">
                   {lista.length === 0 && <p className="m-0 text-[11px] text-slate-300">—</p>}
@@ -158,7 +174,7 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
               <ul className="m-0 flex-1 list-none space-y-1.5 p-0">
                 {lista.map(e => (
                   <li key={e.id}>
-                    <button type="button" onClick={() => onAbrir?.(e)} className={`w-full rounded-md border px-2.5 py-1.5 text-left text-[13px] ${COR[e.tipo]}`}>
+                    <button type="button" onClick={() => abrirDia(k, e)} className={`w-full rounded-md border px-2.5 py-1.5 text-left text-[13px] ${COR[e.tipo]}`}>
                       <span className="font-semibold tabular-nums">{horas(e) || "Dia todo"}</span> · {e.titulo}
                       <span className="block text-xs opacity-80">{[e.turma, e.curso, e.local, e.formadores?.join(", "), mostrarRegime && e.regime ? (e.regime === "fin" ? "Financiada" : "Gold") : ""].filter(Boolean).join(" · ")}</span>
                     </button>
@@ -175,6 +191,58 @@ export function CalendarioEventos({ eventos, aCarregar, onPeriodo, onAbrir, most
           {LEGENDA.filter(([t]) => tipos.has(t)).map(([t, r]) => (
             <span key={t} className="inline-flex items-center gap-1"><span className={`h-2.5 w-2.5 rounded border ${COR[t]}`} />{r}</span>
           ))}
+        </div>
+      )}
+      {dia && (
+        <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/20" onClick={() => setDia(null)}>
+          <aside role="dialog" aria-label={`Eventos de ${dataPt(dia)}`} onClick={ev => ev.stopPropagation()}
+            className="flex h-full w-full max-w-sm flex-col border-l border-slate-200 bg-white text-slate-800 shadow-xl">
+            <div className="flex items-center gap-2 border-b border-slate-200 px-4 py-3">
+              {sel && <button type="button" className="text-sm text-slate-500" onClick={() => setSel(null)} aria-label="Voltar ao dia">‹</button>}
+              <p className="m-0 flex-1 text-sm font-semibold">{DIAS[(deIso(dia).getDay() + 6) % 7]}, {dataPt(dia)}</p>
+              <button type="button" className="px-1 text-lg leading-none text-slate-400 hover:text-slate-700" onClick={() => setDia(null)} aria-label="Fechar">×</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4">
+              {sel ? (
+                <div className="space-y-3">
+                  <p className={`m-0 inline-block rounded border px-2 py-0.5 text-[11px] font-semibold ${COR[sel.tipo]}`}>{LEGENDA.find(([t]) => t === sel.tipo)?.[1]}</p>
+                  <h3 className="m-0 text-base font-semibold">{sel.titulo}</h3>
+                  <dl className="m-0 grid grid-cols-[96px_1fr] gap-x-3 gap-y-1.5 text-sm">
+                    {([
+                      ["Horário", horas(sel) || "Dia todo"],
+                      ["Turma", sel.turma],
+                      ["Curso", sel.curso],
+                      [sel.modulos && sel.modulos.length > 1 ? "Módulos" : "Módulo", sel.modulos?.join(", ")],
+                      [sel.formadores && sel.formadores.length > 1 ? "Formadores" : "Formador", sel.formadores?.join(", ")],
+                      ["Modalidade", sel.modalidade ? MODALIDADE[sel.modalidade] : ""],
+                      ["Local", sel.local],
+                      ["Regime", mostrarRegime && sel.regime ? (sel.regime === "fin" ? "Financiada" : "Gold") : ""],
+                    ] as [string, string | undefined][]).filter(([, v]) => v).map(([r, v]) => (
+                      <div key={r} className="contents"><dt className="text-slate-500">{r}</dt><dd className="m-0">{v}</dd></div>
+                    ))}
+                  </dl>
+                  {onAbrir && (
+                    <button type="button" onClick={() => onAbrir(sel)}
+                      className="rounded-md border border-slate-300 bg-white px-3 py-1.5 text-sm font-semibold hover:bg-slate-50">
+                      {sel.tipo === "contacto" ? "Abrir pré-inscrição" : "Abrir turma"}
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <ul className="m-0 list-none space-y-2 p-0">
+                  {(porDia.get(dia) ?? []).length === 0 && <li className="text-sm text-slate-500">Sem eventos neste dia.</li>}
+                  {(porDia.get(dia) ?? []).map(e => (
+                    <li key={e.id}>
+                      <button type="button" onClick={() => setSel(e)} className={`w-full rounded-md border px-3 py-2 text-left text-[13px] hover:brightness-95 ${COR[e.tipo]}`}>
+                        <span className="font-semibold tabular-nums">{horas(e) || "Dia todo"}</span> · {e.titulo}
+                        <span className="block text-xs opacity-80">{[e.turma, e.formadores?.join(", ")].filter(Boolean).join(" · ")}</span>
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </aside>
         </div>
       )}
     </div>
